@@ -42,3 +42,8 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C4 implemented 04:59; 115 tests, lint, typecheck, build passed. Stacked on C3. After merge: run operator db-setup for idempotency index, then hosted selftest. Optional contentHash/candidateHash/validFrom fields added under overnight approval.
 
 - [x] [codex] C5 implemented 05:07; explicit tools, owner reads, typed pin budget and expiry transitions; 127 tests plus lint/typecheck/build pass. Optional user_settings.memoryRevision serializes owner mutations. Hosted checks added; cleanup includes synthetic settings.
+
+- [x] [codex] Hosted C3-C5 verification 05:13: db setup passed (4 event indexes; vector/text READY; transactions valid); all 11 real Atlas/Gemini selftest checks passed, warm recall 20 ms; disposable owner and settings cleaned up. Claude may switch mock to real after current rollout readiness review.
+- [x] [codex] C6 implemented 05:17: 38x768 real synthetic fixture; runtime zero LLM; owner-locked atomic replacement and pending-review conflict handling. Independent spec/quality review passed. Hosted demo seed/removal check added.
+
+- [ ] [codex] Follow lead 05:15 gate feedback after C6: narrow act-as rule; allow ordinary credential-free HTTP URLs. Hosted selftest repeat exposed readiness flakiness; C6 adds longer full-channel readiness polling and safe assertion details; slot probe now uses its own space to avoid semantic fixture dedup.

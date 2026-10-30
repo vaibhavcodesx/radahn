@@ -8,15 +8,17 @@ import { recall } from "./recall";
 import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
+import { seedDemo, removeDemo } from "./seed";
 import { flipExpired } from "./lifecycle";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
+class SelfTestAssertion extends Error {}
 export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
   const ownerId=`eval:selftest:${Date.now()}:${randomUUID()}`;
   const spaceKey=new ObjectId().toHexString(), c=collections(), checks:SelfTestCheck[]=[];
-  const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch{checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:"Check failed; provider and content details suppressed."});}};
+  const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
   try {
     const data:Array<{type:MemoryType;statement:string;importance:number}>=[
       {type:"constraint",statement:"Aarav must submit Radahn by 9 PM today.",importance:10},
@@ -32,83 +34,93 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
     if(checks[0].ok) await check("hybrid-recall-planning-and-owner-isolation",async()=>{
       // Atlas Search is eventually consistent; wait only inside the integration probe.
       let result:Awaited<ReturnType<typeof recall>>|undefined;
-      for(let attempt=0;attempt<8;attempt++) {
+      for(let attempt=0;attempt<30;attempt++) {
         result=await recall({ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false});
-        if(result.picks.length===3) break;
+        if(result.picks.length===3 && result.channelsRan.includes("semantic") && result.channelsRan.includes("lexical")) break;
         await new Promise(resolve=>setTimeout(resolve,500));
       }
-      if(result?.picks.length!==3 || !result.channelsRan.includes("semantic") || !result.channelsRan.includes("lexical")) throw new Error("Recall check failed");
+      if(result?.picks.length!==3 || !result.channelsRan.includes("semantic") || !result.channelsRan.includes("lexical")) throw new SelfTestAssertion("Recall check failed");
       const other=await recall({ownerId:`${ownerId}:other`,spaceKey,query:"Plan my next 4 hours.",persistTrace:false});
-      if(other.picks.length || other.core.length || other.strategies.length) throw new Error("Owner isolation failed");
+      if(other.picks.length || other.core.length || other.strategies.length) throw new SelfTestAssertion("Owner isolation failed");
       const warm=await recall({ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false});
       checks.push({name:"warm-recall-latency",ok:warm.latencyMs.total<400,ms:Math.round(warm.latencyMs.total),detail:"Warm query; retrieval and scoring budget is 400 ms."});
     });
     await check("transactional-slot-reconcile-and-idempotency",async()=>{
       const candidate:CandidateMemory={statement:"Aarav's integration deadline is 9 PM.",type:"constraint",subject:"aarav",attribute:"integration_deadline",value:"9 PM",entities:["aarav"],importance:9,confidence:0.9,sensitivity:"none",scope:"space",explicit:true,hint:"new"};
-      const context={ownerId,spaceKey,now:new Date(),policy:"review_sensitive" as const,source:{kind:"manual" as const,messageId:"selftest-create",actor:{kind:"system" as const,name:"selftest"}},recalled:[]};
+      const writeSpaceKey=new ObjectId().toHexString();
+      const context={ownerId,spaceKey:writeSpaceKey,now:new Date(),policy:"review_sensitive" as const,source:{kind:"manual" as const,messageId:"selftest-create",actor:{kind:"system" as const,name:"selftest"}},recalled:[]};
       const first=await writeCandidates([candidate],context);
-      if(first.added!==1)throw new Error("Create failed");
+      if(first.added!==1)throw new SelfTestAssertion("Create failed");
       const duplicate=await writeCandidates([candidate],context);
-      if(duplicate.ops[0]?.op!=="skip")throw new Error("Idempotency failed");
+      if(duplicate.ops[0]?.op!=="skip")throw new SelfTestAssertion("Idempotency failed");
       const confirmed=await writeCandidates([candidate],{...context,source:{...context.source,messageId:"selftest-confirm"}});
-      if(confirmed.confirmed!==1)throw new Error("Confirm failed");
+      if(confirmed.confirmed!==1)throw new SelfTestAssertion("Confirm failed");
       const updated=await writeCandidates([{...candidate,statement:"Aarav's integration deadline is 10 PM.",value:"10 PM"}],{...context,source:{...context.source,messageId:"selftest-update"}});
-      if(updated.superseded!==1 || !updated.notices.length)throw new Error("Supersede failed");
+      if(updated.superseded!==1 || !updated.notices.length)throw new SelfTestAssertion("Supersede failed");
       const chain=await c.memories.find({ownerId,slotKey:"aarav.integration_deadline"}).toArray();
-      if(chain.filter(m=>m.status==="active").length!==1 || chain.filter(m=>m.status==="superseded").length!==1)throw new Error("Single truth failed");
+      if(chain.filter(m=>m.status==="active").length!==1 || chain.filter(m=>m.status==="superseded").length!==1)throw new SelfTestAssertion("Single truth failed");
       const historical=await writeCandidates([{...candidate,validFrom:"2026-01-01T00:00:00Z"}],{...context,source:{...context.source,messageId:"selftest-history"}});
       const old=await c.memories.findOne({ownerId,_id:new ObjectId(historical.ops[0].memoryId)});
-      if(old?.status!=="superseded")throw new Error("History guard failed");
+      if(old?.status!=="superseded")throw new SelfTestAssertion("History guard failed");
     });
     await check("privacy-sensitive-review-and-consent",async()=>{
       const candidate:CandidateMemory={statement:"my password is hunter2",type:"fact",entities:[],importance:6,confidence:0.9,sensitivity:"none",scope:"space",explicit:false,hint:"new"};
       const context={ownerId,spaceKey,now:new Date(),policy:"review_sensitive" as const,source:{kind:"manual" as const,messageId:"selftest-block",actor:{kind:"system" as const,name:"selftest"}},recalled:[]};
       const blocked=await writeCandidates([candidate],context);
-      if(blocked.blocked!==1 || await c.memories.countDocuments({ownerId,statement:/hunter2/}))throw new Error("Privacy gate failed");
+      if(blocked.blocked!==1 || await c.memories.countDocuments({ownerId,statement:/hunter2/}))throw new SelfTestAssertion("Privacy gate failed");
       const pending=await writeCandidates([{...candidate,statement:"Aarav has fictional seasonal allergies.",sensitivity:"sensitive"}],{...context,source:{...context.source,messageId:"selftest-pending"}});
-      if(pending.pending!==1)throw new Error("Review gate failed");
+      if(pending.pending!==1)throw new SelfTestAssertion("Review gate failed");
       const explicit=await rememberExplicit({ownerId,spaceKey,statement:"Aarav has fictional seasonal allergies.",type:"fact",sensitivity:"sensitive",source:{kind:"manual",actor:{kind:"system",name:"selftest"}}});
-      if(explicit.op!=="add")throw new Error("Explicit consent failed");
+      if(explicit.op!=="add")throw new SelfTestAssertion("Explicit consent failed");
     });
     await check("transaction-abort-leaves-no-partial-memory",async()=>{
       const sample=await c.memories.findOne({ownerId});
-      if(!sample)throw new Error("No fixture");
+      if(!sample)throw new SelfTestAssertion("No fixture");
       const _id=new ObjectId(),session=mongo().startSession();
       const probe={...sample,_id};delete probe.slotKey;let inserted=false;
-      try {await session.withTransaction(async()=>{await c.memories.insertOne(probe,{session});inserted=true;throw new Error("intentional rollback");});} catch { /* Expected rollback; verify below. */ } finally {await session.endSession();}
-      if(!inserted)throw new Error("Transaction insert failed before rollback probe");
-      if(await c.memories.findOne({ownerId,_id}))throw new Error("Transaction did not roll back");
+      try {await session.withTransaction(async()=>{await c.memories.insertOne(probe,{session});inserted=true;throw new SelfTestAssertion("intentional rollback");});} catch { /* Expected rollback; verify below. */ } finally {await session.endSession();}
+      if(!inserted)throw new SelfTestAssertion("Transaction insert failed before rollback probe");
+      if(await c.memories.findOne({ownerId,_id}))throw new SelfTestAssertion("Transaction did not roll back");
     });
     await check("explicit-correction-review-and-forget",async()=>{
       const source=await c.memories.findOne({ownerId,status:"active",slotKey:"aarav.integration_deadline"});
-      if(!source)throw new Error("Missing correction fixture");
+      if(!source)throw new SelfTestAssertion("Missing correction fixture");
       const corrected=await correctMemory({ownerId,spaceKey,memoryId:source._id.toHexString(),newStatement:"Aarav's integration deadline is 11 PM.",actor:{kind:"system",name:"selftest"}});
-      if(corrected.status!=="updated" || !corrected.after)throw new Error("Explicit correction failed");
+      if(corrected.status!=="updated" || !corrected.after)throw new SelfTestAssertion("Explicit correction failed");
       const pending=await c.memories.findOne({ownerId,status:"pending_review"});
-      if(pending && (await reviewMemory({ownerId,memoryId:pending._id.toHexString(),decision:"approve",actor:{kind:"system",name:"selftest"}}))?.status!=="active")throw new Error("Approval failed");
+      if(pending && (await reviewMemory({ownerId,memoryId:pending._id.toHexString(),decision:"approve",actor:{kind:"system",name:"selftest"}}))?.status!=="active")throw new SelfTestAssertion("Approval failed");
       const forgotten=await forgetMemory({ownerId,memoryId:corrected.after.id,actor:{kind:"system",name:"selftest"}});
-      if(forgotten.status!=="forgotten" || await c.memories.findOne({ownerId,_id:new ObjectId(corrected.after.id)}))throw new Error("Forget failed");
+      if(forgotten.status!=="forgotten" || await c.memories.findOne({ownerId,_id:new ObjectId(corrected.after.id)}))throw new SelfTestAssertion("Forget failed");
       const tombstone=await c.events.findOne({ownerId,memoryId:new ObjectId(corrected.after.id),kind:"forgotten"});
-      if(!tombstone || tombstone.diff || tombstone.summary.includes("11 PM"))throw new Error("Tombstone leaked content");
+      if(!tombstone || tombstone.diff || tombstone.summary.includes("11 PM"))throw new SelfTestAssertion("Tombstone leaked content");
     });
     await check("concurrent-core-pin-budget",async()=>{
-      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new Error("No fixture");
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No fixture");
       const rows=Array.from({length:7},(_,i)=>{const row={...sample,_id:new ObjectId(),statement:(`Synthetic pin ${i} `+"x".repeat(240)).slice(0,240),pinned:i<5};delete row.slotKey;delete row.expiresAt;delete row.purgeAt;return row;});
       try {
         await c.memories.insertMany(rows);
         const results=await Promise.allSettled(rows.slice(5).map(row=>updateMemory({ownerId,memoryId:row._id.toHexString(),patch:{pinned:true},actor:{kind:"system",name:"selftest"}})));
-        if(results.filter(r=>r.status==="fulfilled").length!==1 || results.filter(r=>r.status==="rejected" && r.reason?.code==="PIN_BUDGET_EXCEEDED").length!==1)throw new Error("Concurrent pin budget failed");
+        if(results.filter(r=>r.status==="fulfilled").length!==1 || results.filter(r=>r.status==="rejected" && r.reason?.code==="PIN_BUDGET_EXCEEDED").length!==1)throw new SelfTestAssertion("Concurrent pin budget failed");
       } finally {await c.memories.deleteMany({ownerId,_id:{$in:rows.map(row=>row._id)}});}
     });
     await check("expiry-status-and-event",async()=>{
-      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new Error("No fixture");
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No fixture");
       const now=new Date(),row={...sample,_id:new ObjectId(),pinned:false,expiresAt:new Date(+now-1000),purgeAt:new Date(+now+180000),createdAt:new Date(+now-3000)};delete row.slotKey;
       await c.memories.insertOne(row);await flipExpired(ownerId,now);
-      if((await c.memories.findOne({ownerId,_id:row._id}))?.status!=="expired" || !await c.events.findOne({ownerId,memoryId:row._id,kind:"expired"}))throw new Error("Expiry event failed");
+      if((await c.memories.findOne({ownerId,_id:row._id}))?.status!=="expired" || !await c.events.findOne({ownerId,memoryId:row._id,kind:"expired"}))throw new SelfTestAssertion("Expiry event failed");
     });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
-      if(result.added+result.confirmed+result.pending<1)throw new Error("Extraction produced no useful memory");
+      if(result.added+result.confirmed+result.pending<1)throw new SelfTestAssertion("Extraction produced no useful memory");
+    });
+    await check("precomputed-demo-seed-and-removal",async()=>{
+      const input={ownerId,spaceIds:{hackathon:spaceKey,personal:new ObjectId().toHexString(),internships:new ObjectId().toHexString()},conversations:[]};
+      const before=await c.memories.countDocuments({ownerId,demo:{$ne:true}});
+      const result=await seedDemo(input);
+      if(result.memories!==38 || await c.memories.countDocuments({ownerId,demo:true})!==38)throw new SelfTestAssertion("Demo seed count failed");
+      await removeDemo(ownerId);
+      if(await c.memories.countDocuments({ownerId,demo:true})!==0 || await c.memories.countDocuments({ownerId,demo:{$ne:true}})!==before)throw new SelfTestAssertion("Demo removal isolation failed");
+      await seedDemo(input);
     });
   } finally {
     await check("cleanup-isolated-owner",async()=>{

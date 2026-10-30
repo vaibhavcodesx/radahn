@@ -4,6 +4,7 @@ import { recall, getRecallTrace } from "./recall";
 import { buildSystemPrompt, buildGhostPrompt } from "./context";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories, getMemory, listEvents, pendingCount } from "./tools";
+import { seedDemo, removeDemo, deleteAll } from "./seed";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -34,7 +35,7 @@ export const realEngine: MemoryEngine = {
   graph: async () => notImplemented("graph"),
   insights: async () => notImplemented("insights"),
   pendingCount,
-  seedDemo: async () => notImplemented("seedDemo"),
-  removeDemo: async () => notImplemented("removeDemo"),
-  deleteAll: async () => notImplemented("deleteAll"),
+  seedDemo,
+  removeDemo,
+  deleteAll,
 };
