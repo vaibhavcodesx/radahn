@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TypeSwatch } from "@/components/atoms";
 import type { LiveEvent } from "@/components/realtime/LiveProvider";
 import type { MemoryTypeName } from "@/lib/memory-types";
@@ -21,10 +21,18 @@ const KINDS: Array<{ kind: string; label: string; tone: string }> = [
 
 export function WriteChips({ events, waiting }: { events: LiveEvent[]; waiting: boolean }) {
   const [open, setOpen] = useState(false);
+  // Extraction usually lands in 2–6 s; after 20 s with nothing, the turn simply wrote nothing.
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setTimeout(() => setExpired(true), 20_000);
+    return () => clearTimeout(t);
+  }, [waiting]);
+  const pending = waiting && !expired;
   const counts = KINDS.map((k) => ({ ...k, n: events.filter((e) => e.kind === k.kind).length })).filter((k) => k.n > 0);
 
   if (counts.length === 0) {
-    return waiting ? (
+    return pending ? (
       <p className="mono-label flex items-center gap-2 text-[10.5px] text-ink-3" aria-live="polite">
         <span className="inline-flex gap-0.5" aria-hidden>
           {[0, 1, 2].map((i) => (
