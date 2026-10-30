@@ -64,7 +64,7 @@ Files: `src/server/llm/**` (+ tests).
 - Tests (mocked fetch / mocked provider): exhausted pair is skipped; cooldown expires; key rotation; prefixes applied; no key ever appears in an error message.
 Done when: unit tests green; `npx tsx scripts/smoke-llm.ts` (write it) prints which model served a 1-token call and a 768-length embedding.
 
-## Task C2 — Privacy gate      [status: todo]
+## Task C2 — Privacy gate      [status: implemented 04:39, awaiting lead merge]
 Files: `src/server/memory/gate.ts` (+ `gate.test.ts`), wire `realEngine.preScan`.
 - memory-engine.md §4.1 detectors (all of them, incl. Luhn for cards, Aadhaar 4-4-4, PAN, OTP phrasing, "password is …", entropy ≥ 4.0 for tokens ≥ 24 chars) → `PreScanResult`. Synchronous, pure.
 - §4.3 candidate gate: secrets → blocked; injection patterns + invisible Unicode → blocked (`reason: 'injection'`); strip invisible chars always; sensitivity/policy → `pending_review`; length clamp 240; tautology/empty → skip.

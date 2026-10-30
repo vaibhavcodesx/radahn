@@ -1,4 +1,5 @@
 import "server-only";
+import { preScan } from "./gate";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -10,7 +11,7 @@ function notImplemented(name: string): never {
 }
 
 export const realEngine: MemoryEngine = {
-  preScan: () => notImplemented("preScan"),
+  preScan,
   recall: async () => notImplemented("recall"),
   buildContext: () => notImplemented("buildContext"),
   ghostContext: () => notImplemented("ghostContext"),
