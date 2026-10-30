@@ -1,0 +1,41 @@
+# Source material (hackathon PDFs, personal notes, saved snippets) stays local
+/Inputs/
+
+# Env
+.env
+.env*.local
+.env.*
+!.env.example
+
+# Dependencies / builds
+node_modules/
+.next/
+out/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Test output
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Vercel
+.vercel
+
+# Impeccable local state (design.json is committed by the documenter; local config is not)
+.impeccable/config.local.json
+.impeccable/review/
+.impeccable/build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# impeccable hook cache (local)
+.impeccable/hook.cache.json

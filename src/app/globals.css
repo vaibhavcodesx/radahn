@@ -1,0 +1,229 @@
+@import "tailwindcss";
+
+/* Radahn tokens — design.md §4. Dark ("ledger") is the default; light is "paper".
+   Theme is set by data-theme on <html>; with no attribute we follow the OS. */
+
+:root {
+  --canvas: #0e0d0b;
+  --surface: #161512;
+  --surface-2: #1e1c18;
+  --hover: rgba(237, 230, 214, 0.05);
+  --hover-2: rgba(237, 230, 214, 0.09);
+  --line: rgba(237, 230, 214, 0.1);
+  --line-strong: rgba(237, 230, 214, 0.18);
+  --ink: #ede6d6;
+  --ink-2: #b8b1a2;
+  --ink-3: #8a8477; /* lifted from #7E786C so 12px captions clear 4.5:1 on --surface */
+  --accent: #ede6d6;
+  --accent-ink: #0e0d0b;
+  --accent-tint: rgba(237, 230, 214, 0.08);
+  --grove: #0f1c13;
+  --grove-2: #142619;
+  --grove-line: rgba(176, 214, 164, 0.14);
+  --grove-ink: #cfe3c6;
+  --grove-ink-2: #8fae86;
+  --focus: #f2c12e;
+  --green: #4fb37e;
+  --red: #e2553a;
+  --orange: #f08a24;
+  --tooltip-bg: #ede6d6;
+  --tooltip-fg: #0e0d0b;
+  --tooltip-muted: #5b564d;
+  --shadow-card: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: 0 0 0 1px var(--line-strong), 0 16px 40px -12px rgba(0, 0, 0, 0.6);
+
+  /* Memory type palette ("Whitney blocks"), identical in both themes */
+  --t-profile: #e7dcc3;
+  --t-preference: #f2c12e;
+  --t-fact: #3a63d8;
+  --t-goal: #f08a24;
+  --t-constraint: #d8432f;
+  --t-decision: #b23a7a;
+  --t-outcome: #2e9e6b;
+  --t-feedback: #74b8e0;
+  --t-strategy: #6b4bc2;
+  --t-observation: #a7a23c;
+  --t-ink-dark: #15130f;
+  --t-ink-light: #faf7ef;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --canvas: #f2f0e8;
+  --surface: #faf9f4;
+  --surface-2: #ffffff;
+  --hover: rgba(21, 19, 15, 0.04);
+  --hover-2: rgba(21, 19, 15, 0.07);
+  --line: rgba(21, 19, 15, 0.1);
+  --line-strong: rgba(21, 19, 15, 0.18);
+  --ink: #15130f;
+  --ink-2: #4a463e;
+  --ink-3: #6e695f;
+  --accent: #15130f;
+  --accent-ink: #f2f0e8;
+  --accent-tint: rgba(21, 19, 15, 0.06);
+  --grove: #e3ecdd;
+  --grove-2: #d8e4d0;
+  --grove-line: rgba(30, 70, 40, 0.14);
+  --grove-ink: #1d3a24;
+  --grove-ink-2: #4b6b50;
+  --focus: #8a5a00;
+  --green: #1f7a4c;
+  --red: #b83a22;
+  --orange: #b5600f;
+  --tooltip-bg: #15130f;
+  --tooltip-fg: #f2f0e8;
+  --tooltip-muted: #a9a397;
+  --shadow-card: 0 0 0 1px var(--line), 0 1px 2px rgba(21, 19, 15, 0.06);
+  --shadow-overlay: 0 0 0 1px var(--line-strong), 0 16px 40px -12px rgba(21, 19, 15, 0.18);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-hover-2: var(--hover-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-foreground: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-grove: var(--grove);
+  --color-grove-2: var(--grove-2);
+  --color-grove-line: var(--grove-line);
+  --color-grove-ink: var(--grove-ink);
+  --color-grove-ink-2: var(--grove-ink-2);
+  --color-focus: var(--focus);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-orange: var(--orange);
+  --color-tooltip-bg: var(--tooltip-bg);
+  --color-tooltip-fg: var(--tooltip-fg);
+  --color-tooltip-muted: var(--tooltip-muted);
+
+  --color-t-profile: var(--t-profile);
+  --color-t-preference: var(--t-preference);
+  --color-t-fact: var(--t-fact);
+  --color-t-goal: var(--t-goal);
+  --color-t-constraint: var(--t-constraint);
+  --color-t-decision: var(--t-decision);
+  --color-t-outcome: var(--t-outcome);
+  --color-t-feedback: var(--t-feedback);
+  --color-t-strategy: var(--t-strategy);
+  --color-t-observation: var(--t-observation);
+
+  --font-serif: var(--font-hedvig), "Spectral", Georgia, serif;
+  --font-sans: var(--font-hanken), system-ui, sans-serif;
+  --font-mono: var(--font-martian), "Geist Mono", ui-monospace, monospace;
+
+  --radius-chip: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+
+  --shadow-card: var(--shadow-card);
+  --shadow-overlay: var(--shadow-overlay);
+
+  --ease-out: var(--ease-out);
+  --ease-inout: var(--ease-inout);
+
+  --animate-pop-in: pop-in 200ms var(--ease-out) both;
+  --animate-fade-in: fade-in 200ms var(--ease-out) both;
+  --animate-fade-up: fade-up 320ms var(--ease-out) both;
+  --animate-pixel-on: pixel-on 1.2s var(--ease-inout) infinite;
+  --animate-eq-bounce: eq-bounce 0.9s var(--ease-inout) infinite;
+  --animate-shimmer-text: shimmer-text 2.2s linear infinite;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pixel-on {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 1; }
+}
+@keyframes eq-bounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+@keyframes shimmer-text {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes blur-in {
+  from { opacity: 0; filter: blur(6px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+  }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--t-preference);
+    color: var(--t-ink-dark);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility mono-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@utility hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    rgba(0, 0, 0, 0.35) 3px 5px
+  );
+}
+@utility shimmer {
+  background: linear-gradient(90deg, var(--ink-3) 0%, var(--ink) 50%, var(--ink-3) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
