@@ -173,6 +173,11 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
     }
   });
 
+  // Shared between execute() and onEnd(): the outer onEnd sees every part (data + model).
+  let recall: RecallResult | undefined;
+  let refs: Record<string, string> = {};
+  let servedModel: string | undefined;
+
   return createUIMessageStream<RadahnUIMessage>({
     execute: async ({ writer }) => {
       writer.write({ type: "start", messageId: assistantUiId });
@@ -184,7 +189,6 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
 
       // 3. Recall (memory-engine.md §5) — the lens shows "Recalling…" while this runs.
       writer.write({ type: "data-recall", id: "recall", data: { status: "running" } });
-      let recall: RecallResult | undefined;
       try {
         recall = await eng.recall({
           ownerId,
@@ -226,6 +230,7 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
         { role: "user", content: userText },
       ];
 
+      refs = ctx.refs;
       const tools = memoryTools({ engine: eng, ownerId, spaceKey, conversationId, messageId: input.message.id, refs: ctx.refs, writer });
 
       // 5. Stream with pre-first-token model fallback.
@@ -242,6 +247,7 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           abortSignal: AbortSignal.timeout(45_000),
         }),
       );
+      servedModel = started.candidate.modelId;
       writer.write({
         type: "data-model",
         data: { id: started.candidate.modelId, label: modelLabel(started.candidate.modelId), fallback: started.candidate.fallback },
@@ -253,33 +259,40 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           tools,
           sendStart: false,
           onError: () => "The model stopped unexpectedly. Try again.",
-          onEnd: async ({ responseMessage }) => {
-            const text = textOf(responseMessage);
-            const cited = citedIds(text, ctx.refs);
-            await messages.insertOne({
-              _id: new ObjectId(),
-              conversationId,
-              ownerId,
-              role: "assistant",
-              uiId: assistantUiId,
-              parts: responseMessage.parts as unknown[],
-              text,
-              recallId: recall?.recallId || undefined,
-              citedMemoryIds: cited,
-              model: started.candidate.modelId,
-              createdAt: new Date(),
-            });
-            await conversations.updateOne({ _id: conversation._id, ownerId }, { $set: { lastMessageAt: new Date() } });
-            if (cited.length) {
-              await collections().memories.updateMany(
-                { ownerId, _id: { $in: cited.map((i) => new ObjectId(i)) } },
-                { $inc: { "stats.citedCount": 1 } },
-              );
-            }
-            finish({ text, recall, refs: ctx.refs, model: started.candidate.modelId });
-          },
         }),
       );
+    },
+    onEnd: async ({ responseMessage }) => {
+      const text = textOf(responseMessage);
+      if (!text && !responseMessage.parts.some((p) => p.type.startsWith("tool-"))) {
+        finish({ text: "", refs: {} });
+        return;
+      }
+      const cited = citedIds(text, refs);
+      try {
+        await messages.insertOne({
+          _id: new ObjectId(),
+          conversationId,
+          ownerId,
+          role: "assistant",
+          uiId: assistantUiId,
+          parts: responseMessage.parts as unknown[],
+          text,
+          recallId: recall?.recallId || undefined,
+          citedMemoryIds: cited,
+          model: servedModel,
+          createdAt: new Date(),
+        });
+        await conversations.updateOne({ _id: conversation._id, ownerId }, { $set: { lastMessageAt: new Date() } });
+        if (cited.length) {
+          await collections().memories.updateMany(
+            { ownerId, _id: { $in: cited.map((i) => new ObjectId(i)) } },
+            { $inc: { "stats.citedCount": 1 } },
+          );
+        }
+      } finally {
+        finish({ text, recall, refs, model: servedModel });
+      }
     },
     onError: (e) => {
       finish({ text: "", refs: {} });

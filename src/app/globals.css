@@ -227,3 +227,13 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Send sweep: the ten memory-type colours, in order (design.md §4.1 — the only other allowed gradient). */
+.glimm {
+  background: linear-gradient(90deg, transparent, var(--t-profile), var(--t-preference), var(--t-fact), var(--t-goal), var(--t-constraint), var(--t-decision), var(--t-outcome), var(--t-feedback), var(--t-strategy), var(--t-observation), transparent);
+  animation: glimm 900ms var(--ease-out) both;
+}
+@keyframes glimm {
+  from { transform: translateX(-100%); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0.2; }
+}
