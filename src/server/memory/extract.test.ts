@@ -2,7 +2,7 @@ import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
 const mock=vi.hoisted(()=>({mem:{findOne:vi.fn(),aggregate:vi.fn(),insertOne:vi.fn(),updateOne:vi.fn(),find:vi.fn()},events:{findOne:vi.fn(),insertOne:vi.fn()},spaces:{updateOne:vi.fn()},generateStructured:vi.fn(),embed:vi.fn(),transaction:vi.fn(),end:vi.fn()}));
-vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock.mem,events:mock.events,spaces:mock.spaces})}));
+vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock.mem,events:mock.events,spaces:mock.spaces,settings:{updateOne:mock.spaces.updateOne}})}));
 vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>({withTransaction:mock.transaction,endSession:mock.end})})}));
 vi.mock("@/server/llm/registry",()=>({generateStructured:mock.generateStructured,embed:mock.embed}));
 const {extractAndWrite,rememberExplicit}=await import("./extract");
@@ -104,6 +104,11 @@ describe("transactional writes",()=>{
   mock.generateStructured.mockResolvedValue({object:{memories:[candidate({subject:undefined,attribute:undefined})]}});
   await extractAndWrite(input);const saved=mock.mem.insertOne.mock.calls[0][0];
   expect(Object.hasOwn(saved,"slotKey")).toBe(false);expect(Object.hasOwn(saved,"expiresAt")).toBe(false);expect(Object.hasOwn(saved,"purgeAt")).toBe(false);
+ });
+ it("does not charge expired pins against a new explicit pin",async()=>{
+  const expired=Array.from({length:7},()=>active({pinned:true,statement:"x".repeat(240),expiresAt:new Date(0)}));
+  mock.mem.find.mockImplementation(filter=>({toArray:async()=>filter.$or?[]:expired}));
+  const result=await rememberExplicit({ownerId:"alice",spaceKey,statement:"Aarav likes tea.",type:"preference",pinned:true,source:{kind:"manual",actor:{kind:"user",name:"you"}}});expect(result.op).toBe("add");
  });
  it("scans normalized metadata before it can introduce plaintext secrets",async()=>{
   mock.generateStructured.mockResolvedValue({object:{memories:[candidate({entities:["ｐａｓｓｗｏｒｄ ｉｓ ｈｕｎｔｅｒ２"]})]}});

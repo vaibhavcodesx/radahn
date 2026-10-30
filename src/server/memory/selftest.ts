@@ -7,6 +7,8 @@ import { embed } from "@/server/llm/registry";
 import { recall } from "./recall";
 import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
+import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
+import { flipExpired } from "./lifecycle";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -77,13 +79,40 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(!inserted)throw new Error("Transaction insert failed before rollback probe");
       if(await c.memories.findOne({ownerId,_id}))throw new Error("Transaction did not roll back");
     });
+    await check("explicit-correction-review-and-forget",async()=>{
+      const source=await c.memories.findOne({ownerId,status:"active",slotKey:"aarav.integration_deadline"});
+      if(!source)throw new Error("Missing correction fixture");
+      const corrected=await correctMemory({ownerId,spaceKey,memoryId:source._id.toHexString(),newStatement:"Aarav's integration deadline is 11 PM.",actor:{kind:"system",name:"selftest"}});
+      if(corrected.status!=="updated" || !corrected.after)throw new Error("Explicit correction failed");
+      const pending=await c.memories.findOne({ownerId,status:"pending_review"});
+      if(pending && (await reviewMemory({ownerId,memoryId:pending._id.toHexString(),decision:"approve",actor:{kind:"system",name:"selftest"}}))?.status!=="active")throw new Error("Approval failed");
+      const forgotten=await forgetMemory({ownerId,memoryId:corrected.after.id,actor:{kind:"system",name:"selftest"}});
+      if(forgotten.status!=="forgotten" || await c.memories.findOne({ownerId,_id:new ObjectId(corrected.after.id)}))throw new Error("Forget failed");
+      const tombstone=await c.events.findOne({ownerId,memoryId:new ObjectId(corrected.after.id),kind:"forgotten"});
+      if(!tombstone || tombstone.diff || tombstone.summary.includes("11 PM"))throw new Error("Tombstone leaked content");
+    });
+    await check("concurrent-core-pin-budget",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new Error("No fixture");
+      const rows=Array.from({length:7},(_,i)=>{const row={...sample,_id:new ObjectId(),statement:(`Synthetic pin ${i} `+"x".repeat(240)).slice(0,240),pinned:i<5};delete row.slotKey;delete row.expiresAt;delete row.purgeAt;return row;});
+      try {
+        await c.memories.insertMany(rows);
+        const results=await Promise.allSettled(rows.slice(5).map(row=>updateMemory({ownerId,memoryId:row._id.toHexString(),patch:{pinned:true},actor:{kind:"system",name:"selftest"}})));
+        if(results.filter(r=>r.status==="fulfilled").length!==1 || results.filter(r=>r.status==="rejected" && r.reason?.code==="PIN_BUDGET_EXCEEDED").length!==1)throw new Error("Concurrent pin budget failed");
+      } finally {await c.memories.deleteMany({ownerId,_id:{$in:rows.map(row=>row._id)}});}
+    });
+    await check("expiry-status-and-event",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new Error("No fixture");
+      const now=new Date(),row={...sample,_id:new ObjectId(),pinned:false,expiresAt:new Date(+now-1000),purgeAt:new Date(+now+180000),createdAt:new Date(+now-3000)};delete row.slotKey;
+      await c.memories.insertOne(row);await flipExpired(ownerId,now);
+      if((await c.memories.findOne({ownerId,_id:row._id}))?.status!=="expired" || !await c.events.findOne({ownerId,memoryId:row._id,kind:"expired"}))throw new Error("Expiry event failed");
+    });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
       if(result.added+result.confirmed+result.pending<1)throw new Error("Extraction produced no useful memory");
     });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId})]);
+      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId})]);
     });
   }
   return {ok:checks.every(check=>check.ok),checks};

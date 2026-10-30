@@ -7,6 +7,8 @@ import { mongo } from "@/server/db/client";
 import { embed, generateStructured } from "@/server/llm/registry";
 import { preScan, gateCandidate } from "./gate";
 import { contentHash, normalise, confirmConfidence, slotDecision, neighbourDecision } from "./reconcile";
+import { PinBudgetError } from "./errors";
+import { lockOwner } from "./mutation";
 import { purgeAt } from "./lifecycle";
 import type { CandidateMemory, MemoryUnit, MemoryEvent, MemoryEventKind, RecallPick, WritePolicy, WriteSummary, WriteOpResult, SupersedeReason } from "./types";
 export interface WriteContext { ownerId:string;spaceKey:string;now:Date;policy:WritePolicy;source:MemoryUnit["source"];recalled:RecallPick[];pinned?:boolean;reason?:SupersedeReason }
@@ -109,6 +111,7 @@ async function persist(plan:Plan,ctx:WriteContext,session:ClientSession):Promise
   };
   if(plan.op==="skip")return {op:"skip",reason:plan.reason};
   if(messageId && await c.events.findOne({ownerId:ctx.ownerId,messageId,candidateHash:plan.hash},opts))return {op:"skip",reason:"already_applied"};
+  await lockOwner(ctx.ownerId,session);
   if(plan.op==="blocked") {await event("blocked");return {op:"blocked",reason:plan.reason};}
   if(plan.target) {
     const current=await c.memories.findOne({ownerId:ctx.ownerId,_id:plan.target._id,status:"active",spaceKey:plan.spaceKey},opts);
@@ -133,9 +136,9 @@ async function persist(plan:Plan,ctx:WriteContext,session:ClientSession):Promise
     await event("superseded",plan.target,false);
   }
   if(plan.op==="history" && plan.target) {unit.validTo=plan.target.validFrom;unit.supersededBy=plan.target._id;unit.supersedeReason="update";}
-  if(unit.pinned) {
-    const pins=await c.memories.find({ownerId:ctx.ownerId,pinned:true,status:"active"},opts).toArray();
-    if(pins.filter(m=>!m._id.equals(plan.target?._id??_id)).reduce((n,m)=>n+m.statement.length,0)+unit.statement.length>1500)throw new Error("PIN_BUDGET_EXCEEDED: consolidate first");
+  if(unit.pinned && unit.status==="active" && (!unit.expiresAt || +unit.expiresAt>+ctx.now)) {
+    const pins=await c.memories.find({ownerId:ctx.ownerId,pinned:true,status:"active",$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:ctx.now}}]},opts).toArray();
+    if(pins.filter(m=>!m._id.equals(plan.target?._id??_id)).reduce((n,m)=>n+m.statement.length,0)+unit.statement.length>1500)throw new PinBudgetError();
   }
   // Absent optional BSON fields must stay absent: null matches the partial slot index
   // and fails the expiresAt-exists filter used by recall.

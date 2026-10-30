@@ -92,7 +92,7 @@ Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests
 - Idempotency: skip if a `memory_events` doc already exists for `(messageId, candidate hash)`.
 - Tests with mocked LLM + embeddings: slot same value → confirm; slot different value → supersede (and notice text); out-of-order guard; secret candidate → blocked with no statement stored; sensitive → pending; explicit sensitive → active.
 
-## Task C5 — Explicit tools + review + lifecycle reads      [status: todo]
+## Task C5 — Explicit tools + review + lifecycle reads      [status: implemented 05:07, hosted checks after deploy]
 Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemories`, `getMemory`, `listEvents`, `pendingCount`.
 - Forget = `deleteOne` + tombstone event with no statement; ambiguous query → candidates (never forget on ambiguity).
 - `updateMemory`: pin budget check (1,500 chars across pinned) → throw a typed error the route maps to "consolidate first"; `expiresAt` updates `purgeAt`.

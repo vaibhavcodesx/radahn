@@ -3,6 +3,7 @@ import { preScan } from "./gate";
 import { recall, getRecallTrace } from "./recall";
 import { buildSystemPrompt, buildGhostPrompt } from "./context";
 import { extractAndWrite, rememberExplicit } from "./extract";
+import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories, getMemory, listEvents, pendingCount } from "./tools";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -20,19 +21,19 @@ export const realEngine: MemoryEngine = {
   ghostContext: buildGhostPrompt,
   extractAndWrite,
   rememberExplicit,
-  correctMemory: async () => notImplemented("correctMemory"),
-  forgetMemory: async () => notImplemented("forgetMemory"),
-  reviewMemory: async () => notImplemented("reviewMemory"),
-  updateMemory: async () => notImplemented("updateMemory"),
+  correctMemory,
+  forgetMemory,
+  reviewMemory,
+  updateMemory,
   runReflection: async () => notImplemented("runReflection"),
   listReflections: async () => notImplemented("listReflections"),
-  listMemories: async () => notImplemented("listMemories"),
-  getMemory: async () => notImplemented("getMemory"),
+  listMemories,
+  getMemory,
   getRecallTrace,
-  listEvents: async () => notImplemented("listEvents"),
+  listEvents,
   graph: async () => notImplemented("graph"),
   insights: async () => notImplemented("insights"),
-  pendingCount: async () => notImplemented("pendingCount"),
+  pendingCount,
   seedDemo: async () => notImplemented("seedDemo"),
   removeDemo: async () => notImplemented("removeDemo"),
   deleteAll: async () => notImplemented("deleteAll"),
