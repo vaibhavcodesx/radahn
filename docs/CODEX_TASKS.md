@@ -107,7 +107,7 @@ Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemor
 - `getMemory` returns versions chain, evidence, related, recall history (from `recalls`), events, and `raw` (the Mongo doc with `embedding` replaced by `"[768 floats]"`).
 - A maintenance helper `flipExpired(ownerId?)` (exported from `lifecycle.ts`) sets `status:'expired'` + event for units past `expiresAt` (Claude calls it from cron and opportunistically).
 
-## Task C6 — Demo seed with precomputed embeddings      [status: todo]
+## Task C6 — Demo seed with precomputed embeddings      [status: implemented 05:17, awaiting hosted verification]
 Files: `seed.ts`, `scripts/seed-demo.ts`, `scripts/fixtures/demo-embeddings.json` (generated once, committed), `fixtures/demo.ts` (extend if needed). Wire `seedDemo`, `removeDemo`, `deleteAll`.
 - `seedDemo({ownerId, spaceIds, conversations})`: remove existing `demo:true` units for the owner, insert all `DEMO_MEMORIES` with embeddings from the JSON fixture (zero LLM calls at seed time), resolve keys → ids (supersede chain, evidence, related, provenance via `conversations`), set `expiresAt`/`purgeAt` relative to now, write one `created` event summarising the load. `insertMany` in one batch (M0: 100 ops/s).
 - `scripts/seed-demo.ts --gen-embeddings` regenerates the JSON.
