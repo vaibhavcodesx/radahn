@@ -33,7 +33,9 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const simRef = useRef<Simulation<GNode, GLink> | null>(null);
-  const [data, setData] = useState<{ nodes: GNode[]; links: GLink[] } | null>(null);
+  // d3-force mutates nodes in place, so the graph lives in a ref; `count` triggers layout/render.
+  const graph = useRef<{ nodes: GNode[]; links: GLink[] } | null>(null);
+  const [count, setCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [arrange, setArrange] = useState<Arrange>("type");
   const [hover, setHover] = useState<{ node: GNode; x: number; y: number; cw: number } | null>(null);
@@ -53,10 +55,20 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
       .then((j: { nodes: Omit<GNode, "size">[]; links: Array<{ source: string; target: string; kind: GLink["kind"] }> }) => {
         if (!alive) return;
         const ids = new Set(j.nodes.map((n) => n.id));
-        setData({
-          nodes: j.nodes.map((n) => ({ ...n, type: n.type as MemoryTypeName, size: 8 + n.importance * 1.6 })),
+        // Seed each node in its type column so the first layout appears settled.
+        const cw = wrapRef.current?.clientWidth ?? 900;
+        const ch = wrapRef.current?.clientHeight ?? 500;
+        graph.current = {
+          nodes: j.nodes.map((n) => ({
+            ...n,
+            type: n.type as MemoryTypeName,
+            size: 8 + n.importance * 1.6,
+            x: ((MEMORY_TYPE_LIST.indexOf(n.type as MemoryTypeName) + 0.5) / MEMORY_TYPE_LIST.length) * cw + (Math.random() - 0.5) * 50,
+            y: ch / 2 + (Math.random() - 0.5) * ch * 0.5,
+          })),
           links: j.links.filter((l) => ids.has(l.source) && ids.has(l.target)).map((l) => ({ ...l })),
-        });
+        };
+        setCount(j.nodes.length);
       })
       .catch(() => alive && setError("Couldn't load the field."));
     return () => {
@@ -65,7 +77,8 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
   }, []);
 
   useEffect(() => {
-    if (!data) return;
+    const data = graph.current;
+    if (!data || count === null) return;
     const canvas = canvasRef.current!;
     const wrap = wrapRef.current!;
     const ctx = canvas.getContext("2d")!;
@@ -102,14 +115,18 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
       return [w * 0.08 + t * w * 0.84, h / 2 + (MEMORY_TYPE_LIST.indexOf(n.type) - 4.5) * (h / 14)];
     };
 
+    // First layout: start every node near its target so the field appears settled; later
+    // "Arrange by" changes keep current positions and animate (the 600 ms re-lay).
+    const first = !simRef.current;
     const sim = (simRef.current ??= forceSimulation<GNode>(data.nodes));
     sim
       .nodes(data.nodes)
-      .force("x", forceX<GNode>((n) => target(n)[0]).strength(arrange === "time" ? 0.25 : 0.12))
-      .force("y", forceY<GNode>((n) => target(n)[1]).strength(arrange === "time" ? 0.25 : 0.04))
+      .force("x", forceX<GNode>((n) => target(n)[0]).strength(arrange === "time" ? 0.3 : 0.2))
+      .force("y", forceY<GNode>((n) => target(n)[1]).strength(arrange === "time" ? 0.3 : 0.06))
       .force("collide", forceCollide<GNode>((n) => n.size * 0.75 + 2))
       .force("link", forceLink<GNode, GLink>(data.links).id((n) => n.id).strength(0.05))
-      .alpha(0.9)
+      .alpha(first ? 0.5 : 0.9)
+      .alphaDecay(0.04)
       .restart();
 
     const now = Date.now();
@@ -194,9 +211,10 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
       sim.on("tick", null);
       ro.disconnect();
     };
-  }, [data, arrange, spaceNames]);
+  }, [count, arrange, spaceNames]);
 
   const pick = (e: React.MouseEvent) => {
+    const data = graph.current;
     if (!data) return null;
     const r = canvasRef.current!.getBoundingClientRect();
     const x = e.clientX - r.left;
@@ -240,9 +258,9 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
         }}
       >
         <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
-        {!data && !error ? <p className="shimmer absolute inset-0 m-auto h-fit w-fit text-[13px]">Laying out memories…</p> : null}
+        {count === null && !error ? <p className="shimmer absolute inset-0 m-auto h-fit w-fit text-[13px]">Laying out memories…</p> : null}
         {error ? <p className="absolute inset-0 m-auto h-fit w-fit text-[13px] text-grove-ink-2">{error}</p> : null}
-        {data && data.nodes.length === 0 ? <p className="absolute inset-0 m-auto h-fit w-fit text-[13px] text-grove-ink-2">No memories yet.</p> : null}
+        {count === 0 ? <p className="absolute inset-0 m-auto h-fit w-fit text-[13px] text-grove-ink-2">No memories yet.</p> : null}
         {hover ? (
           <div
             role="tooltip"
