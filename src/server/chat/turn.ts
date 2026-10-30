@@ -25,6 +25,7 @@ import {
   listMessages,
 } from "@/server/app/workspace";
 import { ObjectId } from "mongodb";
+import { appUrl, env } from "@/server/env";
 
 /**
  * One chat turn (TRD §6 POST /api/chat, architecture.md §2):
@@ -154,6 +155,21 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           },
         },
       );
+      // Automatic reflection every 8 new units in this space (memory-engine.md §7), as its own
+      // request so it gets its own time budget (TRD §10). Claim the counter first so two turns
+      // finishing together don't both trigger it.
+      const claimed = await collections().spaces.findOneAndUpdate(
+        { _id: space._id, ownerId, unitsSinceReflection: { $gte: 8 } },
+        { $set: { unitsSinceReflection: 0, lastReflectionAt: new Date() } },
+      );
+      if (claimed) {
+        await fetch(`${appUrl()}/api/reflect/internal`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${env().CRON_SECRET}` },
+          body: JSON.stringify({ ownerId, spaceKey }),
+          signal: AbortSignal.timeout(110_000),
+        }).catch(() => {});
+      }
     } catch (e) {
       console.error("[turn] extractAndWrite failed", (e as Error)?.name, (e as Error)?.message?.slice(0, 160));
     }
