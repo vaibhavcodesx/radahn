@@ -3,14 +3,15 @@
 Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. Feature ids refer to docs/PRD.md §6. Times IST.
 
 ## Now
-- [ ] [human] Atlas → Network Access → allow 0.0.0.0/0 (TLS handshake from the dev machine is reset; Vercel needs it too)
+- [ ] [human] Google OAuth client: add origin https://radahn-ai.vercel.app + redirect https://radahn-ai.vercel.app/api/auth/callback/google
+- [ ] [human, optional] GitHub → Settings → Applications → Vercel → grant access to `radahn` (PR previews)
 - [ ] [human] AI Studio → Rate limits: read real RPM/RPD for each key's project, put numbers in docs/research/quotas.md (numbers only)
 - [ ] [human] Optional: a 3rd Gemini key from a *different Google project* (same-project keys share quota)
-- [ ] [claude] Phase 0 tail: GitHub repo → Vercel project + env → first prod deploy → db:setup on Atlas
-- [ ] [codex] C1 LLM registry (quota-aware) · C2 privacy gate · C3 recall · C4 extract + reconcile + writes
+- [ ] [codex] C3 recall · C4 extract + reconcile + writes (then Claude flips prod to MEMORY_ENGINE=real)
+- [ ] [claude] Phase 2: Memory Atlas table + detail · Review inbox · Activity · Settings
 
-## Next (Phase 1, until Checkpoint A 10:30)
-- [ ] [claude] Auth (guest + Google, link migration) · app shell · chat route + stream protocol · Streaming Text + citations · Memory lens · SSE realtime · write chips
+## Next
+- [ ] [claude] Flip prod to real engine after C3+C4 + self-test pass
 
 ## Later (Phase 2, until Checkpoint B 15:00)
 - [ ] [codex] C5 explicit tools · C6 demo seed + embedding fixture · C7 ghost + reflection · C8 insights + evals
@@ -23,6 +24,9 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] Bug bash ×3 fresh profiles · demo video · README · deck · final deploy 20:45 · tag v1.0.0 · freeze 21:00 · submit form by 22:00
 
 ## Done
+- [x] [claude] Phase 0: repo, CI, Vercel prod (radahn-ai.vercel.app), Atlas setup (04:38)
+- [x] [codex/claude] C1 quota routing, C2 privacy gate merged (04:55)
+- [x] [claude] Phase 1 core loop on prod with mock engine: auth, shell, chat, lens, citations, chips, ghost diff, demo seed (05:10) — Checkpoint A met early on mock
 - [x] [claude/planner] Planning docs (03:15)
 - [x] [claude] Research pass → docs/research/ (04:15)
 - [x] [claude] Scaffold, tokens, atoms, env, contracts, mock engine, db-setup script, CI, CODEX_TASKS.md (04:22)
