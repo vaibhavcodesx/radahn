@@ -6,6 +6,28 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 **Deadline:** C1–C4 merged by **10:30 IST** (Checkpoint A). C5–C6 by 12:00. C7–C8 by 15:00. Hard freeze 21:00.
 
+## OVERNIGHT NOTES (added 04:40 IST — the humans are asleep until ~08:30; work autonomously)
+
+- **Nobody will answer questions until ~08:30.** Make sensible calls, write them in the PR description and `CHANGELOG.md`, keep going. Claude reviews and merges your PRs as soon as CI is green (it polls). Don't wait for a merge to start the next task: branch the next task off your previous branch if it depends on it, and say so in the PR.
+- **Atlas is NOT reachable from this machine** (campus network resets the TLS handshake after TCP connects) and there is **no Docker**, so no local MongoDB. Therefore:
+  - Unit tests: mock the DB/LLM (as planned). This is the main safety net.
+  - Integration: write checks in `src/server/memory/selftest.ts` (`runSelfTest()`, yours). After your PR is merged and deployed, run them on Vercel against real Atlas + Gemini:
+    `node -e "require('@next/env').loadEnvConfig(process.cwd());fetch('https://radahn-ai.vercel.app/api/admin/selftest',{method:'POST',headers:{authorization:'Bearer '+process.env.CRON_SECRET}}).then(r=>r.json()).then(j=>console.log(JSON.stringify(j,null,2)))"`
+    (your `.env.local` copy has `CRON_SECRET`; never print it). Use a throwaway owner `eval:selftest:<timestamp>` and clean up.
+  - Gemini IS reachable from this machine (only Mongo is blocked), so `scripts/smoke-llm.ts` works locally.
+- **DB is set up** on Atlas `radahn` (all collections, validator, indexes, `memories_vec` + `memories_text` READY, transactions verified). Re-run via `POST /api/admin/db-setup` (same auth) after you change `src/server/db/setup.ts` definitions (that module now holds the definitions; `scripts/db-setup.ts` is a thin CLI wrapper; you own both).
+- **No `radahn_eval` database**: M0 allows 3 search indexes per *cluster*, and `radahn` uses 2. Evals run in `radahn` with owners prefixed `eval:` and delete their data afterwards. Change `npm run eval` accordingly (C8): it can call a `/api/admin/eval` route — add `src/server/memory/evals.ts` exporting `runEvals()` and Claude will expose the route; or run the deterministic part locally with mocks.
+- **Additive contract changes are pre-approved overnight** (new optional fields, new `MemoryEngine` methods). Add the method to the interface in `index.ts`, implement it in `real.ts`, add a trivial version to `mock.ts` so the build stays green, and describe it in the PR. Breaking changes still need Claude.
+- Prod runs `MEMORY_ENGINE=mock` until C2+C3+C4 are merged and the self-test passes; then Claude flips it to `real`. Make that moment come early: C1→C4 first, smallest viable versions, then deepen.
+
+### Extra tasks after C8 (in this order)
+- **C9 Maintenance**: `lifecycle.ts` exports `runMaintenance({ now })`: flip expired units (+events), backfill `needsEmbedding` units, purge guest owners inactive > 7 days (all collections in `OWNED_COLLECTIONS` + `user_settings`; Better Auth `user` docs with `isAnonymous: true` and no session in 7 days). Claude wires `/api/cron/maintenance`.
+- **C10 Agent keys + MCP engine side**: `agentKeys.ts`: `createAgentKey(ownerId, name, spaceKeys) → { id, key (shown once), prefix }` (store sha256 only), `verifyAgentKey(rawKey) → { ownerId, spaceKeys, name } | null`, `listAgentKeys`, `revokeAgentKey`. Writes from agents use actor `{kind:'external_agent', name}`. Claude builds `/api/mcp`.
+- **C11 Conflicts for the Review inbox**: `listConflicts(ownerId)` = pairs of active units in the same space with cosine ≥ 0.85, different slot values or an LLM-judged contradiction (batch, `fast` chain, cached on the units as `conflictWith`), and `resolveConflict({ownerId, keepId, dropIds})` → supersede with reason `conflict_resolution`.
+- **C12 Time travel**: `asOf?: string` on `ListMemoriesInput` and `RecallInput` (§bi-temporal: `validFrom <= t` and (`validTo` absent or `> t`), statuses active+superseded). Demo line: "What did you think my deadline was this morning?"
+- **C13 Profile block** (Letta rethink): reflection also writes a ≤ 1,200-char "what I know about {name}" summary per owner in a new `profiles` collection (`{_id: ownerId, text, version, updatedAt, evidenceIds}`), returned in `RecallResult` as `profile?: string` and used as the "About" section when present. Keep the previous version for a diff.
+- **C14 Tuning**: run the evals, tune weights/thresholds, record before/after numbers in `evals/results.md` and `CHANGELOG.md`.
+
 ## How the engine plugs in
 
 - The app calls only `engine()` from `src/server/memory/index.ts`. `MEMORY_ENGINE=mock` serves `mock.ts` (Claude's fixture engine); `MEMORY_ENGINE=real` serves `real.ts` — **your file**. Replace each `notImplemented` in `real.ts` as you go. Put logic in focused modules under `src/server/memory/` (`gate.ts`, `recall.ts`, `score.ts`, `reconcile.ts`, `extract.ts`, `lifecycle.ts`, `reflect.ts`, `seed.ts`, `insights.ts`, `prompts/*.ts`) and have `real.ts` wire them.
@@ -30,8 +52,8 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 ---
 
-## Task C0 — Database setup script            [status: done by Claude in Phase 0; Codex owns it from now]
-Files: `scripts/db-setup.ts`. `npm run db:setup` creates collections, the `memories` `$jsonSchema` validator, all TRD §5.2 indexes, and the two Atlas Search indexes (polls until queryable). Idempotent. Run against `radahn` and `radahn_eval` (`MONGODB_DB=radahn_eval npm run db:setup`). Extend it if you add fields or indexes.
+## Task C0 — Database setup            [status: done 04:38 by Claude — Atlas radahn fully set up; Codex owns it from now]
+Files: `src/server/db/setup.ts` (definitions), `scripts/db-setup.ts` (CLI), `POST /api/admin/db-setup` (runs on Vercel). Creates collections, the `memories` `$jsonSchema` validator, all TRD §5.2 indexes, and the two Atlas Search indexes (polls until queryable). Idempotent. Run against `radahn` and `radahn_eval` (`MONGODB_DB=radahn_eval npm run db:setup`). Extend it if you add fields or indexes.
 
 ## Task C1 — LLM registry: quota-aware routing + embeddings      [status: todo]
 Files: `src/server/llm/**` (+ tests).
