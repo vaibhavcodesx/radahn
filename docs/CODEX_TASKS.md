@@ -70,7 +70,7 @@ Files: `src/server/memory/gate.ts` (+ `gate.test.ts`), wire `realEngine.preScan`
 - §4.3 candidate gate: secrets → blocked; injection patterns + invisible Unicode → blocked (`reason: 'injection'`); strip invisible chars always; sensitivity/policy → `pending_review`; length clamp 240; tautology/empty → skip.
 - Tests: ≥ 1 positive and 1 negative fixture per detector; the redacted output never contains the secret; a sentence with "my password is hunter2" is redacted; "I prefer passwords managers" is not.
 
-## Task C3 — Recall      [status: todo]
+## Task C3 — Recall      [status: implemented 04:48, hosted verification after deployment]
 Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buildContext`, `ghostContext`, `getRecallTrace`.
 - §5.1–§5.6 exactly: 4 channels in parallel (semantic `$vectorSearch` numCandidates 150 / limit 40 with pre-filter `{ownerId, status:'active', spaceKey:{$in:[space,'global']}}` then `$match` on `expiresAt`; lexical `$search` compound with filters; temporal via `chrono-node` only when the query has a time expression; graph-lite on entities of top 3), RRF k=60 normalised, the `final` formula, threshold 0.35 + noise floor, MMR λ=0.7, budget 8 units / 1,200 tokens, ambiguity notice, reason codes + plain-language `why`.
 - Core = pinned active units (≤ 1,500 chars). Strategies per decision 4.

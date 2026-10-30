@@ -36,3 +36,5 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 - [x] [codex] C1 merged by Claude, PR #1; all checks and smoke passed.
 - [x] [codex] C2 implemented 04:39; 47 privacy tests, 60 total tests, lint, typecheck and build passed. PR #2 awaiting lead merge.
+
+- [x] [codex] C3 implemented 04:48; 91 tests, lint, typecheck, build passed. Hosted Atlas planning/latency probe queued after deployment.

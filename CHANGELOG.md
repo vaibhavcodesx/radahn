@@ -24,3 +24,7 @@ Append-only. Newest first. Prefix entries with `[claude]`, `[codex]`, or `[human
 - 04:34 [codex] Started C2 full privacy pre-scan and deterministic candidate gate.
 
 - 04:39 [codex] C2 implemented all 13 secret detectors, Luhn and entropy checks, overlapping-span redaction, invisible-character stripping, deterministic injection/policy gate, and realEngine.preScan wiring. 47 gate tests include false positives and reviewer-reproduced bypasses (marker prefixes, card+CVV, masked random suffix). All 60 tests, lint, typecheck and build passed; independent privacy review cleared. No contract changes.
+
+- 04:40 [codex] Started C3 hybrid recall. Adopted overnight instructions for Vercel Atlas checks and isolated eval: owners.
+
+- 04:48 [codex] C3 implemented owner-scoped hybrid recall, normalized RRF, recency/importance/confidence/type scoring, MMR diversity, budgets, relevant strategies, change/ambiguity notices, traces/stats, DTO serialization and hosted isolated-owner self-test with cleanup. 91 total tests, lint, typecheck and build passed; independent review fixes cover trace-storage outages and planning-strategy priority. Near-duplicate suppression uses cosine >=0.95 after MMR ordering (keeps differing slot values for clarification). Hosted Atlas/400ms verification follows merge/deploy.
