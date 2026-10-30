@@ -33,7 +33,7 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 ## Task C0 — Database setup script            [status: done by Claude in Phase 0; Codex owns it from now]
 Files: `scripts/db-setup.ts`. `npm run db:setup` creates collections, the `memories` `$jsonSchema` validator, all TRD §5.2 indexes, and the two Atlas Search indexes (polls until queryable). Idempotent. Run against `radahn` and `radahn_eval` (`MONGODB_DB=radahn_eval npm run db:setup`). Extend it if you add fields or indexes.
 
-## Task C1 — LLM registry: quota-aware routing + embeddings      [status: todo]
+## Task C1 — LLM registry: quota-aware routing + embeddings      [status: implemented 04:33, awaiting lead merge]
 Files: `src/server/llm/**` (+ tests).
 - Key pool from `env().GEMINI_API_KEYS` (already trimmed). Fingerprint each key as `sha256(key).slice(0,6)`; never log keys.
 - State in `llm_usage` (`LlmUsageDoc`, `_id = "${keyFp}:${model}"`): on a 429 whose message mentions per-day / daily quota → `exhaustedUntil` = next midnight America/Los_Angeles; other 429/RESOURCE_EXHAUSTED → `cooldownUntil = now + 60 s`; 5xx/timeouts → retry once with jitter, then next candidate. Cache the state in-process for 10 s so `candidates()` costs ~0 ms on the hot path.

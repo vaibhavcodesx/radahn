@@ -1,4 +1,5 @@
 import "server-only";
+import { fingerprint, refreshUsage, live, record } from "./quota";
 import { createGoogleGenerativeAI, type GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { embedMany, generateText, Output, type LanguageModel } from "ai";
 import type { z } from "zod";
@@ -20,7 +21,7 @@ export type ModelRole = "chat" | "fast" | "reflect";
 export const MODEL_CHAINS: Record<ModelRole, string[]> = {
   chat: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
   fast: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-  reflect: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
+  reflect: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
 };
 
 /** Human label shown in the UI ("3.8 Flash"). */
@@ -52,42 +53,34 @@ export interface ServedBy {
  * Candidates for a role, best first, already skipping (key, model) pairs that are cooling
  * down or exhausted. `preferred` (a model id from user settings) moves to the front if allowed.
  */
+let rotation = 0;
 export async function candidates(role: ModelRole, preferred?: string): Promise<ModelCandidate[]> {
-  const keys = env().GEMINI_API_KEYS;
+  const keys = [...new Set(env().GEMINI_API_KEYS)];
   let chain = MODEL_CHAINS[role];
-  if (preferred && chain.includes(preferred)) chain = [preferred, ...chain.filter((m) => m !== preferred)];
-  const out: ModelCandidate[] = [];
-  chain.forEach((modelId, mi) => {
-    keys.forEach((apiKey, ki) => {
-      const google = createGoogleGenerativeAI({ apiKey });
-      out.push({
-        model: google(modelId),
-        modelId,
-        keyFp: `k${ki}`,
-        label: modelLabel(modelId),
-        fallback: mi > 0,
-      });
-    });
-  });
-  return out;
+  if (preferred && chain.includes(preferred)) chain = [preferred, ...chain.filter(m => m !== preferred)];
+  await refreshUsage(keys.flatMap(key => chain.map(model => `${fingerprint(key)}:${model}`)));
+  const offset = rotation++ % Math.max(1, keys.length);
+  const ordered = [...keys.slice(offset), ...keys.slice(0, offset)];
+  return chain.flatMap((modelId, mi) => ordered.flatMap(apiKey => {
+    const keyFp = fingerprint(apiKey);
+    if (!live(`${keyFp}:${modelId}`)) return [];
+    return [{ model: createGoogleGenerativeAI({apiKey})(modelId), modelId, keyFp, label: modelLabel(modelId), fallback: mi > 0 }];
+  }));
 }
 
-/** Record how a candidate did, so routing can skip it next time. */
+/** Quota state is infrastructure-wide; unlike user memory it is keyed only by key fingerprint. */
 export async function report(
   candidate: Pick<ModelCandidate, "modelId" | "keyFp">,
   outcome: "ok" | "rate_limited" | "quota_exhausted" | "error",
-): Promise<void> {
-  void candidate;
-  void outcome;
-}
+): Promise<void> { await record(candidate, outcome); }
 
 /** Classify an AI SDK / Gemini error for `report`. */
 export function classifyError(err: unknown): "rate_limited" | "quota_exhausted" | "error" {
   const msg = String((err as { message?: string })?.message ?? err).toLowerCase();
   const status = (err as { statusCode?: number })?.statusCode;
-  if (msg.includes("per day") || msg.includes("perday") || msg.includes("daily")) return "quota_exhausted";
-  if (status === 429 || msg.includes("429") || msg.includes("resource_exhausted") || msg.includes("quota"))
-    return "rate_limited";
+  const limited = status === 429 || /429|resource_exhausted|quota.*exceed/.test(msg);
+  if (limited && /per[ _-]?day|daily/.test(msg)) return "quota_exhausted";
+  if (limited) return "rate_limited";
   return "error";
 }
 
@@ -106,20 +99,27 @@ export async function withFallback<T>(
   opts: { preferred?: string } = {},
 ): Promise<{ result: T; servedBy: ServedBy }> {
   const list = await candidates(role, opts.preferred);
-  let lastErr: unknown;
   for (const c of list) {
-    try {
-      const result = await fn(c);
-      await report(c, "ok");
-      return { result, servedBy: { modelId: c.modelId, label: c.label, fallback: c.fallback } };
-    } catch (err) {
-      lastErr = err;
-      const kind = classifyError(err);
-      await report(c, kind);
-      if (kind === "error") break; // not a quota problem: don't burn the chain
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await fn(c);
+        await report(c, "ok");
+        return { result, servedBy: { modelId: c.modelId, label: c.label, fallback: c.fallback } };
+      } catch (err) {
+        const kind = classifyError(err);
+        await report(c, kind);
+        if (kind !== "error") break;
+        if (!transient(err)) throw new Error("LLM request failed (non-retryable provider error)");
+        if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+      }
     }
   }
-  throw lastErr ?? new Error("No model candidates available");
+  throw new Error("LLM request failed (no live candidates succeeded)");
+}
+
+function transient(err: unknown): boolean {
+  const e = err as { statusCode?: number; name?: string; message?: string };
+  return (e?.statusCode ?? 0) >= 500 || /timeout|abort|ETIMEDOUT|ECONNRESET|fetch failed/i.test(`${e?.name} ${e?.message}`);
 }
 
 /** Structured output with fallback (AI SDK v7: generateText + Output.object). */
@@ -130,10 +130,11 @@ export async function generateStructured<S extends z.ZodType>(
   const { result, servedBy } = await withFallback(role, async (c) => {
     const { output } = await generateText({
       model: c.model,
+      maxRetries: 0,
       system: args.system,
       prompt: args.prompt,
       output: Output.object({ schema: args.schema }),
-      providerOptions: thinkingOptions(c.modelId, args.thinking ?? "low"),
+      providerOptions: thinkingOptions(c.modelId, args.thinking ?? (role === "reflect" ? "medium" : "low")),
       abortSignal: AbortSignal.timeout(args.timeoutMs ?? 20_000),
     });
     return output as z.infer<S>;
@@ -151,9 +152,10 @@ export async function generatePlain(
     async (c) => {
       const { text } = await generateText({
         model: c.model,
+      maxRetries: 0,
         system: args.system,
         prompt: args.prompt,
-        providerOptions: thinkingOptions(c.modelId, args.thinking ?? "low"),
+        providerOptions: thinkingOptions(c.modelId, args.thinking ?? (role === "reflect" ? "medium" : "low")),
         abortSignal: AbortSignal.timeout(args.timeoutMs ?? 30_000),
       });
       return text;
@@ -176,23 +178,58 @@ export async function embed(
 ): Promise<number[][]> {
   if (items.length === 0) return [];
   const e = env();
-  const values = items.map((i) =>
-    kind === "query" ? `task: search result | query: ${i.text}` : `title: ${i.title ?? "none"} | text: ${i.text}`,
-  );
-  let lastErr: unknown;
-  for (const apiKey of e.GEMINI_API_KEYS) {
-    try {
-      const google = createGoogleGenerativeAI({ apiKey });
-      const { embeddings } = await embedMany({
-        model: google.embedding(e.GEMINI_EMBED_MODEL),
-        values,
-        providerOptions: { google: { outputDimensionality: e.EMBED_DIM } },
-        abortSignal: AbortSignal.timeout(8_000),
-      });
-      return embeddings;
-    } catch (err) {
-      lastErr = err;
+  const result: number[][] = new Array(items.length);
+  const missing: number[] = [];
+  items.forEach((item, index) => {
+    const key = normalise(item.text);
+    const hit = kind === "query" ? queryCache.get(key) : undefined;
+    if (hit && hit.until > Date.now()) {
+      queryCache.delete(key); queryCache.set(key, hit);
+      result[index] = [...hit.vector];
+    } else { queryCache.delete(key); missing.push(index); }
+  });
+  const keys = [...new Set(e.GEMINI_API_KEYS)];
+  await refreshUsage(keys.map(key => `${fingerprint(key)}:${e.GEMINI_EMBED_MODEL}`));
+  for (let start = 0; start < missing.length; start += 100) {
+    const batch = missing.slice(start, start + 100);
+    const values = batch.map(index => {
+      const i = items[index];
+      return kind === "query" ? `task: search result | query: ${i.text}` : `title: ${i.title ?? "none"} | text: ${i.text}`;
+    });
+    let vectors: number[][] | undefined;
+    for (const apiKey of keys) {
+      const pair = {keyFp: fingerprint(apiKey), modelId: e.GEMINI_EMBED_MODEL};
+      if (!live(`${pair.keyFp}:${pair.modelId}`)) continue;
+      for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { embeddings } = await embedMany({
+          model: createGoogleGenerativeAI({apiKey}).embedding(e.GEMINI_EMBED_MODEL), values,
+          providerOptions: { google: { outputDimensionality: e.EMBED_DIM } },
+          maxRetries: 0, abortSignal: AbortSignal.timeout(8_000),
+        });
+        if (embeddings.length !== batch.length || embeddings.some(v => v.length !== 768 || v.some(n => !Number.isFinite(n)))) throw new Error("Invalid embedding dimensions");
+        vectors = embeddings; await record(pair, "ok"); break;
+      } catch (err) {
+        await record(pair, classifyError(err));
+        if (attempt === 0 && transient(err)) await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+        else break;
+      }
+      }
+      if (vectors) break;
     }
+    if (!vectors) throw new Error("Embedding request failed (no live candidates succeeded)");
+    batch.forEach((index, j) => {
+      result[index] = [...vectors[j]];
+      if (kind === "query") {
+        const key = normalise(items[index].text);
+        queryCache.delete(key);
+        queryCache.set(key, {vector: [...vectors[j]], until: Date.now() + 600_000});
+        // Bound memory as well as age; query text is never persisted by this cache.
+        if (queryCache.size > 256) queryCache.delete(queryCache.keys().next().value!);
+      }
+    });
   }
-  throw lastErr ?? new Error("embed failed");
+  return result;
 }
+const queryCache = new Map<string, {vector: number[]; until: number}>();
+const normalise = (text: string) => text.trim().replace(/\s+/g, " ").toLowerCase();
