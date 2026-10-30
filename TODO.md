@@ -31,4 +31,4 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - (nothing yet)
 
 - [x] [codex] C1 merged by Claude, PR #1; all checks and smoke passed.
-- [x] [codex] C2 implemented 04:39; 47 privacy tests, 60 total tests, lint, typecheck and build passed. Await lead merge.
+- [x] [codex] C2 implemented 04:39; 47 privacy tests, 60 total tests, lint, typecheck and build passed. PR #2 awaiting lead merge.
