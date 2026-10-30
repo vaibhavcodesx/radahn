@@ -34,7 +34,7 @@ export const POST = handle(async (req: Request) => {
 
   const settings = await getSettings(user);
   const system = (await engine()).ghostContext({ timeZone: settings.timeZone, now: new Date() });
-  const { text, servedBy } = await generatePlain("chat", { system, prompt: userMsg.text, preferred: assistant.model, timeoutMs: 40_000 });
+  const { text, servedBy } = await generatePlain("chat", { system, prompt: userMsg.text, preferred: assistant.model, timeoutMs: 15_000 });
   await messages.updateOne({ _id: assistant._id, ownerId: user.id }, { $set: { ghost: { text, model: servedBy.modelId, at: new Date() } } });
   return json({ text, model: servedBy.label, cached: false, sameModel: servedBy.modelId === assistant.model });
 });

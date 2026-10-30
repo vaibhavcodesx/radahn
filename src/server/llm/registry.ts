@@ -54,6 +54,24 @@ export interface ServedBy {
  * down or exhausted. `preferred` (a model id from user settings) moves to the front if allowed.
  */
 let rotation = 0;
+
+/**
+ * Models that hung (no error, no tokens) are skipped in-process for a while. Observed 05:10 IST:
+ * gemini-3.8-flash accepted requests but returned nothing for > 25 s on both keys, which never
+ * raises a 429, so quota routing alone can't route around it. (Claude, integration fix.)
+ */
+const slowUntil = new Map<string, number>();
+export function markSlow(modelId: string, ms = 5 * 60_000) {
+  slowUntil.set(modelId, Date.now() + ms);
+}
+export function isSlow(modelId: string) {
+  return (slowUntil.get(modelId) ?? 0) > Date.now();
+}
+export function isTimeout(err: unknown): boolean {
+  const e = err as { name?: string; message?: string };
+  return /timeout|aborted/i.test(`${e?.name} ${e?.message}`);
+}
+
 export async function candidates(role: ModelRole, preferred?: string): Promise<ModelCandidate[]> {
   const keys = [...new Set(env().GEMINI_API_KEYS)];
   let chain = MODEL_CHAINS[role];
@@ -61,6 +79,8 @@ export async function candidates(role: ModelRole, preferred?: string): Promise<M
   await refreshUsage(keys.flatMap(key => chain.map(model => `${fingerprint(key)}:${model}`)));
   const offset = rotation++ % Math.max(1, keys.length);
   const ordered = [...keys.slice(offset), ...keys.slice(0, offset)];
+  // Slow models go last rather than vanishing, so a fully slow chain still gets tried.
+  chain = [...chain.filter((m) => !isSlow(m)), ...chain.filter((m) => isSlow(m))];
   return chain.flatMap((modelId, mi) => ordered.flatMap(apiKey => {
     const keyFp = fingerprint(apiKey);
     if (!live(`${keyFp}:${modelId}`)) return [];
@@ -99,7 +119,9 @@ export async function withFallback<T>(
   opts: { preferred?: string } = {},
 ): Promise<{ result: T; servedBy: ServedBy }> {
   const list = await candidates(role, opts.preferred);
+  const hung = new Set<string>();
   for (const c of list) {
+    if (hung.has(c.modelId)) continue;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const result = await fn(c);
@@ -109,6 +131,12 @@ export async function withFallback<T>(
         const kind = classifyError(err);
         await report(c, kind);
         if (kind !== "error") break;
+        // A hung model: don't retry it on this or any other key — move to the next model.
+        if (isTimeout(err)) {
+          markSlow(c.modelId);
+          hung.add(c.modelId);
+          break;
+        }
         if (!transient(err)) throw new Error("LLM request failed (non-retryable provider error)");
         if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
       }

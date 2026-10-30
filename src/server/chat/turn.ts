@@ -235,7 +235,7 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
 
       // 5. Stream with pre-first-token model fallback.
       const list = await candidates("chat", input.model ?? settings.chatModel);
-      const started = await startWithFallback(list, (c) =>
+      const started = await startWithFallback(list, (c, signal) =>
         streamText({
           model: c.model,
           system: ctx.system,
@@ -244,7 +244,7 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           stopWhen: isStepCount(3),
           maxRetries: 0,
           providerOptions: thinkingOptions(c.modelId, "low"),
-          abortSignal: AbortSignal.timeout(45_000),
+          abortSignal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
         }),
       );
       servedModel = started.candidate.modelId;

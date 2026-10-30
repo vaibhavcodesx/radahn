@@ -1,6 +1,6 @@
 import "server-only";
 import type { TextStreamPart, ToolSet } from "ai";
-import { classifyError, report, type ModelCandidate } from "@/server/llm/registry";
+import { classifyError, markSlow, report, type ModelCandidate } from "@/server/llm/registry";
 
 /**
  * Streaming model fallback (TRD §9). Gemini quota errors surface as an `error` part before any
@@ -18,20 +18,37 @@ export interface StartedStream<TOOLS extends ToolSet> {
   candidate: ModelCandidate;
 }
 
+const TIMEOUT = Symbol("first-token-timeout");
+
 export async function startWithFallback<TOOLS extends ToolSet>(
   candidates: ModelCandidate[],
-  start: (c: ModelCandidate) => { stream: AsyncIterable<TextStreamPart<TOOLS>> },
+  start: (c: ModelCandidate, signal: AbortSignal) => { stream: AsyncIterable<TextStreamPart<TOOLS>> },
+  opts: { firstTokenMs?: number } = {},
 ): Promise<StartedStream<TOOLS>> {
   let lastError: unknown = new Error("No chat model is available right now.");
+  const hung = new Set<string>();
   for (const candidate of candidates) {
-    const result = start(candidate);
+    if (hung.has(candidate.modelId)) continue;
+    // A model can accept the request and then send nothing (no 429, no tokens). Give each
+    // candidate a first-token deadline, then abort it and move on.
+    const abort = new AbortController();
+    const result = start(candidate, abort.signal);
     const it = result.stream[Symbol.asyncIterator]();
     const buffered: TextStreamPart<TOOLS>[] = [];
     let failed: unknown;
     let done = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<typeof TIMEOUT>((r) => (timer = setTimeout(() => r(TIMEOUT), opts.firstTokenMs ?? 9_000)));
     try {
       for (;;) {
-        const next = await it.next();
+        const next = await Promise.race([it.next(), deadline]);
+        if (next === TIMEOUT) {
+          failed = new Error(`timeout: ${candidate.modelId} sent no tokens`);
+          markSlow(candidate.modelId);
+          hung.add(candidate.modelId);
+          abort.abort();
+          break;
+        }
         if (next.done) {
           done = true;
           break;
@@ -46,10 +63,12 @@ export async function startWithFallback<TOOLS extends ToolSet>(
       }
     } catch (e) {
       failed = e;
+    } finally {
+      clearTimeout(timer);
     }
     if (failed) {
       lastError = failed;
-      await report(candidate, classifyError(failed));
+      if (!hung.has(candidate.modelId)) await report(candidate, classifyError(failed));
       void it.return?.();
       continue;
     }
