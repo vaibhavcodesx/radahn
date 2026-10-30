@@ -60,6 +60,7 @@ export interface MessageDoc {
 }
 
 export interface UserSettingsDoc {
+  memoryRevision?: number; // Serializes owner memory mutations for cross-document budgets (C5).
   _id: string; // = ownerId
   displayName?: string;
   timeZone: string;

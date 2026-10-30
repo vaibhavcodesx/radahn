@@ -70,7 +70,7 @@ Files: `src/server/memory/gate.ts` (+ `gate.test.ts`), wire `realEngine.preScan`
 - §4.3 candidate gate: secrets → blocked; injection patterns + invisible Unicode → blocked (`reason: 'injection'`); strip invisible chars always; sensitivity/policy → `pending_review`; length clamp 240; tautology/empty → skip.
 - Tests: ≥ 1 positive and 1 negative fixture per detector; the redacted output never contains the secret; a sentence with "my password is hunter2" is redacted; "I prefer passwords managers" is not.
 
-## Task C3 — Recall      [status: todo]
+## Task C3 — Recall      [status: implemented 04:48, hosted verification after deployment]
 Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buildContext`, `ghostContext`, `getRecallTrace`.
 - §5.1–§5.6 exactly: 4 channels in parallel (semantic `$vectorSearch` numCandidates 150 / limit 40 with pre-filter `{ownerId, status:'active', spaceKey:{$in:[space,'global']}}` then `$match` on `expiresAt`; lexical `$search` compound with filters; temporal via `chrono-node` only when the query has a time expression; graph-lite on entities of top 3), RRF k=60 normalised, the `final` formula, threshold 0.35 + noise floor, MMR λ=0.7, budget 8 units / 1,200 tokens, ambiguity notice, reason codes + plain-language `why`.
 - Core = pinned active units (≤ 1,500 chars). Strategies per decision 4.
@@ -81,7 +81,7 @@ Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buil
 - Tests (pure `score.ts`): RRF normalisation, recency half-lives (∞ for profile/strategy), typeBoost by intent, threshold drop, MMR removes near-duplicates, budget cut; `buildContext` refs equal picks.
 Done when: on the dev DB with seeded demo data, "Plan my next 4 hours." returns the 9 PM constraint, the time-box preference, and the top-16 goal in < 400 ms server time.
 
-## Task C4 — Extraction, reconcile, transactional writes, events      [status: todo]
+## Task C4 — Extraction, reconcile, transactional writes, events      [status: implemented 04:59, hosted self-test after deploy]
 Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests. Wire `extractAndWrite`, `rememberExplicit`.
 - §4.2 extraction on `MODEL_CHAINS.fast` with structured output (zod schema = `CandidateMemory` + optional `validFrom`), prompt per §4.2 + decision 3. ≤ 5 candidates.
 - §4.3 gate (C2) → §4.4 reconcile: hint with valid target → slot match (confirm / supersede) → hash dedup (decision 5) → semantic neighbours (≥ 0.92 confirm, 0.80–0.92 one batched LLM reconcile on `fast`, < 0.80 add).
@@ -92,7 +92,7 @@ Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests
 - Idempotency: skip if a `memory_events` doc already exists for `(messageId, candidate hash)`.
 - Tests with mocked LLM + embeddings: slot same value → confirm; slot different value → supersede (and notice text); out-of-order guard; secret candidate → blocked with no statement stored; sensitive → pending; explicit sensitive → active.
 
-## Task C5 — Explicit tools + review + lifecycle reads      [status: todo]
+## Task C5 — Explicit tools + review + lifecycle reads      [status: implemented 05:07, hosted checks after deploy]
 Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemories`, `getMemory`, `listEvents`, `pendingCount`.
 - Forget = `deleteOne` + tombstone event with no statement; ambiguous query → candidates (never forget on ambiguity).
 - `updateMemory`: pin budget check (1,500 chars across pinned) → throw a typed error the route maps to "consolidate first"; `expiresAt` updates `purgeAt`.

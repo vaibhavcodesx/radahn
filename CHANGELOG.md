@@ -24,3 +24,15 @@ Append-only. Newest first. Prefix entries with `[claude]`, `[codex]`, or `[human
 - 04:34 [codex] Started C2 full privacy pre-scan and deterministic candidate gate.
 
 - 04:39 [codex] C2 implemented all 13 secret detectors, Luhn and entropy checks, overlapping-span redaction, invisible-character stripping, deterministic injection/policy gate, and realEngine.preScan wiring. 47 gate tests include false positives and reviewer-reproduced bypasses (marker prefixes, card+CVV, masked random suffix). All 60 tests, lint, typecheck and build passed; independent privacy review cleared. No contract changes.
+
+- 04:40 [codex] Started C3 hybrid recall. Adopted overnight instructions for Vercel Atlas checks and isolated eval: owners.
+
+- 04:48 [codex] C3 implemented owner-scoped hybrid recall, normalized RRF, recency/importance/confidence/type scoring, MMR diversity, budgets, relevant strategies, change/ambiguity notices, traces/stats, DTO serialization and hosted isolated-owner self-test with cleanup. 91 total tests, lint, typecheck and build passed; independent review fixes cover trace-storage outages and planning-strategy priority. Near-duplicate suppression uses cosine >=0.95 after MMR ordering (keeps differing slot values for clarification). Hosted Atlas/400ms verification follows merge/deploy.
+
+- 04:50 [codex] Started C4 extraction, deterministic reconciliation and transactional event writes; additive hash/validFrom metadata follows overnight authorization.
+
+- 04:59 [codex] C4 implemented structured extraction, consent/privacy gates including normalized metadata, pre-embedding SHA-1 dedup, deterministic/one-batch ambiguous reconciliation, transaction-linked supersede/events, historical-fact guard, idempotent final-event index and TTL grace. Added optional contentHash/candidateHash/validFrom fields under overnight approval. Atlas normalized scores are converted to cosine for reconcile thresholds; absent BSON optional fields are omitted. Races retain backfill markers; hinted updates preserve slot/pin metadata. 115 tests, lint, typecheck and build passed. Hosted selftest now covers create/confirm/update/history/idempotency/privacy/real rollback/live extraction. DB setup + hosted probe required after deployment.
+
+- 05:00 [codex] Started C5 explicit correction/forget/review and owner-scoped lifecycle reads.
+
+- 05:07 [codex] C5 implemented correction/forget/review/update, scoped memory/event/detail reads, pending count and atomic expiry events. Shared owner mutation revision prevents concurrent pin-budget write skew (optional UserSettingsDoc.memoryRevision). Forget tombstones contain no statement; review edits re-run policy and clear stale values; expiry CAS protects edited purge deadlines; only live active pins count. 127 tests, lint/typecheck/build passed, independent review cleared after synthetic-settings cleanup fix. Hosted probes cover explicit lifecycle operations and concurrent pin limits.

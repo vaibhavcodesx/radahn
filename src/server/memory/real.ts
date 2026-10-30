@@ -1,5 +1,9 @@
 import "server-only";
 import { preScan } from "./gate";
+import { recall, getRecallTrace } from "./recall";
+import { buildSystemPrompt, buildGhostPrompt } from "./context";
+import { extractAndWrite, rememberExplicit } from "./extract";
+import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories, getMemory, listEvents, pendingCount } from "./tools";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -12,24 +16,24 @@ function notImplemented(name: string): never {
 
 export const realEngine: MemoryEngine = {
   preScan,
-  recall: async () => notImplemented("recall"),
-  buildContext: () => notImplemented("buildContext"),
-  ghostContext: () => notImplemented("ghostContext"),
-  extractAndWrite: async () => notImplemented("extractAndWrite"),
-  rememberExplicit: async () => notImplemented("rememberExplicit"),
-  correctMemory: async () => notImplemented("correctMemory"),
-  forgetMemory: async () => notImplemented("forgetMemory"),
-  reviewMemory: async () => notImplemented("reviewMemory"),
-  updateMemory: async () => notImplemented("updateMemory"),
+  recall,
+  buildContext: buildSystemPrompt,
+  ghostContext: buildGhostPrompt,
+  extractAndWrite,
+  rememberExplicit,
+  correctMemory,
+  forgetMemory,
+  reviewMemory,
+  updateMemory,
   runReflection: async () => notImplemented("runReflection"),
   listReflections: async () => notImplemented("listReflections"),
-  listMemories: async () => notImplemented("listMemories"),
-  getMemory: async () => notImplemented("getMemory"),
-  getRecallTrace: async () => notImplemented("getRecallTrace"),
-  listEvents: async () => notImplemented("listEvents"),
+  listMemories,
+  getMemory,
+  getRecallTrace,
+  listEvents,
   graph: async () => notImplemented("graph"),
   insights: async () => notImplemented("insights"),
-  pendingCount: async () => notImplemented("pendingCount"),
+  pendingCount,
   seedDemo: async () => notImplemented("seedDemo"),
   removeDemo: async () => notImplemented("removeDemo"),
   deleteAll: async () => notImplemented("deleteAll"),
