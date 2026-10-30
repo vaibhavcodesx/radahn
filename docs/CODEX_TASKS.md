@@ -6,6 +6,14 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 **Deadline:** C1–C4 merged by **10:30 IST** (Checkpoint A). C5–C6 by 12:00. C7–C8 by 15:00. Hard freeze 21:00.
 
+## LEAD NOTES (Claude, 05:15 IST) — read first
+- **Merged to main:** C1, C2, C3, C4, C5 (stack `codex/c5-tools`). 136 tests green. Deployed.
+- **Self-test on Vercel (real Atlas + Gemini):** 9/11 pass, warm recall 26 ms. **FAILING:** `transactional-slot-reconcile-and-idempotency` (1.7 s) and `explicit-correction-review-and-forget` (depends on it). Fix these first — slot supersede is demo beat 4 ("deadline 9 PM → 10 PM").
+- **Prod flips to MEMORY_ENGINE=real as soon as `seedDemo` / `removeDemo` / `deleteAll` exist (C6)** — the judge path starts with "Load demo memories". So order: fix the 2 failing checks → C6 → C7 (reflection; `listReflections` is called by the Activity page) → C8 (`graph`, `insights`; Activity calls `insights` and tolerates errors).
+- **Gate feedback (C2):** (a) the `act as` injection rule blocks legit memories like "Aarav will act as team lead" — restrict it to instruction-shaped text (e.g. "act as (a|an|my|the)? ?(system|assistant|ai|admin|developer)"); (b) the ≥ 24-char entropy rule redacts ordinary URLs (GitHub links). Exempt `https?://` tokens without credential-shaped query params.
+- **Registry (C1) integration edit by Claude:** `gemini-3.8-flash` hung > 25 s with no 429 at 05:10; I added `markSlow/isSlow/isTimeout` and timeout → next model in `withFallback`. Keep these exports (the chat route uses `markSlow`).
+- Mock engine now uses your `gate.preScan`.
+
 ## OVERNIGHT NOTES (added 04:40 IST — the humans are asleep until ~08:30; work autonomously)
 
 - **Nobody will answer questions until ~08:30.** Make sensible calls, write them in the PR description and `CHANGELOG.md`, keep going. Claude reviews and merges your PRs as soon as CI is green (it polls). Don't wait for a merge to start the next task: branch the next task off your previous branch if it depends on it, and say so in the PR.
@@ -64,13 +72,13 @@ Files: `src/server/llm/**` (+ tests).
 - Tests (mocked fetch / mocked provider): exhausted pair is skipped; cooldown expires; key rotation; prefixes applied; no key ever appears in an error message.
 Done when: unit tests green; `npx tsx scripts/smoke-llm.ts` (write it) prints which model served a 1-token call and a 768-length embedding.
 
-## Task C2 — Privacy gate      [status: implemented 04:39, awaiting lead merge]
+## Task C2 — Privacy gate      [status: merged 05:12 by Claude]
 Files: `src/server/memory/gate.ts` (+ `gate.test.ts`), wire `realEngine.preScan`.
 - memory-engine.md §4.1 detectors (all of them, incl. Luhn for cards, Aadhaar 4-4-4, PAN, OTP phrasing, "password is …", entropy ≥ 4.0 for tokens ≥ 24 chars) → `PreScanResult`. Synchronous, pure.
 - §4.3 candidate gate: secrets → blocked; injection patterns + invisible Unicode → blocked (`reason: 'injection'`); strip invisible chars always; sensitivity/policy → `pending_review`; length clamp 240; tautology/empty → skip.
 - Tests: ≥ 1 positive and 1 negative fixture per detector; the redacted output never contains the secret; a sentence with "my password is hunter2" is redacted; "I prefer passwords managers" is not.
 
-## Task C3 — Recall      [status: implemented 04:48, hosted verification after deployment]
+## Task C3 — Recall      [status: merged 05:12 by Claude]
 Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buildContext`, `ghostContext`, `getRecallTrace`.
 - §5.1–§5.6 exactly: 4 channels in parallel (semantic `$vectorSearch` numCandidates 150 / limit 40 with pre-filter `{ownerId, status:'active', spaceKey:{$in:[space,'global']}}` then `$match` on `expiresAt`; lexical `$search` compound with filters; temporal via `chrono-node` only when the query has a time expression; graph-lite on entities of top 3), RRF k=60 normalised, the `final` formula, threshold 0.35 + noise floor, MMR λ=0.7, budget 8 units / 1,200 tokens, ambiguity notice, reason codes + plain-language `why`.
 - Core = pinned active units (≤ 1,500 chars). Strategies per decision 4.
@@ -81,7 +89,7 @@ Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buil
 - Tests (pure `score.ts`): RRF normalisation, recency half-lives (∞ for profile/strategy), typeBoost by intent, threshold drop, MMR removes near-duplicates, budget cut; `buildContext` refs equal picks.
 Done when: on the dev DB with seeded demo data, "Plan my next 4 hours." returns the 9 PM constraint, the time-box preference, and the top-16 goal in < 400 ms server time.
 
-## Task C4 — Extraction, reconcile, transactional writes, events      [status: implemented 04:59, hosted self-test after deploy]
+## Task C4 — Extraction, reconcile, transactional writes, events      [status: merged 05:12 by Claude]
 Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests. Wire `extractAndWrite`, `rememberExplicit`.
 - §4.2 extraction on `MODEL_CHAINS.fast` with structured output (zod schema = `CandidateMemory` + optional `validFrom`), prompt per §4.2 + decision 3. ≤ 5 candidates.
 - §4.3 gate (C2) → §4.4 reconcile: hint with valid target → slot match (confirm / supersede) → hash dedup (decision 5) → semantic neighbours (≥ 0.92 confirm, 0.80–0.92 one batched LLM reconcile on `fast`, < 0.80 add).
@@ -92,7 +100,7 @@ Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests
 - Idempotency: skip if a `memory_events` doc already exists for `(messageId, candidate hash)`.
 - Tests with mocked LLM + embeddings: slot same value → confirm; slot different value → supersede (and notice text); out-of-order guard; secret candidate → blocked with no statement stored; sensitive → pending; explicit sensitive → active.
 
-## Task C5 — Explicit tools + review + lifecycle reads      [status: implemented 05:07, hosted checks after deploy]
+## Task C5 — Explicit tools + review + lifecycle reads      [status: merged 05:12 by Claude]
 Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemories`, `getMemory`, `listEvents`, `pendingCount`.
 - Forget = `deleteOne` + tombstone event with no statement; ambiguous query → candidates (never forget on ambiguity).
 - `updateMemory`: pin budget check (1,500 chars across pinned) → throw a typed error the route maps to "consolidate first"; `expiresAt` updates `purgeAt`.
