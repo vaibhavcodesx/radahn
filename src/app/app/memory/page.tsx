@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TypeSwatch, ValuePill } from "@/components/atoms";
+import { AtlasField } from "@/components/memory/AtlasField";
 import { AtlasToolbar } from "@/components/memory/AtlasToolbar";
 import { MEMORY_TYPE_LIST, MEMORY_TYPE_META, STATUS_LABEL, type MemoryTypeName } from "@/lib/memory-types";
 import { cn, timeAgo } from "@/lib/utils";
@@ -21,6 +22,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
   const q = one("q")?.slice(0, 100);
   const sort = (["updated", "importance", "recalled", "created"] as const).find((s) => s === one("sort")) ?? "updated";
   const space = one("space") ?? "all";
+  const view = one("view") === "field" ? "field" : "table";
 
   const eng = await engine();
   const [all, spaces] = await Promise.all([
@@ -41,7 +43,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
   const counts = MEMORY_TYPE_LIST.map((t) => ({ t, n: active.filter((m) => m.type === t).length })).filter((c) => c.n > 0);
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { type, status, q, sort: sort === "updated" ? undefined : sort, space: space === "all" ? undefined : space, ...patch };
+    const merged = { view: view === "field" ? "field" : undefined, type, status, q, sort: sort === "updated" ? undefined : sort, space: space === "all" ? undefined : space, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return `/app/memory${s ? `?${s}` : ""}`;
@@ -57,6 +59,18 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
               {active.length} active · {all.filter((m) => m.status === "pending_review").length} need review · {all.filter((m) => m.status === "superseded").length} outdated · {all.filter((m) => m.status === "expired").length} expired
             </p>
           </div>
+          <nav aria-label="View" className="flex gap-1 rounded-full bg-surface p-1 shadow-card">
+            {(["table", "field"] as const).map((v) => (
+              <Link
+                key={v}
+                href={href({ view: v === "field" ? "field" : undefined })}
+                aria-current={view === v ? "page" : undefined}
+                className={cn("mono-label flex h-7 items-center gap-1.5 rounded-full px-3 text-[10px]", view === v ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink")}
+              >
+                {v} <span className="opacity-60">{v === "table" ? "T" : "F"}</span>
+              </Link>
+            ))}
+          </nav>
         </header>
 
         {/* Whitney strip: one painted row, block width proportional to count (design.md §6.5) */}
@@ -86,7 +100,9 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
           spaces={[{ id: "all", name: "All spaces" }, { id: "global", name: "Global" }, ...spaces.map((s) => ({ id: s._id.toHexString(), name: s.name }))]}
         />
 
-        {rows.length === 0 ? (
+        {view === "field" ? (
+          <AtlasField spaceNames={Object.fromEntries(spaceName)} />
+        ) : rows.length === 0 ? (
           <div className="mt-10 rounded-card bg-surface p-8 text-center shadow-card">
             <p className="font-serif text-[22px]">{all.length ? "Nothing matches these filters." : "No memories yet."}</p>
             <p className="mt-2 text-[13px] text-ink-2">
