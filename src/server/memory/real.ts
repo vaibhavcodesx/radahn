@@ -2,6 +2,7 @@ import "server-only";
 import { preScan } from "./gate";
 import { recall, getRecallTrace } from "./recall";
 import { buildSystemPrompt, buildGhostPrompt } from "./context";
+import { extractAndWrite, rememberExplicit } from "./extract";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -17,8 +18,8 @@ export const realEngine: MemoryEngine = {
   recall,
   buildContext: buildSystemPrompt,
   ghostContext: buildGhostPrompt,
-  extractAndWrite: async () => notImplemented("extractAndWrite"),
-  rememberExplicit: async () => notImplemented("rememberExplicit"),
+  extractAndWrite,
+  rememberExplicit,
   correctMemory: async () => notImplemented("correctMemory"),
   forgetMemory: async () => notImplemented("forgetMemory"),
   reviewMemory: async () => notImplemented("reviewMemory"),

@@ -37,7 +37,7 @@ function injection(text: string): boolean {
  return false;
 }
 export function preScan(text: string): PreScanResult {
- const clean=text.replace(INVISIBLE,"");
+ const clean=text.normalize("NFKC").replace(INVISIBLE,"");
  const spans: Array<{start:number;end:number;kind:SecretKind}>=[];
  const add=(start:number,value:string,kind:SecretKind) => {
   let end=start+value.length;
@@ -71,7 +71,7 @@ export function preScan(text: string): PreScanResult {
  }
  let redacted=clean;
  for(const span of [...spans].sort((a,b)=>b.start-a.start)) redacted=redacted.slice(0,span.start)+`[redacted:${span.kind}]`+redacted.slice(span.end);
- return {redacted,kinds:[...new Set(spans.map(s=>s.kind))],injection:injection(text)};
+ return {redacted,kinds:[...new Set(spans.map(s=>s.kind))],injection:injection(text)||injection(clean)};
 }
 export interface GateResult {op:"add"|"pending"|"blocked"|"skip";reason?:string;candidate?:CandidateMemory}
 export function gateCandidate(candidate: CandidateMemory, policy: WritePolicy): GateResult {

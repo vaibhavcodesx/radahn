@@ -5,6 +5,10 @@ import { ObjectId } from "mongodb";
 import { collections } from "@/server/db/collections";
 import { embed } from "@/server/llm/registry";
 import { recall } from "./recall";
+import { writeCandidates } from "./write";
+import { extractAndWrite, rememberExplicit } from "./extract";
+import { mongo } from "@/server/db/client";
+import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
 export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
@@ -36,6 +40,46 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(other.picks.length || other.core.length || other.strategies.length) throw new Error("Owner isolation failed");
       const warm=await recall({ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false});
       checks.push({name:"warm-recall-latency",ok:warm.latencyMs.total<400,ms:Math.round(warm.latencyMs.total),detail:"Warm query; retrieval and scoring budget is 400 ms."});
+    });
+    await check("transactional-slot-reconcile-and-idempotency",async()=>{
+      const candidate:CandidateMemory={statement:"Aarav's integration deadline is 9 PM.",type:"constraint",subject:"aarav",attribute:"integration_deadline",value:"9 PM",entities:["aarav"],importance:9,confidence:0.9,sensitivity:"none",scope:"space",explicit:true,hint:"new"};
+      const context={ownerId,spaceKey,now:new Date(),policy:"review_sensitive" as const,source:{kind:"manual" as const,messageId:"selftest-create",actor:{kind:"system" as const,name:"selftest"}},recalled:[]};
+      const first=await writeCandidates([candidate],context);
+      if(first.added!==1)throw new Error("Create failed");
+      const duplicate=await writeCandidates([candidate],context);
+      if(duplicate.ops[0]?.op!=="skip")throw new Error("Idempotency failed");
+      const confirmed=await writeCandidates([candidate],{...context,source:{...context.source,messageId:"selftest-confirm"}});
+      if(confirmed.confirmed!==1)throw new Error("Confirm failed");
+      const updated=await writeCandidates([{...candidate,statement:"Aarav's integration deadline is 10 PM.",value:"10 PM"}],{...context,source:{...context.source,messageId:"selftest-update"}});
+      if(updated.superseded!==1 || !updated.notices.length)throw new Error("Supersede failed");
+      const chain=await c.memories.find({ownerId,slotKey:"aarav.integration_deadline"}).toArray();
+      if(chain.filter(m=>m.status==="active").length!==1 || chain.filter(m=>m.status==="superseded").length!==1)throw new Error("Single truth failed");
+      const historical=await writeCandidates([{...candidate,validFrom:"2026-01-01T00:00:00Z"}],{...context,source:{...context.source,messageId:"selftest-history"}});
+      const old=await c.memories.findOne({ownerId,_id:new ObjectId(historical.ops[0].memoryId)});
+      if(old?.status!=="superseded")throw new Error("History guard failed");
+    });
+    await check("privacy-sensitive-review-and-consent",async()=>{
+      const candidate:CandidateMemory={statement:"my password is hunter2",type:"fact",entities:[],importance:6,confidence:0.9,sensitivity:"none",scope:"space",explicit:false,hint:"new"};
+      const context={ownerId,spaceKey,now:new Date(),policy:"review_sensitive" as const,source:{kind:"manual" as const,messageId:"selftest-block",actor:{kind:"system" as const,name:"selftest"}},recalled:[]};
+      const blocked=await writeCandidates([candidate],context);
+      if(blocked.blocked!==1 || await c.memories.countDocuments({ownerId,statement:/hunter2/}))throw new Error("Privacy gate failed");
+      const pending=await writeCandidates([{...candidate,statement:"Aarav has fictional seasonal allergies.",sensitivity:"sensitive"}],{...context,source:{...context.source,messageId:"selftest-pending"}});
+      if(pending.pending!==1)throw new Error("Review gate failed");
+      const explicit=await rememberExplicit({ownerId,spaceKey,statement:"Aarav has fictional seasonal allergies.",type:"fact",sensitivity:"sensitive",source:{kind:"manual",actor:{kind:"system",name:"selftest"}}});
+      if(explicit.op!=="add")throw new Error("Explicit consent failed");
+    });
+    await check("transaction-abort-leaves-no-partial-memory",async()=>{
+      const sample=await c.memories.findOne({ownerId});
+      if(!sample)throw new Error("No fixture");
+      const _id=new ObjectId(),session=mongo().startSession();
+      const probe={...sample,_id};delete probe.slotKey;let inserted=false;
+      try {await session.withTransaction(async()=>{await c.memories.insertOne(probe,{session});inserted=true;throw new Error("intentional rollback");});} catch { /* Expected rollback; verify below. */ } finally {await session.endSession();}
+      if(!inserted)throw new Error("Transaction insert failed before rollback probe");
+      if(await c.memories.findOne({ownerId,_id}))throw new Error("Transaction did not roll back");
+    });
+    await check("structured-extraction-live-provider",async()=>{
+      const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
+      if(result.added+result.confirmed+result.pending<1)throw new Error("Extraction produced no useful memory");
     });
   } finally {
     await check("cleanup-isolated-owner",async()=>{

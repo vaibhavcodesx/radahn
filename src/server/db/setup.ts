@@ -47,6 +47,7 @@ const INDEXES: Record<string, IndexDef[]> = {
     [{ purgeAt: 1 }, { name: "ttl_purge", expireAfterSeconds: 0 }],
   ],
   memory_events: [
+    [{ownerId:1,messageId:1,candidateHash:1},{name:"one_write_per_candidate",unique:true,partialFilterExpression:{messageId:{$type:"string"},candidateHash:{$type:"string"}}}],
     [{ ownerId: 1, at: -1 }, { name: "owner_at" }],
     [{ ownerId: 1, messageId: 1 }, { name: "owner_message" }],
     [{ ownerId: 1, memoryId: 1, at: -1 }, { name: "owner_memory_at" }],

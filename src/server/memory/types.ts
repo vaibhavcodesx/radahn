@@ -54,6 +54,7 @@ export interface MemoryUnit {
   ownerId: string;
   spaceKey: SpaceKey;
   type: MemoryType;
+  contentHash?: string; // SHA-1 normalized statement for pre-embedding dedup (C4).
   statement: string; // ≤ 240 chars, third person, absolute dates
   subject?: string;
   attribute?: string;
@@ -307,6 +308,7 @@ export interface CandidateMemory {
   sensitivity: Sensitivity;
   scope: 'global' | 'space';
   expiresAt?: string; // ISO
+  validFrom?: string; // Optional event-time ISO; out-of-order guard (C4).
   explicit: boolean;
   hint: 'new' | 'update' | 'confirm';
   targetRef?: string;
@@ -451,6 +453,7 @@ export interface MemoryEvent {
   /** One-line summary. NO content for 'forgotten' and 'blocked'. */
   summary: string;
   messageId?: string; // turn that caused it (drives write chips)
+  candidateHash?: string; // Idempotent final event per owner/message/candidate (C4).
   diff?: { before?: string; after?: string };
   at: Date;
 }

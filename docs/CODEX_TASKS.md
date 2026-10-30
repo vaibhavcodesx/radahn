@@ -81,7 +81,7 @@ Files: `recall.ts`, `score.ts` (pure), `context.ts`, tests. Wire `recall`, `buil
 - Tests (pure `score.ts`): RRF normalisation, recency half-lives (∞ for profile/strategy), typeBoost by intent, threshold drop, MMR removes near-duplicates, budget cut; `buildContext` refs equal picks.
 Done when: on the dev DB with seeded demo data, "Plan my next 4 hours." returns the 9 PM constraint, the time-box preference, and the top-16 goal in < 400 ms server time.
 
-## Task C4 — Extraction, reconcile, transactional writes, events      [status: todo]
+## Task C4 — Extraction, reconcile, transactional writes, events      [status: implemented 04:59, hosted self-test after deploy]
 Files: `extract.ts`, `prompts/extract.ts`, `reconcile.ts`, `lifecycle.ts`, tests. Wire `extractAndWrite`, `rememberExplicit`.
 - §4.2 extraction on `MODEL_CHAINS.fast` with structured output (zod schema = `CandidateMemory` + optional `validFrom`), prompt per §4.2 + decision 3. ≤ 5 candidates.
 - §4.3 gate (C2) → §4.4 reconcile: hint with valid target → slot match (confirm / supersede) → hash dedup (decision 5) → semantic neighbours (≥ 0.92 confirm, 0.80–0.92 one batched LLM reconcile on `fast`, < 0.80 add).
