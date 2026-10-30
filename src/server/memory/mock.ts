@@ -9,7 +9,7 @@ import { ObjectId } from "mongodb";
 import { buildGhostPrompt, buildSystemPrompt } from "./context";
 import { DEMO_MEMORIES } from "./fixtures/demo";
 import type { MemoryEngine } from "./index";
-import { mockPreScan } from "./mock-gate";
+import { preScan as gatePreScan } from "./gate";
 import type {
   GraphLink,
   MemoryDTO,
@@ -136,8 +136,8 @@ function newMemory(partial: Omit<MemoryDTO, "id" | "stats" | "createdAt" | "upda
   };
 }
 
-export const mockEngine: MemoryEngine = {
-  preScan: mockPreScan,
+const baseMock: MemoryEngine = {
+  preScan: gatePreScan,
 
   async recall(input) {
     const t0 = performance.now();
@@ -305,7 +305,7 @@ export const mockEngine: MemoryEngine = {
 
   async rememberExplicit(input) {
     const s = state(input.ownerId);
-    const scan = mockPreScan(input.statement);
+    const scan = gatePreScan(input.statement);
     if (scan.kinds.length) {
       event(s, "blocked", { spaceKey: input.spaceKey }, "Blocked a credential-like value (not stored)", input.source.messageId);
       return { op: "blocked", reason: `secret:${scan.kinds[0]}` };
@@ -585,3 +585,84 @@ export const mockEngine: MemoryEngine = {
     store.delete(ownerId);
   },
 };
+
+// ── Optional Mongo persistence (MEMORY_MOCK_STORE=mongo) ─────────────────────────────────────
+// On Vercel every route is its own function with its own memory, so a purely in-memory mock
+// can't share state between /api/demo/seed and /api/chat. With this flag each call hydrates the
+// owner's state from one `mock_state` doc and mutating calls write it back (last write wins —
+// fine for a fallback engine). This is what makes build-plan §7's "ship with the mock" real.
+const MUTATING = new Set<keyof MemoryEngine>([
+  "recall", "extractAndWrite", "rememberExplicit", "correctMemory", "forgetMemory", "reviewMemory",
+  "updateMemory", "runReflection", "seedDemo", "removeDemo", "deleteAll",
+]);
+
+interface StoredState {
+  _id: string;
+  memories: MemoryDTO[];
+  events: MemoryEventDTO[];
+  traces: Array<[string, RecallTrace]>;
+  reflections: ReflectionRun[];
+  spaceIds: Record<string, string>;
+  updatedAt: Date;
+}
+
+async function stateCollection() {
+  const { db } = await import("@/server/db/client");
+  return db().collection<StoredState>("mock_state");
+}
+
+async function hydrate(ownerId: string) {
+  const doc = await (await stateCollection()).findOne({ _id: ownerId });
+  store.set(ownerId, {
+    memories: new Map((doc?.memories ?? []).map((m) => [m.id, m])),
+    events: doc?.events ?? [],
+    traces: new Map(doc?.traces ?? []),
+    reflections: doc?.reflections ?? [],
+    spaceIds: doc?.spaceIds ?? {},
+  });
+}
+
+async function persist(ownerId: string) {
+  const s = store.get(ownerId);
+  const coll = await stateCollection();
+  if (!s) {
+    await coll.deleteOne({ _id: ownerId });
+    return;
+  }
+  await coll.replaceOne(
+    { _id: ownerId },
+    {
+      memories: [...s.memories.values()],
+      events: s.events.slice(-300),
+      traces: [...s.traces.entries()].slice(-40),
+      reflections: s.reflections.slice(0, 20),
+      spaceIds: s.spaceIds,
+      updatedAt: new Date(),
+    },
+    { upsert: true },
+  );
+}
+
+function ownerOf(args: unknown[]): string | undefined {
+  const a = args[0];
+  if (typeof a === "string") return a;
+  if (a && typeof a === "object" && "ownerId" in a) return (a as { ownerId: string }).ownerId;
+  return undefined;
+}
+
+function withMongoState(engine: MemoryEngine): MemoryEngine {
+  const wrapped = { ...engine } as Record<string, unknown>;
+  for (const [key, fn] of Object.entries(engine)) {
+    if (key === "preScan" || key === "buildContext" || key === "ghostContext") continue;
+    wrapped[key] = async (...args: unknown[]) => {
+      const ownerId = ownerOf(args);
+      if (ownerId) await hydrate(ownerId);
+      const result = await (fn as (...a: unknown[]) => Promise<unknown>)(...args);
+      if (ownerId && MUTATING.has(key as keyof MemoryEngine)) await persist(ownerId);
+      return result;
+    };
+  }
+  return wrapped as unknown as MemoryEngine;
+}
+
+export const mockEngine: MemoryEngine = process.env.MEMORY_MOCK_STORE === "mongo" ? withMongoState(baseMock) : baseMock;
