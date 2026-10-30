@@ -173,7 +173,7 @@ async function ensureSearchIndexes(db: Db) {
   for (const idx of SEARCH_INDEXES) {
     const coll = db.collection(idx.collection);
     for (;;) {
-      const [info] = await coll.listSearchIndexes(idx.name).toArray();
+      const [info] = (await coll.listSearchIndexes(idx.name).toArray()) as Array<{ queryable?: boolean; status?: string }>;
       if (info?.queryable) {
         console.log(`  ✓ ${idx.name} queryable (${info.status})`);
         break;
