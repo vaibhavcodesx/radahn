@@ -29,3 +29,5 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 ## Cut
 - (nothing yet)
+
+- [ ] [codex] C1 in progress 04:28 — quota registry, isolated branch codex/engine.
