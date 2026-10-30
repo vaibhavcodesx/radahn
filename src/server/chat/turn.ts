@@ -1,0 +1,291 @@
+import "server-only";
+import {
+  createUIMessageStream,
+  generateId,
+  isStepCount,
+  streamText,
+  toUIMessageStream,
+  type ModelMessage,
+} from "ai";
+import { after } from "next/server";
+import type { RadahnUIMessage, RecallPickWire } from "@/lib/chat-types";
+import type { SessionUser } from "@/server/auth/session";
+import { collections, type MessageDoc } from "@/server/db/collections";
+import { candidates, generatePlain, modelLabel, thinkingOptions } from "@/server/llm/registry";
+import { engine, type RecallResult } from "@/server/memory";
+import { citedIds, stripCitations } from "./citations";
+import { startWithFallback } from "./stream-fallback";
+import { memoryTools } from "./tools";
+import {
+  createConversation,
+  displayName,
+  getConversation,
+  getSettings,
+  getSpace,
+  listMessages,
+} from "@/server/app/workspace";
+import { ObjectId } from "mongodb";
+
+/**
+ * One chat turn (TRD §6 POST /api/chat, architecture.md §2):
+ * pre-scan → persist user msg → recall → data-recall → stream reply with memory tools →
+ * persist assistant msg → after(): extract + reconcile (writes arrive as SSE write chips).
+ */
+
+export interface TurnInput {
+  user: SessionUser;
+  message: RadahnUIMessage; // the new user message (client id kept for provenance)
+  conversationId?: string;
+  spaceId: string;
+  model?: string;
+}
+
+const HISTORY_LIMIT = 12;
+
+function textOf(m: { parts: RadahnUIMessage["parts"] }): string {
+  return m.parts
+    .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+    .map((p) => p.text)
+    .join("");
+}
+
+export function toWirePick(p: RecallResult["picks"][number]): RecallPickWire {
+  return {
+    ref: p.ref,
+    memoryId: p.memoryId,
+    type: p.type,
+    statement: p.statement,
+    final: p.final,
+    scores: {
+      vector: p.scores.vector,
+      rrf: p.scores.rrf,
+      recency: p.scores.recency,
+      importance: p.scores.importance,
+      confidence: p.scores.confidence,
+      typeBoost: p.scores.typeBoost,
+      final: p.scores.final,
+    },
+    reasons: p.reasons,
+    why: p.why,
+    ageDays: p.ageDays,
+    confirmCount: p.confirmCount,
+  };
+}
+
+export async function runTurn(input: TurnInput): Promise<ReadableStream> {
+  const { user } = input;
+  const ownerId = user.id;
+  const eng = await engine();
+  const settings = await getSettings(user);
+  const space = await getSpace(ownerId, input.spaceId);
+  const spaceKey = space._id.toHexString();
+  const name = displayName(user, settings);
+
+  const conversation = input.conversationId
+    ? await getConversation(ownerId, input.conversationId)
+    : await createConversation(ownerId, spaceKey);
+  const conversationId = conversation._id.toHexString();
+
+  // 1. Pre-scan before the LLM or DB sees anything (memory-engine.md §4.1).
+  const rawText = textOf(input.message).slice(0, 8000);
+  const scan = eng.preScan(rawText);
+  const userText = scan.redacted;
+
+  // 2. History (short-term memory) + persist the redacted user message.
+  const history = await listMessages(ownerId, conversationId, 200);
+  const recent = history.slice(-HISTORY_LIMIT);
+  const now = new Date();
+  const userDoc: MessageDoc = {
+    _id: new ObjectId(),
+    conversationId,
+    ownerId,
+    role: "user",
+    uiId: input.message.id,
+    parts: [{ type: "text", text: userText }],
+    text: userText,
+    citedMemoryIds: [],
+    redactions: scan.kinds.length ? scan.kinds : undefined,
+    createdAt: now,
+  };
+  const { messages, conversations } = collections();
+  await messages.insertOne(userDoc);
+  await conversations.updateOne({ _id: conversation._id, ownerId }, { $set: { lastMessageAt: now } });
+
+  const assistantUiId = generateId();
+  const previousUser = [...recent].reverse().find((m) => m.role === "user")?.text;
+
+  // Deferred: the assistant text is known only when the stream ends; after() waits for it.
+  let finish!: (v: { text: string; recall?: RecallResult; refs: Record<string, string>; model?: string }) => void;
+  const finished = new Promise<{ text: string; recall?: RecallResult; refs: Record<string, string>; model?: string }>((r) => (finish = r));
+
+  after(async () => {
+    const result = await finished;
+    if (!result.text) return;
+    const turns = [
+      ...recent.slice(-4).map((m) => ({ role: m.role, text: stripCitations(m.text) })),
+      { role: "user" as const, text: userText },
+      { role: "assistant" as const, text: stripCitations(result.text) },
+    ];
+    try {
+      const summary = await eng.extractAndWrite({
+        ownerId,
+        spaceKey,
+        conversationId,
+        messageId: input.message.id,
+        turns,
+        recalled: result.recall?.picks ?? [],
+        userName: name,
+        timeZone: settings.timeZone,
+        now: new Date(),
+        policy: settings.writePolicy,
+      });
+      await messages.updateOne(
+        { ownerId, uiId: assistantUiId },
+        {
+          $set: {
+            writeSummary: {
+              messageId: input.message.id,
+              added: summary.added,
+              confirmed: summary.confirmed,
+              superseded: summary.superseded,
+              pending: summary.pending,
+              blocked: summary.blocked,
+            },
+          },
+        },
+      );
+    } catch (e) {
+      console.error("[turn] extractAndWrite failed", (e as Error)?.name, (e as Error)?.message?.slice(0, 160));
+    }
+    // Title once per conversation, on the cheap model.
+    if (conversation.title === "New chat") {
+      try {
+        const { text } = await generatePlain("fast", {
+          system: "Write a 2-5 word title for this chat. No quotes, no punctuation at the end.",
+          prompt: userText.slice(0, 600),
+          timeoutMs: 8000,
+        });
+        const title = text.trim().replace(/^["']|["'.]$/g, "").slice(0, 60);
+        if (title) await conversations.updateOne({ _id: conversation._id, ownerId }, { $set: { title } });
+      } catch {
+        /* keep "New chat" */
+      }
+    }
+  });
+
+  return createUIMessageStream<RadahnUIMessage>({
+    execute: async ({ writer }) => {
+      writer.write({ type: "start", messageId: assistantUiId });
+      writer.write({
+        type: "data-turn",
+        data: { conversationId, userMessageId: input.message.id, assistantMessageId: assistantUiId },
+      });
+      if (scan.kinds.length) writer.write({ type: "data-redaction", data: { kinds: scan.kinds } });
+
+      // 3. Recall (memory-engine.md §5) — the lens shows "Recalling…" while this runs.
+      writer.write({ type: "data-recall", id: "recall", data: { status: "running" } });
+      let recall: RecallResult | undefined;
+      try {
+        recall = await eng.recall({
+          ownerId,
+          spaceKey,
+          query: userText,
+          previousUserMessage: previousUser,
+          conversationId,
+          messageId: assistantUiId,
+        });
+        writer.write({
+          type: "data-recall",
+          id: "recall",
+          data: {
+            status: "done",
+            recallId: recall.recallId,
+            intent: recall.intent,
+            channels: recall.channelsRan,
+            picks: recall.picks.map(toWirePick),
+            core: recall.core.map((m) => ({ id: m.id, type: m.type, statement: m.statement })),
+            strategies: recall.strategies.map((m) => ({ id: m.id, statement: m.statement })),
+            notices: recall.notices.map((n) => n.text),
+            latencyMs: recall.latencyMs.total,
+            candidateCount: recall.candidates.length,
+          },
+        });
+        for (const n of recall.notices) writer.write({ type: "data-notice", data: { kind: n.kind, text: n.text } });
+      } catch (e) {
+        console.error("[turn] recall failed", (e as Error)?.message?.slice(0, 160));
+        writer.write({ type: "data-recall", id: "recall", data: { status: "error" } });
+      }
+
+      // 4. Context (memory-engine.md §6.2).
+      const ctx = recall
+        ? eng.buildContext({ userName: name, timeZone: settings.timeZone, now: new Date(), spaceName: space.name, recall })
+        : { system: eng.ghostContext({ timeZone: settings.timeZone, now: new Date() }), refs: {} };
+
+      const modelMessages: ModelMessage[] = [
+        ...recent.map((m) => ({ role: m.role, content: m.role === "assistant" ? stripCitations(m.text) : m.text }) as ModelMessage),
+        { role: "user", content: userText },
+      ];
+
+      const tools = memoryTools({ engine: eng, ownerId, spaceKey, conversationId, messageId: input.message.id, refs: ctx.refs, writer });
+
+      // 5. Stream with pre-first-token model fallback.
+      const list = await candidates("chat", input.model ?? settings.chatModel);
+      const started = await startWithFallback(list, (c) =>
+        streamText({
+          model: c.model,
+          system: ctx.system,
+          messages: modelMessages,
+          tools,
+          stopWhen: isStepCount(3),
+          maxRetries: 0,
+          providerOptions: thinkingOptions(c.modelId, "low"),
+          abortSignal: AbortSignal.timeout(45_000),
+        }),
+      );
+      writer.write({
+        type: "data-model",
+        data: { id: started.candidate.modelId, label: modelLabel(started.candidate.modelId), fallback: started.candidate.fallback },
+      });
+
+      writer.merge(
+        toUIMessageStream<typeof tools, RadahnUIMessage>({
+          stream: started.stream,
+          tools,
+          sendStart: false,
+          onError: () => "The model stopped unexpectedly. Try again.",
+          onEnd: async ({ responseMessage }) => {
+            const text = textOf(responseMessage);
+            const cited = citedIds(text, ctx.refs);
+            await messages.insertOne({
+              _id: new ObjectId(),
+              conversationId,
+              ownerId,
+              role: "assistant",
+              uiId: assistantUiId,
+              parts: responseMessage.parts as unknown[],
+              text,
+              recallId: recall?.recallId || undefined,
+              citedMemoryIds: cited,
+              model: started.candidate.modelId,
+              createdAt: new Date(),
+            });
+            await conversations.updateOne({ _id: conversation._id, ownerId }, { $set: { lastMessageAt: new Date() } });
+            if (cited.length) {
+              await collections().memories.updateMany(
+                { ownerId, _id: { $in: cited.map((i) => new ObjectId(i)) } },
+                { $inc: { "stats.citedCount": 1 } },
+              );
+            }
+            finish({ text, recall, refs: ctx.refs, model: started.candidate.modelId });
+          },
+        }),
+      );
+    },
+    onError: (e) => {
+      finish({ text: "", refs: {} });
+      const msg = String((e as Error)?.message ?? e).toLowerCase();
+      if (/quota|429|exhausted|rate/.test(msg)) return "Gemini's free tier is busy right now. Your memory still works — try again in a minute.";
+      return "I couldn't finish that reply. Try again.";
+    },
+  });
+}
