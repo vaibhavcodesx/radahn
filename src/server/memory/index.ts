@@ -103,74 +103,10 @@ export interface MemoryEngine {
 
 let impl: MemoryEngine | undefined;
 
-const isNotImplemented = (e: unknown) => /not implemented/i.test(String((e as Error)?.message));
-
-/**
- * While Codex lands C7/C8, derive graph + insights from listMemories so the Field and Activity
- * pages work on the real engine; reflection reports "not available yet" instead of crashing.
- * Each fallback is used only when the real method throws "not implemented".
- */
-function withFallbacks(real: MemoryEngine): MemoryEngine {
-  const all = (ownerId: string) =>
-    real.listMemories({ ownerId, spaceKey: "all", statuses: ["active", "pending_review", "superseded", "expired"], limit: 1000 });
-  return {
-    ...real,
-    async graph(ownerId, spaceKey) {
-      try {
-        return await real.graph(ownerId, spaceKey);
-      } catch (e) {
-        if (!isNotImplemented(e)) throw e;
-        const list = await all(ownerId);
-        const ids = new Set(list.map((m) => m.id));
-        const links: GraphLink[] = [];
-        for (const m of list) {
-          if (m.supersededBy && ids.has(m.supersededBy)) links.push({ source: m.id, target: m.supersededBy, kind: "supersede" });
-          for (const ev of m.evidenceIds) if (ids.has(ev)) links.push({ source: ev, target: m.id, kind: "evidence" });
-          for (const r of m.relatedIds) if (ids.has(r) && m.id < r) links.push({ source: m.id, target: r, kind: "related" });
-        }
-        const nodes: GraphNode[] = list.map((m) => ({ id: m.id, type: m.type, status: m.status, statement: m.statement, importance: m.importance, spaceKey: m.spaceKey, updatedAt: m.updatedAt, recallCount: m.stats.recallCount }));
-        return { nodes, links };
-      }
-    },
-    async insights(ownerId, spaceKey) {
-      try {
-        return await real.insights(ownerId, spaceKey);
-      } catch (e) {
-        if (!isNotImplemented(e)) throw e;
-        const list = await all(ownerId);
-        const count = <K extends string>(key: (m: MemoryDTO) => K) => {
-          const out = new Map<K, number>();
-          for (const m of list) out.set(key(m), (out.get(key(m)) ?? 0) + 1);
-          return out;
-        };
-        const recalled = list.reduce((n, m) => n + m.stats.recallCount, 0);
-        const cited = list.reduce((n, m) => n + m.stats.citedCount, 0);
-        const weekAgo = Date.now() - 7 * 86_400_000;
-        return {
-          byType: [...count((m) => m.type)].filter(([, n]) => n).map(([type, c]) => ({ type, count: c })),
-          byStatus: [...count((m) => m.status)].map(([status, c]) => ({ status, count: c })),
-          recallHitRate: recalled ? Math.min(1, cited / recalled) : 0,
-          correctionsThisWeek: list.filter((m) => m.status === "superseded" && m.validTo && Date.parse(m.validTo) > weekAgo).length,
-          storageBytes: list.length * 7_400,
-          eventsPerDay: [],
-        };
-      }
-    },
-    async listReflections(ownerId, limit) {
-      try {
-        return await real.listReflections(ownerId, limit);
-      } catch (e) {
-        if (isNotImplemented(e)) return [];
-        throw e;
-      }
-    },
-  };
-}
-
 export async function engine(): Promise<MemoryEngine> {
   if (impl) return impl;
   if (env().MEMORY_ENGINE === "real") {
-    impl = withFallbacks((await import("./real")).realEngine);
+    impl = (await import("./real")).realEngine;
   } else {
     impl = (await import("./mock")).mockEngine;
   }
