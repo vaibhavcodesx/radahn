@@ -53,6 +53,17 @@ export async function correctMemory(input:CorrectInput):Promise<CorrectResult> {
   if(result.ops[0]?.op==="blocked")return {status:"blocked"};
   const key=result.ops[0]?.memoryId;
   const after=key?await collections().memories.findOne({ownerId:input.ownerId,_id:new ObjectId(key),...spaceFilter(effectiveSpaceKeys(undefined,input.allowedSpaceKeys))}):null;
+  // Retire unresolved twins about the same thing (e.g. a 6 PM vs 7 PM conflict): one correction must
+  // leave exactly one current value, whichever twin the model targeted. (Claude, 31 Oct integration fix.)
+  if(after && before.subject && before.attribute) {
+    const twins=await collections().memories.find({ownerId:input.ownerId,spaceKey:before.spaceKey,status:"active",subject:before.subject,attribute:before.attribute,_id:{$nin:[before._id,after._id]}}).toArray();
+    if(twins.length)await transaction(input.ownerId,async session=>{
+      for(const twin of twins) {
+        const r=await collections().memories.updateOne({ownerId:input.ownerId,_id:twin._id,status:"active"},{$set:{status:"superseded",supersededBy:after._id,validTo:now,updatedAt:now}},{session});
+        if(r.modifiedCount)await event(input.ownerId,twin,"superseded",input.actor,session,{before:twin.statement,after:after.statement});
+      }
+    });
+  }
   return after?{status:"updated",before:memoryDTO(before),after:memoryDTO(after)}:{status:"not_found"};
 }
 export async function forgetMemory(input:ForgetInput):Promise<ForgetResult> {
