@@ -13,6 +13,7 @@ import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
 import { flipExpired, runMaintenance } from "./lifecycle";
 import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
+import { listConflicts, resolveConflict } from "./conflicts";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -20,6 +21,7 @@ class SelfTestAssertion extends Error {}
 export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
   const ownerId=`eval:selftest:${Date.now()}:${randomUUID()}`;
+  const isolatedOwners=[ownerId,`${ownerId}:conflicts`];
   const spaceKey=new ObjectId().toHexString(), c=collections(), checks:SelfTestCheck[]=[];
   const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
   try {
@@ -129,6 +131,20 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(await revokeAgentKey(ownerId+":other",created.id))throw new SelfTestAssertion("Foreign owner revoked agent key");
       if(!await revokeAgentKey(ownerId,created.id) || await verifyAgentKey(created.key))throw new SelfTestAssertion("Agent key revocation failed");
     });
+    await check("conflict-detection-and-versioned-resolution",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No conflict fixture");
+      const conflictOwner=isolatedOwners[1],now=new Date(),scope=new ObjectId().toHexString();
+      const rows=["9 PM","10 PM"].map(value=>{
+        const row={...sample,_id:new ObjectId(),ownerId:conflictOwner,spaceKey:scope,type:"constraint" as const,statement:`The synthetic demo deadline is ${value}.`,subject:"synthetic-demo",attribute:"deadline",value,pinned:false,entities:["synthetic-demo"],evidenceIds:[],relatedIds:[],stats:{recallCount:0,confirmCount:0,citedCount:0},validFrom:now,createdAt:now,updatedAt:now};
+        delete row.slotKey;delete row.expiresAt;delete row.purgeAt;delete row.contentHash;delete row.validTo;delete row.supersedes;delete row.supersededBy;return row;
+      });
+      await c.memories.insertMany(rows);
+      const pairs=await listConflicts(conflictOwner);
+      if(!pairs.some(pair=>[pair.left.id,pair.right.id].includes(rows[0]._id.toHexString())&&[pair.left.id,pair.right.id].includes(rows[1]._id.toHexString())))throw new SelfTestAssertion("Contradiction pair missing");
+      const resolved=await resolveConflict({ownerId:conflictOwner,keepId:rows[1]._id.toHexString(),dropIds:[rows[0]._id.toHexString()]});
+      const old=await c.memories.findOne({ownerId:conflictOwner,_id:rows[0]._id});
+      if(resolved.status!=="resolved" || old?.status!=="superseded" || old.supersedeReason!=="conflict_resolution" || !old.validTo || !await c.events.findOne({ownerId:conflictOwner,memoryId:rows[0]._id,kind:"superseded"}))throw new SelfTestAssertion("Conflict resolution history failed");
+    });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
       if(result.added+result.confirmed+result.pending<1)throw new SelfTestAssertion("Extraction produced no useful memory");
@@ -161,7 +177,8 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
     });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId})]);
+      const cleanup=await Promise.allSettled(isolatedOwners.flatMap(ownerId=>[c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId})]));
+      if(cleanup.some(result=>result.status==="rejected"))throw new SelfTestAssertion("Isolated owner cleanup incomplete");
     });
   }
   return {ok:checks.every(check=>check.ok),checks};

@@ -581,6 +581,8 @@ const baseMock: MemoryEngine = {
     for (const [id, m] of s.memories) if (m.demo) s.memories.delete(id);
   },
 
+  async listConflicts() { return []; },
+  async resolveConflict() { return {status:"not_found",supersededIds:[]}; },
   async createAgentKey() { throw new Error("Agent keys are unavailable in the mock engine"); },
   async verifyAgentKey() { return null; },
   async listAgentKeys() { return []; },

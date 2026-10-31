@@ -63,3 +63,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C10 engine implemented 06:25: agent key CRUD/authentication, owner-validated space scopes and one-time secret display; MCP transport/routes remain Claude-owned.
 
 - [ ] [codex] C10 lead MCP handoff: verify key first; derive ownerId, allowed spaceKeys and actor {kind:'external_agent',name:verified.name} from verified access, never client fields. Enforce the chosen space against the verified allowlist before any memory call. Raw keys are creation-only; metadata omits hashes/secrets.
+
+- [x] [codex] C11 engine implemented 06:34: owner-scoped cached conflict pairs and transactional resolution; additive conflict cache fields and two facade methods pre-approved overnight. Claude owns Review inbox routing/UI.
+
+- [ ] [codex] C11 lead UI handoff: listConflicts(ownerId) returns pairs and resolveConflict({ownerId,keepId,dropIds,actor?}) writes superseded history. Review is explicitly bounded to the most recent60 live units, top40 cosine pairs, at most12 model judgments; pagination/exhaustive review remains future work.

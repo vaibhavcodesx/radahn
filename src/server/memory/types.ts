@@ -90,6 +90,10 @@ export interface MemoryUnit {
     lastConfirmedAt?: Date;
     citedCount: number;
   };
+  /** C11 contradiction cache; technical cache writes preserve semantic updatedAt. */
+  conflictWith?: ObjectId[];
+  conflictCheckedAt?: Date;
+  conflictFingerprint?: string;
   embedding: number[]; // 768 floats
   embeddingModel: 'gemini-embedding-2@768';
   createdAt: Date;

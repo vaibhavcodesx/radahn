@@ -8,6 +8,7 @@ import { seedDemo, removeDemo, deleteAll } from "./seed";
 import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import type { MemoryEngine } from "./index";
+import { listConflicts, resolveConflict } from "./conflicts";
 import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 
 /**
@@ -43,4 +44,6 @@ export const realEngine: MemoryEngine = {
   verifyAgentKey,
   listAgentKeys,
   revokeAgentKey,
+  listConflicts,
+  resolveConflict,
 };
