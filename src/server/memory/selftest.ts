@@ -8,6 +8,7 @@ import { recall } from "./recall";
 import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
+import { runReflection, listReflections } from "./reflect";
 import { seedDemo, removeDemo } from "./seed";
 import { flipExpired } from "./lifecycle";
 import { mongo } from "@/server/db/client";
@@ -122,9 +123,20 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(await c.memories.countDocuments({ownerId,demo:true})!==0 || await c.memories.countDocuments({ownerId,demo:{$ne:true}})!==before)throw new SelfTestAssertion("Demo removal isolation failed");
       await seedDemo(input);
     });
+    await check("feedback-reflection-and-strategy-history",async()=>{
+      const now=new Date();
+      await c.spaces.insertOne({_id:new ObjectId(spaceKey),ownerId,name:"Synthetic reflection",color:"--t-feedback",isDefault:false,unitsSinceReflection:8,createdAt:now});
+      const run=await runReflection({ownerId,spaceKey,trigger:"manual"});
+      if(run.status!=="done" || run.steps.some(step=>step.status!=="done"))throw new SelfTestAssertion("Reflection did not complete all steps");
+      const generated=await c.memories.find({ownerId,_id:{$in:run.outputs.strategies.map(id=>new ObjectId(id))},type:"strategy",status:"active"}).toArray();
+      if(!generated.some(m=>/bullet/i.test(m.statement)&&/(?:5|five|short|concise)/i.test(m.statement)&&m.evidenceIds.length>=2))throw new SelfTestAssertion("Reflection did not produce an evidence-backed bullet strategy");
+      const space=await c.spaces.findOne({ownerId,_id:new ObjectId(spaceKey)});
+      if(space?.unitsSinceReflection!==0 || !space.lastReflectionAt)throw new SelfTestAssertion("Reflection counter reset failed");
+      if(!(await listReflections(ownerId)).some(r=>r._id.equals(run._id)))throw new SelfTestAssertion("Reflection history missing");
+    });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId})]);
+      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId})]);
     });
   }
   return {ok:checks.every(check=>check.ok),checks};

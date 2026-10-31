@@ -5,6 +5,7 @@ import { buildSystemPrompt, buildGhostPrompt } from "./context";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories, getMemory, listEvents, pendingCount } from "./tools";
 import { seedDemo, removeDemo, deleteAll } from "./seed";
+import { runReflection, listReflections } from "./reflect";
 import type { MemoryEngine } from "./index";
 
 /**
@@ -26,8 +27,8 @@ export const realEngine: MemoryEngine = {
   forgetMemory,
   reviewMemory,
   updateMemory,
-  runReflection: async () => notImplemented("runReflection"),
-  listReflections: async () => notImplemented("listReflections"),
+  runReflection,
+  listReflections,
   listMemories,
   getMemory,
   getRecallTrace,

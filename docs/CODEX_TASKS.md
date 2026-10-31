@@ -112,7 +112,7 @@ Files: `seed.ts`, `scripts/seed-demo.ts`, `scripts/fixtures/demo-embeddings.json
 - `seedDemo({ownerId, spaceIds, conversations})`: remove existing `demo:true` units for the owner, insert all `DEMO_MEMORIES` with embeddings from the JSON fixture (zero LLM calls at seed time), resolve keys → ids (supersede chain, evidence, related, provenance via `conversations`), set `expiresAt`/`purgeAt` relative to now, write one `created` event summarising the load. `insertMany` in one batch (M0: 100 ops/s).
 - `scripts/seed-demo.ts --gen-embeddings` regenerates the JSON.
 
-## Task C7 — Reflection + ghost      [status: todo]
+## Task C7 — Reflection + ghost      [status: implemented 05:39, hosted reflection check after deploy]
 Files: `reflect.ts`, `prompts/reflect.ts`. Wire `runReflection`, `listReflections`.
 - §7 steps written to the `reflections` doc as they progress (Claude's UI renders `steps[]` live via change stream): gather → cluster (cosine ≥ 0.90 same type) → consolidate (one structured call on `reflect` chain) → write (one transaction).
 - Validate evidence ids (drop unknown), strategies need ≥ 2 feedback/outcome evidence or 1 explicit instruction; existing strategy covering the same trigger → supersede it.
