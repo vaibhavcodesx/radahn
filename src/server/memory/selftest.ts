@@ -9,6 +9,7 @@ import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
 import { runReflection, listReflections } from "./reflect";
+import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
 import { flipExpired } from "./lifecycle";
 import { mongo } from "@/server/db/client";
@@ -122,6 +123,12 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       await removeDemo(ownerId);
       if(await c.memories.countDocuments({ownerId,demo:true})!==0 || await c.memories.countDocuments({ownerId,demo:{$ne:true}})!==before)throw new SelfTestAssertion("Demo removal isolation failed");
       await seedDemo(input);
+    });
+    await check("owner-scoped-insights-and-graph",async()=>{
+      const [metrics,field]=await Promise.all([insights(ownerId),graph(ownerId)]);
+      if(metrics.storageBytes<=0 || !metrics.byType.length || !metrics.byStatus.length || metrics.recallHitRate<0 || metrics.recallHitRate>1)throw new SelfTestAssertion("Insights aggregate failed");
+      const ids=new Set(field.nodes.map(node=>node.id));
+      if(field.nodes.length<38 || !field.links.length || field.links.some(link=>!ids.has(link.source)||!ids.has(link.target)) || field.nodes.some(node=>"embedding" in node))throw new SelfTestAssertion("Graph payload failed");
     });
     await check("feedback-reflection-and-strategy-history",async()=>{
       const now=new Date();

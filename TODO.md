@@ -51,3 +51,5 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] Hosted C6 verification 05:29: production health real/bom1/DB ok; all 12 Atlas/Gemini checks passed, including real seed/remove (462ms) and isolated slot/correction/history. Warm recall 39ms. Owner/settings cleanup passed.
 
 - [x] [codex] C7 implemented 05:39; evidence-backed reflection, strategy refinement, steps/history, atomic outputs/events, preserved concurrent write counter. Hosted bullet-strategy/history check added.
+
+- [x] [codex] C8 implemented 06:05: owner-scoped insights/graph and measured eval harness; Claude to expose runEvals() via authenticated /api/admin/eval. PR #8 C7 CI green, hosted reflection check pending deploy. PR #7 gate follow-up also CI green.

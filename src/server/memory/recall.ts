@@ -33,12 +33,12 @@ export function temporalWindow(query: string, now: Date, timeZone: string): {sta
   return {start,end};
 }
 const REASONS: Record<ReasonCode,string> = {semantic_match:"close in meaning",keyword_match:"matched your words",time_window:"in the requested time window",linked_entity:"linked to a matched entity",high_importance:"high importance",recent:"recent",plan_relevant_constraint:"relevant to planning",confirmed_often:"confirmed several times",pinned_core:"pinned core"};
-function reasons(row: Ranked, intent: RecallIntent): ReasonCode[] {
+function reasons(row: Ranked, intent: RecallIntent, planningFallback=false): ReasonCode[] {
   const out: ReasonCode[]=[];
   if(row.hits.ranks.semantic) out.push("semantic_match");
   if(row.hits.ranks.lexical) out.push("keyword_match");
   if(row.hits.ranks.temporal) out.push("time_window");
-  if(row.hits.ranks.graph) out.push("linked_entity");
+  if(row.hits.ranks.graph && !planningFallback) out.push("linked_entity");
   if(intent==="plan" && row.scores.typeBoost) out.push("plan_relevant_constraint");
   if(row.unit.importance>=8) out.push("high_importance");
   if(row.unit.stats.confirmCount>=2) out.push("confirmed_often");
@@ -80,7 +80,13 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const [semantic,lexical,temporal,coreRows]=await Promise.all([semanticPromise,lexicalPromise,temporalPromise,corePromise]);
   const top=[...semantic.slice(0,3),...lexical.slice(0,3)].slice(0,3);
   const entities=[...new Set(top.flatMap(m=>m.entities))];
-  const graph=entities.length ? await run("graph",()=>c.memories.find({...filter,entities:{$in:entities}}).sort({importance:-1}).limit(15).toArray()) : [];
+  const planningTypes:MemoryUnit["type"][]=["constraint","goal","decision","preference"];
+  const allowedPlanningTypes=planningTypes.filter(type=>!input.types?.length || input.types.includes(type));
+  // Atlas indexes are eventually consistent; bounded space context keeps the first plan useful immediately after seed/write.
+  const planningFallback=intent==="plan" && !semantic.length && !lexical.length && allowedPlanningTypes.length>0;
+  const graph=planningFallback
+    ? await run("graph",()=>c.memories.find({...filter,type:{$in:allowedPlanningTypes}}).sort({importance:-1}).limit(15).toArray())
+    : entities.length ? await run("graph",()=>c.memories.find({...filter,entities:{$in:entities}}).sort({importance:-1}).limit(15).toArray()) : [];
   const fused=new Map<string,{unit:MemoryUnit;hits:Hits}>();
   for(const [channel,rows] of [["semantic",semantic],["lexical",lexical],["temporal",temporal],["graph",graph]] as Array<[RecallChannel,MemoryUnit[]]>) rows.forEach((unit,index)=>{
     const id=unit._id.toHexString();
@@ -105,8 +111,8 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   let chars=0;
   const core=coreRows.filter(live).filter(m=>{if(!m.pinned || chars+m.statement.length>1500)return false;chars+=m.statement.length;return true;}).map(memoryDTO);
   const strategies=coreRows.filter(live).filter(m=>m.type==="strategy").map(m=>({unit:m,relevance:queryVector?cosine(queryVector,m.embedding):0})).filter(x=>x.unit.pinned || x.relevance>=0.6 || (intent==="plan" && /plan|schedule|time.?box/i.test(x.unit.statement))).sort((a,b)=>Number(b.unit.pinned)-Number(a.unit.pinned) || (intent==="plan" ? Number(/plan|schedule|time.?box/i.test(b.unit.statement))-Number(/plan|schedule|time.?box/i.test(a.unit.statement)) : 0) || b.relevance-a.relevance || b.unit.importance-a.unit.importance).slice(0,3).map(x=>memoryDTO(x.unit));
-  const picks=picked.map((row,i)=>{const codes=reasons(row,intent);return {ref:`m${i+1}`,memoryId:row.unit._id.toHexString(),type:row.unit.type,statement:row.unit.statement,final:row.scores.final,scores:row.scores,reasons:codes,why:codes.map(code=>REASONS[code]).join(" · "),status:row.unit.status,ageDays:Math.max(0,(+now-+row.unit.updatedAt)/86400000),confirmCount:row.unit.stats.confirmCount};});
-  const candidates=ranked.map(row=>({memoryId:row.unit._id.toHexString(),statement:row.unit.statement,type:row.unit.type,scores:row.scores,selected:row.selected,reasons:reasons(row,intent),droppedBy:row.droppedBy}));
+  const picks=picked.map((row,i)=>{const codes=reasons(row,intent,planningFallback);return {ref:`m${i+1}`,memoryId:row.unit._id.toHexString(),type:row.unit.type,statement:row.unit.statement,final:row.scores.final,scores:row.scores,reasons:codes,why:codes.map(code=>REASONS[code]).join(" · "),status:row.unit.status,ageDays:Math.max(0,(+now-+row.unit.updatedAt)/86400000),confirmCount:row.unit.stats.confirmCount};});
+  const candidates=ranked.map(row=>({memoryId:row.unit._id.toHexString(),statement:row.unit.statement,type:row.unit.type,scores:row.scores,selected:row.selected,reasons:reasons(row,intent,planningFallback),droppedBy:row.droppedBy}));
   latency.total=performance.now()-started;
   let recallId="";
   if(input.persistTrace!==false) {

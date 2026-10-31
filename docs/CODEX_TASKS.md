@@ -107,12 +107,12 @@ Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemor
 - `getMemory` returns versions chain, evidence, related, recall history (from `recalls`), events, and `raw` (the Mongo doc with `embedding` replaced by `"[768 floats]"`).
 - A maintenance helper `flipExpired(ownerId?)` (exported from `lifecycle.ts`) sets `status:'expired'` + event for units past `expiresAt` (Claude calls it from cron and opportunistically).
 
-## Task C6 — Demo seed with precomputed embeddings      [status: implemented 05:17, awaiting hosted verification]
+## Task C6 — Demo seed with precomputed embeddings      [status: merged 05:26, PR #6; hosted 12/12 pass 05:29]
 Files: `seed.ts`, `scripts/seed-demo.ts`, `scripts/fixtures/demo-embeddings.json` (generated once, committed), `fixtures/demo.ts` (extend if needed). Wire `seedDemo`, `removeDemo`, `deleteAll`.
 - `seedDemo({ownerId, spaceIds, conversations})`: remove existing `demo:true` units for the owner, insert all `DEMO_MEMORIES` with embeddings from the JSON fixture (zero LLM calls at seed time), resolve keys → ids (supersede chain, evidence, related, provenance via `conversations`), set `expiresAt`/`purgeAt` relative to now, write one `created` event summarising the load. `insertMany` in one batch (M0: 100 ops/s).
 - `scripts/seed-demo.ts --gen-embeddings` regenerates the JSON.
 
-## Task C7 — Reflection + ghost      [status: implemented 05:39, hosted reflection check after deploy]
+## Task C7 — Reflection + ghost      [status: PR #8 CI green 05:53, hosted reflection check after deploy]
 Files: `reflect.ts`, `prompts/reflect.ts`. Wire `runReflection`, `listReflections`.
 - §7 steps written to the `reflections` doc as they progress (Claude's UI renders `steps[]` live via change stream): gather → cluster (cosine ≥ 0.90 same type) → consolidate (one structured call on `reflect` chain) → write (one transaction).
 - Validate evidence ids (drop unknown), strategies need ≥ 2 feedback/outcome evidence or 1 explicit instruction; existing strategy covering the same trigger → supersede it.
@@ -120,7 +120,7 @@ Files: `reflect.ts`, `prompts/reflect.ts`. Wire `runReflection`, `listReflection
 - Must produce the bullet-list strategy from the demo's three `feedback` units (eval case).
 - Stretch (only if C1–C8 are green): reflection also rewrites a ≤ 1,200-char "profile" summary (Letta rethink).
 
-## Task C8 — Insights + graph + eval harness      [status: todo]
+## Task C8 — Insights + graph + eval harness      [status: implemented 06:05, hosted eval route pending]
 Wire `insights`, `graph`. Files: `insights.ts`, `evals/golden/*.json`, `evals/run.ts`.
 - Aggregation pipelines per types.ts `Insights` (byType, byStatus, recall hit rate = cited/recalled over 7 d, corrections this week, `storageBytes` via `$collStats` or `dbStats`, eventsPerDay).
 - `graph`: nodes without embeddings, links for supersede/evidence/related.

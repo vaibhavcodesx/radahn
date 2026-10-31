@@ -53,3 +53,24 @@ describe("hybrid recall",()=>{
   expect(temporalWindow("hello",now,"Asia/Kolkata")).toBeNull();
  });
 });
+
+describe("planning before search index visibility",()=>{
+ it("recalls planning context immediately while both search channels are empty",async()=>{
+  const pin=memory({pinned:true,type:"profile",statement:"Aarav is a student."});
+  const rows=[memory({statement:"The build closes at 9 PM."}),memory({type:"goal",statement:"Aarav wants a top-16 finish."}),memory({type:"preference",statement:"Aarav prefers 30-minute time boxes."})];
+  mock.find.mockImplementation((filter)=>({sort:()=>({limit:()=>({toArray:async()=>filter.$or?.some((v:Record<string,unknown>)=>v.pinned)?[pin]:filter.type?rows:[]})}),limit:()=>({toArray:async()=>[]})}));
+  const result=await recall({ownerId:"alice",spaceKey:"s",query:"Plan my next 4 hours.",persistTrace:false});
+  expect(new Set(result.picks.map(p=>p.memoryId))).toEqual(new Set(rows.map(m=>m._id.toHexString())));
+  expect(result.channelsRan).toContain("graph");
+  expect(result.picks.every(p=>p.reasons.includes("plan_relevant_constraint")&&!p.reasons.includes("linked_entity"))).toBe(true);
+  const filter=mock.find.mock.calls.find(([f])=>f.type?.$in)?.[0];
+  expect(filter).toMatchObject({ownerId:"alice",spaceKey:{$in:["s","global"]},status:"active",type:{$in:["constraint","goal","decision","preference"]}});
+ });
+ it("does not widen unrelated general queries or an explicit incompatible type filter",async()=>{
+  await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false});
+  expect(mock.find.mock.calls.some(([filter])=>filter.type?.$in?.includes("constraint"))).toBe(false);
+  mock.find.mockClear();
+  await recall({ownerId:"alice",spaceKey:"s",query:"Plan my day",types:["fact"],persistTrace:false});
+  expect(mock.find.mock.calls.some(([filter])=>filter.type?.$in?.includes("constraint"))).toBe(false);
+ });
+});
