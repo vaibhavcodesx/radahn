@@ -4,6 +4,21 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
+## ROUND 3 (from Claude, 31 Oct 16:35 IST) — read first
+Round 2 (#25, #26, #27) is merged and live, and the OG metadata is in `layout.tsx`. Great work. Round 3 is half product polish, half submission material. Start each branch from fresh main: `git fetch origin && git switch -c antigravity/<task> origin/main`.
+
+**New files you own this round:** `src/app/app/memory/[id]/**`, `src/components/memory/MemoryActions.tsx`, `src/app/app/error.tsx`, `src/app/app/loading.tsx`, `src/app/app/not-found.tsx` (create if missing), `docs/deck/**`, `docs/media/**`, `docs/demo-script.md`. Everything from rounds 1–2 stays yours. Same "do not edit" list as round 2 (chat, Memory list page, shell, atoms, realtime, server, lib, globals.css, layout.tsx, package.json). Keep every fetch URL, body and prop name unchanged.
+
+**Facts rule (deck, script, captions):** use only numbers and claims found in `README.md`, `evals/results.md`, `docs/architecture.md`, `docs/memory-engine.md` or seen on the live site. Never invent metrics. If a number is missing, write `[TBD by Claude]`.
+
+**D1 — Memory detail page** (`/app/memory/<id>`, open any row on the Memory page). Make it read like a record, not a debug dump: the statement big, then a compact facts row (kind, space, status, confidence, saved/updated, expires), "Where it came from" (source quote + link to the chat), "History" as a small vertical timeline, related memories as chips. Actions (Edit, Pin, Expire, Forget) in one tidy bar; Forget keeps its confirm. Mobile 375 px. Code PR by **17:45**.
+**D2 — App error/loading/not-found states.** Calm, on-brand `error.tsx` (what happened, Try again, Back to chat), a skeleton `loading.tsx` that matches the shell, an app `not-found.tsx` ("That memory or chat doesn't exist anymore"). Same PR as D1 is fine.
+**D3 — Accessibility + dark theme pass** over everything you own: visible focus rings, every icon button has an `aria-label`, contrast AA in both themes, `prefers-reduced-motion` respected. On the landing, show dark-theme screenshot variants when the site is dark (capture the same 3 shots in dark; `<picture>` or theme-aware swap). PR by **17:45**.
+**D4 — Deck (the submission PPT).** `docs/deck/radahn.pptx` (16:9, 11–12 slides) plus `docs/deck/deck.md` with the same text. Slides per `docs/build-plan.md` §8: Title + live URL · Problem · Radahn in one line + hero shot · Demo flow (the four beats) · Write path · Recall (4 channels, scoring, trace) · Hard cases (correction, expiry, forget, conflict, private) · Learning (feedback → strategy) · MongoDB architecture & features · Evals & numbers · Limitations & next steps · Team (placeholders for the three names). Warm-black design, serif titles, real screenshots from the live site. Generate with python-pptx or similar; commit only the outputs, not scripts with paths. Due **19:00**.
+**D5 — Demo video kit.** `docs/demo-script.md`: a ≤ 6:30 voice-over script with timestamps, shot by shot, following the judge path (guest → load demo → three suggested prompts → Memory panel → correction → Review → Memory page time travel/forget → Activity), each shot with exact clicks and the line to say. Plus `docs/media/judge-path.gif` (≤ 6 MB, ~20–30 s, 1280 wide) of the core loop for the README. Due **19:00**.
+
+Order: D1+D2 → D3 → D4 → D5. Code PRs (D1–D3) must be green by 17:45; docs PRs (D4, D5) by 19:00. Add `[antigravity]` lines to `CHANGELOG.md`.
+
 ## ROUND 2 (from Claude, 31 Oct 15:40 IST) — read first
 Round 1 is merged (PR #20) and live. Thank you. Round 2 widens your ownership to **three logged-in pages** so Claude can focus on chat, memory and the end-to-end judge run.
 
