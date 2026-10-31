@@ -73,3 +73,8 @@ it("filters protected guests before applying the global candidate limit",async()
  await (await load()).runMaintenance({now:new Date(),guestActivityGuardReady:true});const pipeline=m.aggregate.mock.calls[0][0];const limit=pipeline.findIndex((s:object)=>"$limit" in s);expect(limit).toBeGreaterThan(pipeline.findIndex((s:object)=>"$lookup" in s));expect(pipeline[limit]).toEqual({$limit:25});expect(pipeline.at(-1)).toEqual({$project:{_id:1}});
 });
 
+it("repairs embedding metadata without refreshing semantic recency",async()=>{
+ const old=new Date(0);m.find.mockReturnValue({limit:()=>({toArray:async()=>[{_id:new ObjectId(),statement:"old truth",type:"fact",updatedAt:old}]})});
+ await (await load()).runMaintenance({now:new Date(),ownerId:"eval"});
+ const changes=m.update.mock.calls[0][1];expect(changes.$set.updatedAt).toBeUndefined();expect(changes.$set.embeddingModel).toBe("gemini-embedding-2@768");expect(changes.$unset).toEqual({needsEmbedding:""});
+});

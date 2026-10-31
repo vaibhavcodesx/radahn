@@ -35,7 +35,7 @@ export async function runMaintenance({now,ownerId,guestActivityGuardReady=false}
    await lockOwner(owner,session);let changed=0;
    for(let i=0;i<rows.length;i++) {
     const row=rows[i];
-    const result=await c.memories.updateOne({ownerId:owner,_id:row._id,statement:row.statement,type:row.type,...filter},{$set:{embedding:vectors[i],updatedAt:now},$unset:{needsEmbedding:""}},{session});
+    const result=await c.memories.updateOne({ownerId:owner,_id:row._id,statement:row.statement,type:row.type,...filter},{$set:{embedding:vectors[i],embeddingModel:"gemini-embedding-2@768"},$unset:{needsEmbedding:""}},{session});
     changed+=result.matchedCount;
    }
    return changed;
@@ -118,4 +118,5 @@ export async function noteOwnerActivity(ownerId:string,now=new Date()):Promise<b
   });
  }catch(error){if(error===missing)return false;throw error;}finally{await session.endSession();}
 }
+
 
