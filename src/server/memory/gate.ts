@@ -25,13 +25,27 @@ function luhn(digits: string): boolean {
  }
  return sum%10===0 && !/^0+$/.test(digits);
 }
+function httpInfo(raw:string):{credential:boolean;exfil:boolean;userinfo:boolean}|null {
+ try {
+  const url=new URL(raw);if(!/^https?:$/.test(url.protocol))return null;
+  const fragment=url.hash.slice(1);
+  const fragmentParams=new URLSearchParams(fragment.includes("?")?fragment.slice(fragment.indexOf("?")+1):fragment);
+  const params=[...url.searchParams,...fragmentParams];
+  const keys=params.map(([key])=>key);
+  const secret=keys.some(key=>/^(?:x?apikey|key|(?:access|auth|refresh|id|api|security)?token|(?:client|consumer|app|api)?secret|secretkey|privatekey|accesskey(?:id)?|password|passwd|pwd|credentials?|authorization|auth|bearer|session(?:id|token)?|sig(?:nature)?|xamz(?:signature|credential|securitytoken)|xgoog(?:signature|credential)|code)$/i.test(key.replace(/[-_]/g,"")));
+  const randomQuery=params.some(([,value])=>value.split(/\s+/).some(token=>token.length>=24 && entropy(token)>=4));
+  const userinfo=Boolean(url.username || url.password);
+  return {credential:secret || userinfo || randomQuery,exfil:secret || keys.some(key=>/^(?:data|payload|prompt|memory|exfil)$/i.test(key)),userinfo};
+ }catch{return null;}
+}
 function injection(text: string): boolean {
  if (new RegExp(INVISIBLE.source).test(text)) return true;
- if (/ignore\s+(?:all|previous|prior)\s+instructions|you are now|system prompt|\bdisregard\b|\bact as\b|<\/?(?:system|developer|assistant)\b|###\s*instruction/i.test(text)) return true;
- for(const match of text.matchAll(/https?:\/\/[^\s<>]+/gi)) {
+ const role="(?:(?:a|an|my|the)\\s+)?(?:system|assistant|ai|admin|administrator|developer|root)\\b";
+ if(new RegExp(`(?:^\\s*|[.!?;,\\n]\\s*|\\bplease\\s+)(?:now\\s+)?act as\\s+${role}`,"i").test(text) || new RegExp(`\\byou\\s+(?:(?:must|should|will|can|to|need to|have to)\\s+)?act as\\s+${role}`,"i").test(text))return true;
+ if (/ignore\s+(?:all|previous|prior)\s+instructions|you are now|system prompt|\bdisregard\b|<\/?(?:system|developer|assistant)\b|###\s*instruction/i.test(text)) return true;
+ for(const match of text.matchAll(/https?:\/\/[^\s<>)\]'"}]+/gi)) {
   try {
-   const url=new URL(match[0]);
-   for(const key of url.searchParams.keys()) if(/^(?:api[_-]?key|token|secret|password|credential|data|payload|prompt|memory|exfil)$/i.test(key)) return true;
+   if(httpInfo(match[0])?.exfil)return true;
   } catch { /* Not a URL; other deterministic scans still apply. */ }
  }
  return false;
@@ -65,9 +79,14 @@ export function preScan(text: string): PreScanResult {
   }
   if(found) add(match.index!,match[0],found);
  }
+ for(const match of clean.matchAll(/https?:\/\/[^\s<>)\]'"}]+/gi)) {
+  const info=httpInfo(match[0]);
+  if(info?.credential)add(match.index!,match[0],info.userinfo?"password":"high_entropy");
+ }
  for(const match of clean.matchAll(/\S{24,}/g)) {
   // Four bits/char catches token-like randomness; known redaction markers are stable output.
-  if(!/^\[redacted:[a-z_]+\]$/.test(match[0]) && [match[0],...match[0].split(/[:/=\[\]]/)].some(part=>part.length>=24 && entropy(part)>=4)) add(match.index!,match[0],"high_entropy");
+  const token=match[0].replace(/https?:\/\/[^\s<>)\]'"}]+/gi,url=>{const info=httpInfo(url);return info && !info.credential && !info.exfil?"":url;});
+  if(!/^\[redacted:[a-z_]+\]$/.test(match[0]) && [token,...token.split(/[:/=\[\]]/)].some(part=>part.length>=24 && entropy(part)>=4)) add(match.index!,match[0],"high_entropy");
  }
  let redacted=clean;
  for(const span of [...spans].sort((a,b)=>b.start-a.start)) redacted=redacted.slice(0,span.start)+`[redacted:${span.kind}]`+redacted.slice(span.end);
