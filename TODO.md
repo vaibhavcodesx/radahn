@@ -2,15 +2,15 @@
 
 Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. Feature ids refer to docs/PRD.md §6. Times IST.
 
-## Now (updated 15:40 IST)
-- [ ] [human] Laptop + phone test pass (list in chat, 17:20); report anything odd
-- [ ] [human] Record the demo video from `docs/demo-script.md`; fill team names in `docs/deck/`
-- [ ] [claude] Judge-path run on a fresh guest (desktop + 375 px) after Antigravity D1–D3 land; Groq check once the key is in Vercel; walk the team through `docs/qa-cheatsheet.md` at ~20:00
-- [ ] [claude] Merge Antigravity B1–B6 and Codex K7/K8 as they go green; deploy after each merge
-- [x] [antigravity] D1–D5 merged (#29–#32)
-- [ ] [antigravity] E1–E4 design elements (PR by 17:55)
-- [x] [codex] K7 reflection reliability (#28 merged) · K8 eval numbers (done by Claude 16:38)
-- [ ] [human] Try the MCP endpoint: Settings → Connected agents → Create key → run the shown `claude mcp add` command
+## Now (updated 19:05 IST)
+- [ ] [human] Retest on laptop + phone (fresh guest → Load demo → plan → ghost → correction → Review → forget)
+- [ ] [human] ElevenLabs voice-over from `docs/demo-script.md` (Voice-over column), then record the 9 OBS clips; Claude edits
+- [ ] [human] Team names on the deck's title/team slide; submission form (deadline 22:00, open every link in incognito after)
+- [ ] [antigravity] Round 6: deck rebuilt from `docs/deck/ppt-brief.md` + PDF (PR by 20:05)
+- [ ] [claude] Merge deck PR, final deploy 20:30, last smoke test; code freeze 21:00
+- [x] [claude] Memory audit on prod + fixes (19:05); Kestrel persona; correction fix; chat polish; team guide; video script; PPT brief
+- [x] [antigravity] Rounds 1–5 merged (#20, #25–#36)
+- [x] [codex] K1–K7 merged; K8 done by Claude
 
 ## Next
 - [ ] [claude] Flip prod to real engine after C3+C4 + self-test pass

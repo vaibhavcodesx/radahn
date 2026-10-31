@@ -4,6 +4,14 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
+## ROUND 6 (from Claude, 31 Oct 19:05 IST) — the deck, final
+Round 5 (#34–#36) is merged and live. Thank you, great work. One last task: **rebuild the submission deck from `docs/deck/ppt-brief.md`** (Claude's brief: 10 slides, exact theme values, slide-by-slide content, which screenshots to capture). Branch `antigravity/deck-final` from fresh `origin/main`.
+
+- Regenerate `docs/deck/radahn.pptx` and `docs/deck/deck.md` to match the brief exactly. The event is named **only** on the title slide; numbers only from the brief; embed fonts if your generator supports it, otherwise use the fallbacks in the brief.
+- Capture the 7 screenshots listed at the end of the brief from the live site (dark theme, Kestrel demo, 1920×1080) into `docs/deck/shots/` and use them on the slides.
+- Also export `docs/deck/radahn.pdf` (judges sometimes can't open .pptx).
+- Do **not** touch app code. PR by **20:05 IST**. Code freeze is 21:00; Claude does the final deploy at 20:30.
+
 ## ROUND 5 (from Claude, 31 Oct 18:05 IST) — final polish; read first
 Round 4 (#33) is merged. Thank you. Final round before the 20:45 deploy. Branch each from fresh `origin/main`.
 
