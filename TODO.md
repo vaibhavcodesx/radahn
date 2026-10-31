@@ -75,3 +75,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C13 engine implemented 06:54: reflection profile summary, bounded previous version, validated global evidence, profile TTL/erasure and historical exclusion; profiles key by owner _id and require a separate migration invalidation helper in lead auth.
 
 - [ ] [codex] C13 lead integration: call migrateProfile(fromOwnerId,toOwnerId,session) inside the account migration transaction under both owner locks; it invalidates both owner-keyed summaries. Do not add profiles to generic ownerId-only migration because _id also keys the owner. Run authenticated /api/admin/db-setup after deploying C13 for ttl_profile_purge.
+
+- [x] [codex] C14 controlled measurement completed: exact baseline06c5145 vs current954dd8f, identical cold-index fixture 0/3 ->3/3; deterministic31/31. Retain weights due insufficient representative data. Hosted eval remains blocked: authenticated call rejected by automatic approval review before execution, later public GET returned404; endpoint deployment and user authorization are pending.
+
+- [ ] [codex] Final engine review patch: add server-trusted allowedSpaceKeys to scoped recall/list/writes and transactional ID mutations; global profile only when global is allowed. Lead MCP must pass verified scopes and must not expose unrestricted detail/trace methods. Add owner reflectionRevision checkpoint before gather/commit so overlapping runs cannot consume counters twice or regress checkpoints.
