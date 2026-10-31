@@ -25,7 +25,7 @@ export function memoryTools(ctx: {
   return {
     remember: tool({
       description:
-        "Save something the user explicitly asked you to remember. One self-contained third-person statement with absolute dates.",
+        "ONLY when the user explicitly asks you to remember / save / note something (e.g. 'remember that…'). Never for facts mentioned in passing: those are picked up automatically after the turn, and sensitive ones are put to the user for approval. One self-contained third-person statement with absolute dates.",
       inputSchema: z.object({
         statement: z.string().min(3).max(240),
         type: z.enum(MEMORY_TYPES),
