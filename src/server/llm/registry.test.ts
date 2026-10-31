@@ -25,10 +25,10 @@ describe("quota-aware routing", () => {
     const a = await registry.candidates("chat"); const b = await registry.candidates("chat");
     expect(a[0].keyFp).toBe(fp("test-key-one"));
     expect(b[0].keyFp).toBe(fp("test-key-two"));
-    expect(b[0].modelId).toBe("gemini-3.8-flash");
+    expect(b[0].modelId).toBe("gemini-3.6-flash");
   });
   it("skips persisted exhausted pairs and caches the database read", async () => {
-    mocks.find.mockReturnValue({ toArray: async () => [{ _id: `${fp("test-key-one")}:gemini-3.8-flash`, exhaustedUntil: new Date("2026-11-01T07:00:00Z") }] });
+    mocks.find.mockReturnValue({ toArray: async () => [{ _id: `${fp("test-key-one")}:gemini-3.6-flash`, exhaustedUntil: new Date("2026-11-01T07:00:00Z") }] });
     expect((await registry.candidates("chat"))[0].keyFp).toBe(fp("test-key-two"));
     await registry.candidates("chat"); expect(mocks.find).toHaveBeenCalledTimes(1);
   });

@@ -11,6 +11,7 @@ import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories }
 import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
+import { DEMO_MEMORIES } from "./fixtures/demo";
 import { flipExpired, runMaintenance } from "./lifecycle";
 import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 import { listConflicts, resolveConflict } from "./conflicts";
@@ -174,7 +175,7 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       const input={ownerId,spaceIds:{hackathon:spaceKey,personal:new ObjectId().toHexString(),internships:new ObjectId().toHexString()},conversations:[]};
       const before=await c.memories.countDocuments({ownerId,demo:{$ne:true}});
       const result=await seedDemo(input);
-      if(result.memories!==38 || await c.memories.countDocuments({ownerId,demo:true})!==38)throw new SelfTestAssertion("Demo seed count failed");
+      if(result.memories!==DEMO_MEMORIES.length || await c.memories.countDocuments({ownerId,demo:true})!==DEMO_MEMORIES.length)throw new SelfTestAssertion("Demo seed count failed");
       await removeDemo(ownerId);
       if(await c.memories.countDocuments({ownerId,demo:true})!==0 || await c.memories.countDocuments({ownerId,demo:{$ne:true}})!==before)throw new SelfTestAssertion("Demo removal isolation failed");
       await seedDemo(input);
