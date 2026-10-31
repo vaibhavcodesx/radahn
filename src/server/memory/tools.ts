@@ -14,6 +14,7 @@ import { contentHash } from "./reconcile";
 import { writeCandidates } from "./write";
 import { score } from "./score";
 import type {CorrectInput,CorrectResult,ForgetInput,ForgetResult,ReviewInput,UpdateMemoryInput,MemoryDTO,ListMemoriesInput,MemoryDetail,MemoryUnit,Actor,MemoryEventKind,RecallPick,CandidateMemory} from "./types";
+import {effectiveSpaceKeys,spaceAllowed,spaceFilter} from "./scope";
 import { PinBudgetError } from "./errors";
 export { PinBudgetError } from "./errors";
 const id=(value:string)=>ObjectId.isValid(value)?new ObjectId(value):null;
@@ -25,15 +26,16 @@ async function transaction<T>(ownerId:string,fn:(session:ClientSession)=>Promise
 async function event(ownerId:string,unit:MemoryUnit,kind:MemoryEventKind,actor:Actor,session:ClientSession,diff?:{before?:string;after?:string}) {
   await collections().events.insertOne({_id:new ObjectId(),ownerId,spaceKey:unit.spaceKey,memoryId:unit._id,type:unit.type,kind,actor,summary:kind==="forgotten"?"Memory forgotten":`${kind} memory`,...(diff?{diff}:{}),at:new Date()},{session});
 }
-async function targets(input:{ownerId:string;memoryId?:string;targetRef?:string;refs?:Record<string,string>;query?:string;spaceKey?:string},anyStatus=false):Promise<MemoryUnit[]> {
+async function targets(input:{ownerId:string;memoryId?:string;targetRef?:string;refs?:Record<string,string>;query?:string;spaceKey?:string;allowedSpaceKeys?:string[]},anyStatus=false):Promise<MemoryUnit[]> {
+  const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
   const key=input.memoryId ?? (input.targetRef?input.refs?.[input.targetRef]:undefined);
   if(input.memoryId || input.targetRef) {
     const _id=key?id(key):null;if(!_id)return [];
-    const unit=await collections().memories.findOne({ownerId:input.ownerId,_id,...(anyStatus?{}:{status:"active"})});
-    return unit && unit.ownerId===input.ownerId?[unit]:[];
+    const unit=await collections().memories.findOne({ownerId:input.ownerId,_id,...spaceFilter(scopes),...(anyStatus?{}:{status:"active"})});
+    return unit && unit.ownerId===input.ownerId && spaceAllowed(unit.spaceKey,scopes)?[unit]:[];
   }
   if(!input.query?.trim())return [];
-  return collections().memories.find({ownerId:input.ownerId,status:{$in:anyStatus?["active","pending_review"]:["active"]},...(input.spaceKey?{spaceKey:{$in:[input.spaceKey,"global"]}}:{}),statement:regex(input.query)}).sort({importance:-1}).limit(6).toArray();
+  return collections().memories.find({ownerId:input.ownerId,status:{$in:anyStatus?["active","pending_review"]:["active"]},...spaceFilter(effectiveSpaceKeys(input.spaceKey?[input.spaceKey,"global"]:undefined,scopes)),statement:regex(input.query)}).sort({importance:-1}).limit(6).toArray().then(rows=>rows.filter(m=>m.ownerId===input.ownerId&&spaceAllowed(m.spaceKey,scopes)));
 }
 async function pinBudget(ownerId:string,unit:MemoryUnit,session:ClientSession):Promise<void> {
   if(!unit.pinned || unit.status!=="active" || (unit.expiresAt && +unit.expiresAt<=Date.now()))return;
@@ -47,19 +49,21 @@ export async function correctMemory(input:CorrectInput):Promise<CorrectResult> {
   const before=matches[0],now=new Date();
   const target:RecallPick={ref:"target",memoryId:before._id.toHexString(),type:before.type,statement:before.statement,final:1,scores:score(before,{ranks:{}},"general",0,now),reasons:[],why:"explicit correction",status:before.status,ageDays:0,confirmCount:before.stats.confirmCount};
   const candidate:CandidateMemory={statement:input.newStatement,type:before.type,subject:before.subject,attribute:before.attribute,entities:before.entities,importance:before.importance,confidence:0.95,sensitivity:before.sensitivity,scope:before.spaceKey==="global"?"global":"space",expiresAt:before.expiresAt?.toISOString(),explicit:true,hint:"update",targetRef:"target"};
-  const result=await writeCandidates([candidate],{ownerId:input.ownerId,spaceKey:before.spaceKey,now,policy:"review_sensitive",source:{kind:"tool",actor:input.actor},recalled:[target],reason:input.reason??"correction"});
+  const result=await writeCandidates([candidate],{ownerId:input.ownerId,spaceKey:before.spaceKey,now,policy:"review_sensitive",source:{kind:"tool",actor:input.actor},recalled:[target],reason:input.reason??"correction",allowedSpaceKeys:input.allowedSpaceKeys});
   if(result.ops[0]?.op==="blocked")return {status:"blocked"};
   const key=result.ops[0]?.memoryId;
-  const after=key?await collections().memories.findOne({ownerId:input.ownerId,_id:new ObjectId(key)}):null;
+  const after=key?await collections().memories.findOne({ownerId:input.ownerId,_id:new ObjectId(key),...spaceFilter(effectiveSpaceKeys(undefined,input.allowedSpaceKeys))}):null;
   return after?{status:"updated",before:memoryDTO(before),after:memoryDTO(after)}:{status:"not_found"};
 }
 export async function forgetMemory(input:ForgetInput):Promise<ForgetResult> {
   const matches=await targets(input,true);
   if(!matches.length)return {status:"not_found"};
   if(matches.length>1)return {status:"ambiguous",candidates:matches.map(memoryDTO)};
-  const unit=matches[0];
+  const selected=matches[0],scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
   return transaction(input.ownerId,async session=>{
-    const result=await collections().memories.deleteOne({ownerId:input.ownerId,_id:unit._id},{session});
+    const unit=await collections().memories.findOne({ownerId:input.ownerId,_id:selected._id,...spaceFilter(scopes)},{session});
+    if(!unit||unit.ownerId!==input.ownerId||!spaceAllowed(unit.spaceKey,scopes))return {status:"not_found"};
+    const result=await collections().memories.deleteOne({ownerId:input.ownerId,_id:unit._id,...spaceFilter(scopes)},{session});
     if(!result.deletedCount)return {status:"not_found"};
     await invalidateProfile(input.ownerId,session,[unit._id]);
     await event(input.ownerId,unit,"forgotten",input.actor,session);
@@ -68,9 +72,9 @@ export async function forgetMemory(input:ForgetInput):Promise<ForgetResult> {
 }
 export async function reviewMemory(input:ReviewInput):Promise<MemoryDTO|null> {
   const _id=id(input.memoryId);if(!_id)return null;
-  const c=collections();
-  const initial=await c.memories.findOne({ownerId:input.ownerId,_id,status:"pending_review"});
-  if(!initial || initial.ownerId!==input.ownerId)return null;
+  const c=collections(),scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
+  const initial=await c.memories.findOne({ownerId:input.ownerId,_id,status:"pending_review",...spaceFilter(scopes)});
+  if(!initial || initial.ownerId!==input.ownerId || !spaceAllowed(initial.spaceKey,scopes) || !spaceAllowed(input.edits?.spaceKey??initial.spaceKey,scopes))return null;
   let updated={...initial,...input.edits};
   if(input.decision==="approve") {
     const gate=gateCandidate({statement:updated.statement,type:updated.type,entities:updated.entities,importance:updated.importance,confidence:updated.confidence,sensitivity:updated.sensitivity,scope:updated.spaceKey==="global"?"global":"space",explicit:true,hint:"new"},"review_sensitive");
@@ -81,8 +85,8 @@ export async function reviewMemory(input:ReviewInput):Promise<MemoryDTO|null> {
     }
   }
   return transaction(input.ownerId,async session=>{
-    const current=await c.memories.findOne({ownerId:input.ownerId,_id,status:"pending_review"},{session});
-    if(!current)return null;
+    const current=await c.memories.findOne({ownerId:input.ownerId,_id,status:"pending_review",...spaceFilter(scopes)},{session});
+    if(!current || current.ownerId!==input.ownerId || !spaceAllowed(current.spaceKey,scopes) || !spaceAllowed(input.edits?.spaceKey??current.spaceKey,scopes))return null;
     const now=new Date();updated={...current,...input.edits,statement:updated.statement,...(updated.embedding!==initial.embedding?{embedding:updated.embedding,needsEmbedding:updated.needsEmbedding}:{}),updatedAt:now};
     const set:Partial<MemoryUnit>={updatedAt:now};
     const unset:Record<string, "">={};
@@ -100,16 +104,17 @@ export async function reviewMemory(input:ReviewInput):Promise<MemoryDTO|null> {
       await pinBudget(input.ownerId,updated,session);
       Object.assign(set,{statement:updated.statement,type:updated.type,spaceKey:updated.spaceKey,importance:updated.importance,sensitivity:updated.sensitivity,status:updated.status,embedding:updated.embedding,needsEmbedding:updated.needsEmbedding??false,contentHash:contentHash(updated.statement)});
     }
-    const result=await c.memories.updateOne({ownerId:input.ownerId,_id,status:"pending_review"},{$set:set,...(Object.keys(unset).length?{$unset:unset}:{})},{session});
+    const result=await c.memories.updateOne({ownerId:input.ownerId,_id,status:"pending_review",...spaceFilter(scopes)},{$set:set,...(Object.keys(unset).length?{$unset:unset}:{})},{session});
     if(!result.matchedCount)return null;
     await event(input.ownerId,updated,input.decision==="approve"?"approved":"rejected",input.actor,session);
     return memoryDTO(updated);
   });
 }
 export async function updateMemory(input:UpdateMemoryInput):Promise<MemoryDTO|null> {
+  const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
   const _id=id(input.memoryId);if(!_id)return null;
   return transaction(input.ownerId,async session=>{
-    const c=collections(),unit=await c.memories.findOne({ownerId:input.ownerId,_id},{session});if(!unit || unit.ownerId!==input.ownerId)return null;
+    const c=collections(),unit=await c.memories.findOne({ownerId:input.ownerId,_id,...spaceFilter(scopes)},{session});if(!unit || unit.ownerId!==input.ownerId || !spaceAllowed(unit.spaceKey,scopes) || !spaceAllowed(input.patch.spaceKey??unit.spaceKey,scopes))return null;
     const next={...unit},set:Partial<MemoryUnit>={updatedAt:new Date()},unset:Record<string, "">={};
     for(const key of ["pinned","spaceKey","importance","type"] as const) if(input.patch[key]!==undefined)Object.assign(set,{[key]:input.patch[key]});
     Object.assign(next,set);
@@ -117,7 +122,7 @@ export async function updateMemory(input:UpdateMemoryInput):Promise<MemoryDTO|nu
     else if(input.patch.expiresAt!==undefined) {const date=new Date(input.patch.expiresAt);if(!Number.isFinite(+date))throw new Error("Invalid expiry");next.expiresAt=date;next.purgeAt=purgeAt(date,unit.createdAt);set.expiresAt=next.expiresAt;set.purgeAt=next.purgeAt;}
     await pinBudget(input.ownerId,next,session);
     const update:UpdateFilter<MemoryUnit>={$set:set,...(Object.keys(unset).length?{$unset:unset}:{})};
-    const result=await c.memories.updateOne({ownerId:input.ownerId,_id},update,{session});if(!result.matchedCount)return null;
+    const result=await c.memories.updateOne({ownerId:input.ownerId,_id,...spaceFilter(scopes)},update,{session});if(!result.matchedCount)return null;
     await invalidateProfile(input.ownerId,session,[_id],input.patch.spaceKey!==undefined||(next.expiresAt!==undefined&&(!unit.expiresAt||+next.expiresAt<+unit.expiresAt)));
     await event(input.ownerId,next,input.patch.pinned===undefined?"updated":input.patch.pinned?"pinned":"unpinned",input.actor,session);
     return memoryDTO(next);
@@ -126,13 +131,14 @@ export async function updateMemory(input:UpdateMemoryInput):Promise<MemoryDTO|nu
 export async function listMemories(input:ListMemoriesInput):Promise<MemoryDTO[]> {
   const at=parseAsOf(input.asOf),c=collections(),filter:Filter<MemoryUnit>={ownerId:input.ownerId};
   const space=input.spaceKey ?? (await c.settings.findOne({_id:input.ownerId}))?.currentSpaceId ?? "global";
-  if(space!=="all")filter.spaceKey={$in:[...new Set([space,"global"])]};
+  const scopes=effectiveSpaceKeys(space==="all"?undefined:[space,"global"],input.allowedSpaceKeys);
+  Object.assign(filter,spaceFilter(scopes));
   filter.status={$in:input.statuses?.length?input.statuses:["active","pending_review","superseded"]};
   if(at)Object.assign(filter,historicalFilter(at),{status:{$in:(input.statuses?.length?input.statuses:["active","superseded"]).filter(s=>s==="active" || s==="superseded")}});
   if(input.types?.length)filter.type={$in:input.types};
   if(input.q?.trim())filter.statement=regex(input.q.trim());
   const field={updated:"updatedAt",importance:"importance",recalled:"stats.recallCount",created:"createdAt"}[input.sort??"updated"];
-  return (await c.memories.find(filter).sort({[field]:-1,_id:-1}).limit(Math.max(1,Math.min(input.limit??200,500))).toArray()).filter(m=>!at || (m.ownerId===input.ownerId && (space==="all" || [space,"global"].includes(m.spaceKey)) && isHistoricalMemory(m,at) && (!input.statuses?.length || input.statuses.includes(m.status)))).map(m=>memoryDTO(at?historicalMetadata(m,at):m));
+  return (await c.memories.find(filter).sort({[field]:-1,_id:-1}).limit(Math.max(1,Math.min(input.limit??200,500))).toArray()).filter(m=>m.ownerId===input.ownerId&&spaceAllowed(m.spaceKey,scopes)&&(!at || (isHistoricalMemory(m,at) && (!input.statuses?.length || input.statuses.includes(m.status))))).map(m=>memoryDTO(at?historicalMetadata(m,at):m));
 }
 export async function getMemory(ownerId:string,memoryId:string):Promise<MemoryDetail|null> {
   const _id=id(memoryId);if(!_id)return null;

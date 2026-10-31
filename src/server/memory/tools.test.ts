@@ -1,11 +1,11 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({profiles:{updateOne:vi.fn(),deleteOne:vi.fn()},mem:{findOne:vi.fn(),find:vi.fn(),deleteOne:vi.fn(),updateOne:vi.fn(),countDocuments:vi.fn()},events:{insertOne:vi.fn(),find:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},recalls:{find:vi.fn()},transaction:vi.fn(),end:vi.fn(),embed:vi.fn()}));
+const mock=vi.hoisted(()=>({profiles:{updateOne:vi.fn(),deleteOne:vi.fn()},mem:{insertOne:vi.fn(),aggregate:vi.fn(),findOne:vi.fn(),find:vi.fn(),deleteOne:vi.fn(),updateOne:vi.fn(),countDocuments:vi.fn()},events:{insertOne:vi.fn(),find:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},recalls:{find:vi.fn()},transaction:vi.fn(),end:vi.fn(),embed:vi.fn()}));
 vi.mock("@/server/db/collections",()=>({collections:()=>({profiles:mock.profiles,memories:mock.mem,events:mock.events,settings:mock.settings,recalls:mock.recalls})}));
 vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>({withTransaction:mock.transaction,endSession:mock.end})})}));
 vi.mock("@/server/llm/registry",()=>({embed:mock.embed}));
-const {forgetMemory,updateMemory,reviewMemory,getMemory,listMemories,pendingCount}=await import("./tools");
+const {correctMemory,forgetMemory,updateMemory,reviewMemory,getMemory,listMemories,pendingCount}=await import("./tools");
 import type {MemoryUnit} from "./types";
 const ownerId="alice",actor={kind:"user" as const,name:"you"},now=new Date();
 const unit=(patch:Partial<MemoryUnit>={}):MemoryUnit=>({_id:new ObjectId(),ownerId,spaceKey:"s",type:"fact",statement:"Aarav uses Atlas.",entities:[],tags:[],importance:6,confidence:0.9,sensitivity:"none",status:"active",pinned:false,source:{kind:"manual",actor},evidenceIds:[],relatedIds:[],validFrom:now,createdAt:now,updatedAt:now,stats:{recallCount:0,confirmCount:0,citedCount:0},embedding:Array(768).fill(0.1),embeddingModel:"gemini-embedding-2@768",...patch});
@@ -65,3 +65,49 @@ it("lists only retained valid historical content and rejects invalid snapshots",
 });
 
 it("forgets and updates with profile invalidation in the source transaction including previous evidence",async()=>{const m=unit();mock.mem.findOne.mockResolvedValue(m);await forgetMemory({ownerId,memoryId:m._id.toHexString(),actor});expect(mock.profiles.deleteOne.mock.lastCall?.[0]).toMatchObject({ownerId,$or:[{evidenceIds:{$in:[m._id]}},{"previous.evidenceIds":{$in:[m._id]}}]});expect(mock.profiles.deleteOne.mock.lastCall?.[1]).toEqual(mock.mem.deleteOne.mock.lastCall?.[1]);await updateMemory({ownerId,memoryId:m._id.toHexString(),patch:{spaceKey:"other"},actor});expect(mock.profiles.deleteOne).toHaveBeenCalledTimes(2);});
+
+
+describe("trusted mutation scopes",()=>{
+ it("does not delete or tombstone an ID moved outside the grant after preflight",async()=>{
+  const m=unit();mock.mem.findOne.mockResolvedValueOnce(m).mockResolvedValue({...m,spaceKey:"elsewhere"});
+  const result=await forgetMemory({ownerId,memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],actor});
+  expect(result.status).toBe("not_found");expect(mock.mem.deleteOne).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
+ });
+ it("scopes the transactional delete itself and uses the revalidated target",async()=>{
+  const m=unit();mock.mem.findOne.mockResolvedValue(m);
+  expect((await forgetMemory({ownerId,memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],actor})).status).toBe("forgotten");
+  expect(mock.mem.deleteOne.mock.calls[0][0]).toMatchObject({ownerId,spaceKey:{$in:["s"]}});
+ });
+ it("filters query targets and all-space lists by grants",async()=>{
+  mock.mem.find.mockReturnValue(cursor([unit({spaceKey:"global"}),unit()]));
+  const result=await forgetMemory({ownerId,query:"Atlas",spaceKey:"s",allowedSpaceKeys:["s"],actor});
+  expect(result.status).not.toBe("ambiguous");
+  mock.mem.find.mockClear();const listed=await listMemories({ownerId,spaceKey:"all",allowedSpaceKeys:["s"]});
+  expect(listed.every(m=>m.spaceKey==="s")).toBe(true);expect(mock.mem.find.mock.calls[0][0]).toMatchObject({ownerId,spaceKey:{$in:["s"]}});
+ });
+ it.each(["source","destination"])("rejects update moves with forbidden %s scopes inside the transaction",async side=>{
+  const m=unit({spaceKey:side==="source"?"other":"s"});mock.mem.findOne.mockResolvedValue(m);
+  expect(await updateMemory({ownerId,memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],patch:{spaceKey:side==="destination"?"global":"s"},actor})).toBeNull();
+  expect(mock.mem.updateOne).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
+ });
+ it("rechecks review source and destination permissions before writes",async()=>{
+  const m=unit({status:"pending_review"});mock.mem.findOne.mockResolvedValue(m);
+  expect(await reviewMemory({ownerId,memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],decision:"approve",edits:{spaceKey:"global"},actor})).toBeNull();
+  expect(mock.mem.updateOne).not.toHaveBeenCalled();expect(mock.embed).not.toHaveBeenCalled();
+ });
+});
+
+
+it("does not correct an owner-matching ID outside the grant",async()=>{
+ const m=unit({spaceKey:"global"});mock.mem.findOne.mockResolvedValue(m);
+ expect((await correctMemory({ownerId,spaceKey:"s",memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],newStatement:"Alice uses SQL.",actor})).status).toBe("not_found");
+ expect(mock.embed).not.toHaveBeenCalled();expect(mock.mem.insertOne).not.toHaveBeenCalled();expect(mock.mem.updateOne).not.toHaveBeenCalled();
+});
+it("carries correction scopes to persistence and rejects a target moved before the owner lock",async()=>{
+ const m=unit();let moved=false;
+ mock.mem.findOne.mockImplementation(async(f)=>{const row={...m,spaceKey:moved?"other":"s"};return (!f.spaceKey || (typeof f.spaceKey==="string"?f.spaceKey===row.spaceKey:f.spaceKey.$in.includes(row.spaceKey)))?row:null;});
+ mock.transaction.mockImplementation(async fn=>{moved=true;return fn({});});
+ await expect(correctMemory({ownerId,spaceKey:"s",memoryId:m._id.toHexString(),allowedSpaceKeys:["s"],newStatement:"Alice uses SQL.",actor})).rejects.toThrow(/conflict/);
+ expect(mock.mem.insertOne).not.toHaveBeenCalled();expect(mock.mem.updateOne).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
+ const lookups=mock.mem.findOne.mock.calls.map(([f])=>f);expect(lookups[0]).toMatchObject({ownerId,spaceKey:{$in:["s"]}});expect(lookups.some(f=>f.spaceKey==="s")).toBe(true);
+});

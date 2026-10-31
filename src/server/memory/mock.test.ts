@@ -68,3 +68,27 @@ describe("mock pre-scan", () => {
     expect(r.kinds).toContain("mongodb_uri");
   });
 });
+
+
+describe("mock credential scope parity",()=>{
+ const ownerId="scoped-mock",actor={kind:"external_agent" as const,name:"codex"};
+ it("restricts recall, lists, corrections and erasure to the verified spaces",async()=>{
+  await mockEngine.seedDemo({ownerId,spaceIds,conversations:[]});
+  const all=await mockEngine.listMemories({ownerId,spaceKey:"all"}),global=all.find(m=>m.spaceKey==="global"&&m.status==="active")!;
+  const allowedSpaceKeys=[spaceIds.hackathon];
+  const listed=await mockEngine.listMemories({ownerId,spaceKey:"all",allowedSpaceKeys});
+  expect(listed.length).toBeGreaterThan(0);expect(listed.every(m=>m.spaceKey===spaceIds.hackathon)).toBe(true);
+  const recalled=await mockEngine.recall({ownerId,spaceKey:spaceIds.hackathon,allowedSpaceKeys,query:"plan deadline"});
+  const permitted=new Set(listed.map(m=>m.id));
+  expect([...recalled.picks,...recalled.candidates].every(m=>permitted.has(m.memoryId))).toBe(true);
+  expect([...recalled.core,...recalled.strategies].every(m=>permitted.has(m.id))).toBe(true);
+  expect((await mockEngine.correctMemory({ownerId,spaceKey:spaceIds.hackathon,memoryId:global.id,allowedSpaceKeys,newStatement:"Forbidden update",actor})).status).toBe("not_found");
+  expect((await mockEngine.forgetMemory({ownerId,memoryId:global.id,allowedSpaceKeys,actor})).status).toBe("not_found");
+  expect(await mockEngine.updateMemory({ownerId,memoryId:listed[0].id,allowedSpaceKeys,patch:{spaceKey:"global"},actor})).toBeNull();
+  await expect(mockEngine.rememberExplicit({ownerId,spaceKey:spaceIds.hackathon,scope:"global",allowedSpaceKeys,statement:"Alice likes tea.",type:"preference",source:{kind:"agent_api",actor}})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+ });
+ it("fails closed for empty recall and all-list grants",async()=>{
+  await expect(mockEngine.recall({ownerId,spaceKey:spaceIds.hackathon,allowedSpaceKeys:[],query:"hello"})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+  await expect(mockEngine.listMemories({ownerId,spaceKey:"all",allowedSpaceKeys:[]})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+ });
+});

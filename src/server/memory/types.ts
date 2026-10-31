@@ -239,9 +239,11 @@ export interface RecallLatency {
 }
 
 export interface RecallInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   asOf?: string; // retained content snapshot, absolute ISO timestamp
   ownerId: string;
-  spaceKey: SpaceKey; // current space (global is always included)
+  spaceKey: SpaceKey; // current space (global included only when permitted)
   query: string; // already pre-scanned/redacted
   previousUserMessage?: string;
   intent?: RecallIntent; // detected if omitted
@@ -363,6 +365,8 @@ export interface ExtractInput {
 }
 
 export interface RememberInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   ownerId: string;
   spaceKey: SpaceKey;
   statement: string;
@@ -376,6 +380,8 @@ export interface RememberInput {
 }
 
 export interface CorrectInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   ownerId: string;
   spaceKey: SpaceKey;
   /** One of memoryId / targetRef(+refs) / query must identify the target. */
@@ -396,6 +402,8 @@ export interface CorrectResult {
 }
 
 export interface ForgetInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   ownerId: string;
   memoryId?: string;
   targetRef?: string;
@@ -412,6 +420,8 @@ export interface ForgetResult {
 }
 
 export interface ReviewInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   ownerId: string;
   memoryId: string;
   decision: 'approve' | 'reject';
@@ -421,6 +431,8 @@ export interface ReviewInput {
 
 /** In-place edits that do not change meaning (statement edits go through correctMemory). */
 export interface UpdateMemoryInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   ownerId: string;
   memoryId: string;
   patch: Partial<{
@@ -522,6 +534,8 @@ export interface GhostContextInput {
 // ── Reads for the UI ────────────────────────────────────────────────────────────
 
 export interface ListMemoriesInput {
+  /** Server-trusted verified credential scopes; omit for normal authenticated UI access. */
+  allowedSpaceKeys?: SpaceKey[];
   asOf?: string; // retained content snapshot, absolute ISO timestamp
   ownerId: string;
   spaceKey?: SpaceKey | 'all'; // default: current space + global

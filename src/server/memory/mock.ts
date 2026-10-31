@@ -10,6 +10,7 @@ import { buildGhostPrompt, buildSystemPrompt } from "./context";
 import { DEMO_MEMORIES } from "./fixtures/demo";
 import type { MemoryEngine } from "./index";
 import { preScan as gatePreScan } from "./gate";
+import { effectiveSpaceKeys, spaceAllowed, assertSpaceAllowed } from "./scope";
 import { parseAsOf, isHistoricalMemory } from "./historical";
 import type {
   GraphLink,
@@ -145,6 +146,7 @@ const baseMock: MemoryEngine = {
   preScan: gatePreScan,
 
   async recall(input) {
+    const scopes=effectiveSpaceKeys([input.spaceKey,"global"],input.allowedSpaceKeys)!;
     const t0 = performance.now();
     const s = state(input.ownerId);
     const asOf = parseAsOf(input.asOf);
@@ -154,7 +156,7 @@ const baseMock: MemoryEngine = {
     const pool = [...s.memories.values()].filter(
       (m) =>
         (asOf ? isHistoricalMemory(m, asOf) : isLive(m, now)) &&
-        (m.spaceKey === "global" || m.spaceKey === input.spaceKey) &&
+        scopes.includes(m.spaceKey) &&
         (!input.types || input.types.includes(m.type)),
     ).map(m=>asOf?historicalMockMetadata(m,asOf):m);
 
@@ -312,6 +314,7 @@ const baseMock: MemoryEngine = {
   },
 
   async rememberExplicit(input) {
+    assertSpaceAllowed(input.scope === "global" ? "global" : input.spaceKey,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const scan = gatePreScan(input.statement);
     if (scan.kinds.length) {
@@ -337,16 +340,17 @@ const baseMock: MemoryEngine = {
   },
 
   async correctMemory(input) {
+    const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const id = input.memoryId ?? (input.targetRef && input.refs?.[input.targetRef]);
     let target = id ? s.memories.get(id) : undefined;
     if (!target && input.query) {
       const q = new Set(tokens(input.query));
-      const hits = [...s.memories.values()].filter((m) => m.status === "active" && tokens(m.statement).some((w) => q.has(w)));
+      const hits = [...s.memories.values()].filter((m) => m.status === "active" && spaceAllowed(m.spaceKey,effectiveSpaceKeys([input.spaceKey,"global"],scopes)) && tokens(m.statement).some((w) => q.has(w)));
       if (hits.length > 1) return { status: "ambiguous", candidates: hits.slice(0, 5) };
       target = hits[0];
     }
-    if (!target || target.status !== "active") return { status: "not_found" };
+    if (!target || target.status !== "active" || !spaceAllowed(target.spaceKey,scopes)) return { status: "not_found" };
     const now = new Date().toISOString();
     const next = newMemory({ ...target, id: undefined as unknown as string, validFrom:now,createdAt:now,updatedAt:now,stats:{recallCount:0,confirmCount:0,citedCount:0}, statement: input.newStatement.slice(0, 240), supersedes: target.id, supersedeReason: input.reason ?? "correction", status: "active" });
     next.id = new ObjectId().toHexString();
@@ -360,19 +364,21 @@ const baseMock: MemoryEngine = {
   },
 
   async forgetMemory(input) {
+    const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const id = input.memoryId ?? (input.targetRef && input.refs?.[input.targetRef]);
     const target = id ? s.memories.get(id) : undefined;
-    if (!target) return { status: "not_found" };
+    if (!target || !spaceAllowed(target.spaceKey,scopes)) return { status: "not_found" };
     s.memories.delete(target.id);
     event(s, "forgotten", { spaceKey: target.spaceKey, id: target.id, type: target.type }, `Forgot a ${target.type} memory`, undefined, input.actor.name);
     return { status: "forgotten", forgotten: { id: target.id, type: target.type } };
   },
 
   async reviewMemory(input) {
+    const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const m = s.memories.get(input.memoryId);
-    if (!m || m.status !== "pending_review") return null;
+    if (!m || m.status !== "pending_review" || !spaceAllowed(m.spaceKey,scopes) || !spaceAllowed(input.edits?.spaceKey??m.spaceKey,scopes)) return null;
     if (input.decision === "approve") {
       Object.assign(m, input.edits ?? {}, { status: "active", updatedAt: new Date().toISOString() });
       event(s, "approved", m, `Approved: ${m.statement}`, undefined, "you");
@@ -384,9 +390,10 @@ const baseMock: MemoryEngine = {
   },
 
   async updateMemory(input) {
+    const scopes=effectiveSpaceKeys(undefined,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const m = s.memories.get(input.memoryId);
-    if (!m) return null;
+    if (!m || !spaceAllowed(m.spaceKey,scopes) || !spaceAllowed(input.patch.spaceKey??m.spaceKey,scopes)) return null;
     const p = input.patch;
     if (p.pinned !== undefined) m.pinned = p.pinned;
     if (p.expiresAt !== undefined) m.expiresAt = p.expiresAt ?? undefined;
@@ -426,6 +433,7 @@ const baseMock: MemoryEngine = {
   },
 
   async listMemories(input) {
+    const scopes=effectiveSpaceKeys(input.spaceKey&&input.spaceKey!=="all"?[input.spaceKey,"global"]:undefined,input.allowedSpaceKeys);
     const s = state(input.ownerId);
     const asOf=parseAsOf(input.asOf);
     const statuses = input.statuses ?? ["active", "pending_review", "superseded"];
@@ -434,7 +442,7 @@ const baseMock: MemoryEngine = {
       (m) =>
         statuses.includes(m.status) && (!asOf || isHistoricalMemory(m,asOf)) &&
         (!input.types?.length || input.types.includes(m.type)) &&
-        (input.spaceKey === "all" || !input.spaceKey || m.spaceKey === input.spaceKey || m.spaceKey === "global") &&
+        spaceAllowed(m.spaceKey,scopes) &&
         (!q || m.statement.toLowerCase().includes(q)),
     );
     const key = input.sort ?? "updated";

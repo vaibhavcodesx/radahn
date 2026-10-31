@@ -6,6 +6,7 @@ import { collections } from "@/server/db/collections";
 import { embed } from "@/server/llm/registry";
 import { cosine, score, select, type Ranked, type Hits } from "./score";
 import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
+import {effectiveSpaceKeys} from "./scope";
 import {readProfile} from "./profile";
 import { memoryDTO } from "./serialize";
 import type { MemoryUnit, RecallInput, RecallResult, RecallIntent, RecallChannel, RecallNotice, ReasonCode, RecallLatency } from "./types";
@@ -52,7 +53,7 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const snapshot=at?{asOf:at.toISOString()}:{};
   const query=(input.query.trim().length<40 || /\b(it|that|this|they|them|those)\b/i.test(input.query)) && input.previousUserMessage ? `${input.previousUserMessage}\n${input.query}` : input.query;
   const intent=input.intent ?? detectIntent(input.query);
-  const spaces=[...new Set([input.spaceKey,"global"])];
+  const spaces=effectiveSpaceKeys([input.spaceKey,"global"],input.allowedSpaceKeys)!;
   const base: Filter<MemoryUnit>={ownerId:input.ownerId,status:at?{$in:["active","superseded"]}:"active",spaceKey:{$in:spaces},...(input.types?.length ? {type:{$in:input.types}} : {})};
   const expiry={$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]};
   const filter:Filter<MemoryUnit>={...base,...(at?historicalFilter(at):expiry)};
@@ -107,7 +108,7 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const ids=picked.map(row=>row.unit._id);
   if(ids.length && !at) {
     const history=await c.memories.find({ownerId:input.ownerId,spaceKey:{$in:spaces},status:"superseded",supersededBy:{$in:ids},updatedAt:{$gte:new Date(+now-86400000)}}).limit(8).toArray().catch(()=>[]);
-    for(const old of history) {
+    for(const old of history.filter(m=>m.ownerId===input.ownerId&&spaces.includes(m.spaceKey))) {
       const current=picked.find(p=>p.unit._id.equals(old.supersededBy!));
       if(current) notices.push({kind:"changed",text:`On ${old.createdAt.toISOString()} you said ${old.value ?? old.statement}; now ${current.unit.value ?? current.unit.statement}.`,memoryIds:[old._id.toHexString(),current.unit._id.toHexString()]});
     }
@@ -117,14 +118,14 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const strategies=coreRows.filter(live).map(m=>at?historicalMetadata(m,at):m).filter(m=>m.type==="strategy").map(m=>({unit:m,relevance:queryVector?cosine(queryVector,m.embedding):0})).filter(x=>x.unit.pinned || x.relevance>=0.6 || (intent==="plan" && /plan|schedule|time.?box/i.test(x.unit.statement))).sort((a,b)=>Number(b.unit.pinned)-Number(a.unit.pinned) || (intent==="plan" ? Number(/plan|schedule|time.?box/i.test(b.unit.statement))-Number(/plan|schedule|time.?box/i.test(a.unit.statement)) : 0) || b.relevance-a.relevance || b.unit.importance-a.unit.importance).slice(0,3).map(x=>memoryDTO(x.unit));
   const picks=picked.map((row,i)=>{const codes=reasons(row,intent,planningFallback);return {ref:`m${i+1}`,memoryId:row.unit._id.toHexString(),type:row.unit.type,statement:row.unit.statement,final:row.scores.final,scores:row.scores,reasons:codes,why:codes.map(code=>REASONS[code]).join(" · "),status:row.unit.status,ageDays:Math.max(0,(+now-+row.unit.updatedAt)/86400000),confirmCount:row.unit.stats.confirmCount};});
   const candidates=ranked.map(row=>({memoryId:row.unit._id.toHexString(),statement:row.unit.statement,type:row.unit.type,scores:row.scores,selected:row.selected,reasons:reasons(row,intent,planningFallback),droppedBy:row.droppedBy}));
-  const profile=at?undefined:await readProfile(input.ownerId,wallNow);
+  const profile=at||!spaces.includes("global")?undefined:await readProfile(input.ownerId,wallNow);
   latency.total=performance.now()-started;
   let recallId="";
   if(input.persistTrace!==false) {
     const _id=new ObjectId();
     try { await c.recalls.insertOne({_id,...snapshot,ownerId:input.ownerId,conversationId:input.conversationId,messageId:input.messageId,query,intent,channelsRan:channels,candidates,picks:picks.map(({ref,memoryId})=>({ref,memoryId})),notices,latencyMs:latency,createdAt:wallNow});
     recallId=_id.toHexString(); } catch { /* Trace storage is best effort during a DB interruption. */ }
-    if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
+    if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,spaceKey:{$in:spaces},status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
   }
   return {recallId,...snapshot,...(profile?{profile}:{}),intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
 }

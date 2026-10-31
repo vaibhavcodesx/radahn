@@ -88,8 +88,10 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
  try {
   await step("gather","running");
   const scope={ownerId:input.ownerId,spaceKey:{$in:[...new Set([input.spaceKey,"global"])]},status:"active" as const,$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]};
-  const space=ObjectId.isValid(input.spaceKey)?await c.spaces.findOne({ownerId:input.ownerId,_id:new ObjectId(input.spaceKey)}):null;
+  // Capture before any gather read: another reflection must not pair a new generation with an old counter.
   const settings=await c.settings.findOne({_id:input.ownerId});
+  const revision=settings?.reflectionRevision??0;
+  const space=ObjectId.isValid(input.spaceKey)?await c.spaces.findOne({ownerId:input.ownerId,_id:new ObjectId(input.spaceKey)}):null;
   const recent=await c.memories.find({...scope,...(space?.lastReflectionAt?{updatedAt:{$gt:space.lastReflectionAt}}:{})}).sort({updatedAt:-1}).limit(60).toArray();
   const feedback=await c.memories.find({...scope,type:{$in:["feedback","outcome"]},createdAt:{$gte:new Date(+now-30*86400000)}}).sort({createdAt:-1}).limit(60).toArray();
   const strategies=await c.memories.find({...scope,type:"strategy"}).sort({importance:-1}).limit(30).toArray();
@@ -105,7 +107,9 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
   try {
    const outputs=await session.withTransaction(async()=>{
     const opts={session};await lockOwner(input.ownerId,session);
-    const latestSettings=await c.settings.findOne({_id:input.ownerId},opts);if((latestSettings?.writePolicy??"review_sensitive")!==(settings?.writePolicy??"review_sensitive"))throw new Error("Reflection policy changed");
+    const latestSettings=await c.settings.findOne({_id:input.ownerId},opts);
+    if((latestSettings?.reflectionRevision??0)!==revision)throw new Error("Stale reflection checkpoint");
+    if((latestSettings?.writePolicy??"review_sensitive")!==(settings?.writePolicy??"review_sensitive"))throw new Error("Reflection policy changed");
     const used=[...new Map(plans.flatMap(p=>[...p.evidence,...p.parents]).map(m=>[m._id.toHexString(),m])).values()];
     for(const old of used){const fresh=await c.memories.findOne({ownerId:input.ownerId,_id:old._id,spaceKey:old.spaceKey,status:"active"},opts);if(!fresh||!alive(fresh,new Date())||+fresh.updatedAt!==+old.updatedAt||fresh.statement!==old.statement)throw new Error("Stale reflection evidence");}
     const applied:ReflectionRun["outputs"]={merged:[],observations:[],strategies:[]};
@@ -127,6 +131,8 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
      const observed=Math.max(0,space?.unitsSinceReflection??0),currentCount=Math.max(0,currentSpace?.unitsSinceReflection??0);
      await c.spaces.updateOne({ownerId:input.ownerId,_id:new ObjectId(input.spaceKey)},{$set:{lastReflectionAt:now,unitsSinceReflection:Math.max(0,currentCount-observed)}},opts);
     }
+    // Separate from memoryRevision so ordinary writes during model work remain valid.
+    await c.settings.updateOne({_id:input.ownerId},{$inc:{reflectionRevision:1}},opts);
     const steps=run.steps.map(s=>s.name==="write"?{...s,status:"done" as const,detail:`count: ${plans.length}`,at:new Date()}:s);
     await c.reflections.updateOne({ownerId:input.ownerId,_id:run._id},{$set:{status:"done",outputs:applied,steps,finishedAt:new Date()}},opts);
     return {outputs:applied,steps};

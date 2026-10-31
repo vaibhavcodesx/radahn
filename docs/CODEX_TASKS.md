@@ -129,3 +129,5 @@ Wire `insights`, `graph`. Files: `insights.ts`, `evals/golden/*.json`, `evals/ru
 ---
 
 Status lines: change `[status: todo]` → `[status: in progress HH:MM]` → `[status: merged HH:MM, PR #n]`. Add a `[codex]` line to `CHANGELOG.md` and update `TODO.md` per task. Contract change needed? Put it in the PR description and `TODO.md`; Claude merges contract PRs.
+
+Final review follow-up [07:24]: scoped-agent allowlists and reflection generation checks implemented; unknown eval flags reject before env/network. 309 tests, lint/typecheck pass; engine build passed, final CLI-only guard separately covered. Hosted acceptance and lead route/auth/merge integrations remain pending.

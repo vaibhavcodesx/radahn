@@ -47,3 +47,33 @@ it("gathers stable global facts after last reflection and writes a profile from 
  rows=[unit({spaceKey:"global",type:"profile",statement:"Alice studies computer science.",updatedAt:new Date(0)})];mock.spaces.findOne.mockResolvedValue({lastReflectionAt:new Date(),unitsSinceReflection:1});mock.generate.mockResolvedValue({object:output({profile:{text:"Alice studies computer science.",evidenceIds:[rows[0]._id.toHexString()]}})});
  const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("done");expect(mock.generate).toHaveBeenCalledTimes(1);expect(mock.profiles.replaceOne).toHaveBeenCalled();expect(mock.mem.find.mock.calls.some(([f])=>f.spaceKey==="global"&&f.type?.$in?.includes("profile")&&!f.updatedAt)).toBe(true);
 });
+
+
+describe("owner reflection generation",()=>{
+ it.each([[false,false],[true,false],[false,true],[true,true]])("rejects overlapping checkpoints (observation=%s reverse=%s)",async(observation,reverse)=>{
+  rows=[unit()];let revision=0,count=8,last:Date|undefined;
+  mock.settings.findOne.mockImplementation(async()=>({writePolicy:"auto",reflectionRevision:revision}));
+  mock.settings.updateOne.mockImplementation(async(_f,u)=>{revision+=u.$inc?.reflectionRevision??0;return {};});
+  mock.spaces.findOne.mockImplementation(async()=>({unitsSinceReflection:count,lastReflectionAt:last}));
+  mock.spaces.updateOne.mockImplementation(async(_f,u)=>{count=u.$set.unitsSinceReflection;last=u.$set.lastReflectionAt;return {};});
+  const pending:Array<(value:unknown)=>void>=[];
+  mock.generate.mockImplementation(()=>new Promise(resolve=>pending.push(resolve)));
+  const a=runReflection({ownerId,spaceKey,trigger:"manual"});await vi.waitFor(()=>expect(pending).toHaveLength(1));
+  const b=runReflection({ownerId,spaceKey,trigger:"manual"});await vi.waitFor(()=>expect(pending).toHaveLength(2));
+  const response={object:output(observation?{observations:[{statement:"Aarav prefers concise answers.",evidenceIds:[rows[0]._id.toHexString()]}]}:{})};
+  const winnerIndex=reverse?1:0;pending[winnerIndex](response);const winner=await (reverse?b:a);
+  expect(winner.status).toBe("done");count++;
+  pending[1-winnerIndex](response);const stale=await (reverse?a:b);
+  expect(stale.status).toBe("failed");expect(stale.outputs).toEqual({merged:[],observations:[],strategies:[]});
+  expect(count).toBe(1);expect(last).toEqual(winner.startedAt);expect(revision).toBe(1);
+  expect(mock.mem.insertOne).toHaveBeenCalledTimes(observation?1:0);expect(mock.events.insertOne).toHaveBeenCalledTimes(observation?1:0);
+  expect(mock.spaces.updateOne).toHaveBeenCalledTimes(1);expect(mock.profiles.replaceOne).not.toHaveBeenCalled();
+ });
+ it("captures generation before the space counter can change",async()=>{
+  rows=[unit()];let revision=0;
+  mock.settings.findOne.mockImplementation(async()=>({writePolicy:"auto",reflectionRevision:revision}));
+  mock.spaces.findOne.mockImplementation(async()=>{revision=1;return {unitsSinceReflection:0};});
+  const run=await runReflection({ownerId,spaceKey,trigger:"manual"});
+  expect(run.status).toBe("failed");expect(mock.spaces.updateOne).not.toHaveBeenCalled();expect(mock.mem.insertOne).not.toHaveBeenCalled();
+ });
+});

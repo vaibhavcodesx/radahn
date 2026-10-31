@@ -119,3 +119,9 @@ describe("transactional writes",()=>{
   expect((await extractAndWrite(input)).blocked).toBe(1);expect(mock.mem.insertOne).not.toHaveBeenCalled();
  });
 });
+
+
+it("validates the effective explicit destination before embedding or writing",async()=>{
+ await expect(rememberExplicit({ownerId:"alice",spaceKey,scope:"global",allowedSpaceKeys:[spaceKey],statement:"Aarav likes tea.",type:"preference",source:{kind:"agent_api",actor:{kind:"external_agent",name:"codex"}}})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+ expect(mock.embed).not.toHaveBeenCalled();expect(mock.mem.insertOne).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
+});

@@ -3,10 +3,14 @@ import {writeFile,mkdir} from 'node:fs/promises';
 import {loadEnvConfig} from '@next/env';
 import {runDeterministic} from './measure';
 async function main(){
- loadEnvConfig(process.cwd());
+ const args=process.argv.slice(2);
+ // Validate before loading credentials: an unknown flag must never choose hosted mode.
+ if(args.some(arg=>arg!=='--deterministic'&&arg!=='--help'))throw new Error('Unsupported evaluation option; use --help');
+ if(args.includes('--help')){console.info('Usage: npm run eval -- [--deterministic | --help]\nNo arguments: authenticated hosted evaluation. --deterministic: offline goldens. Both evaluation modes write evals/results.md.');return;}
  let result:{markdown:string};
- if(process.argv.includes('--deterministic'))result=runDeterministic();
+ if(args.includes('--deterministic'))result=runDeterministic();
  else{
+ loadEnvConfig(process.cwd());
  const origin=process.env.EVAL_BASE_URL??'https://radahn-ai.vercel.app',secret=process.env.CRON_SECRET;
  if(!origin||!secret)throw new Error('Set EVAL_BASE_URL and CRON_SECRET for the authenticated hosted evaluation');
  const endpoint=new URL('/api/admin/eval',origin);if(endpoint.protocol!=='https:' && endpoint.hostname!=='localhost')throw new Error('Evaluation endpoint requires HTTPS');

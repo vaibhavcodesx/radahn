@@ -116,3 +116,28 @@ it("returns historical core and strategies while keeping every temporal predicat
 it("includes a validated profile only for current recall and never reads it for asOf",async()=>{mock.profile.mockResolvedValue("Alice studies computer science.");expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false})).profile).toBe("Alice studies computer science.");mock.profile.mockClear();expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",asOf:now.toISOString(),persistTrace:false})).profile).toBeUndefined();expect(mock.profile).not.toHaveBeenCalled();});
 
 it("includes validated profile loading in reported recall latency",async()=>{mock.profile.mockImplementation(async()=>{await new Promise(resolve=>setTimeout(resolve,25));return "Alice likes programming.";});const result=await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false});expect(result.latencyMs.total).toBeGreaterThanOrEqual(20);});
+
+
+describe("trusted credential space restrictions",()=>{
+ it.each([{allowedSpaceKeys:["s"]},{allowedSpaceKeys:["global","s"]}])("restricts every recall surface before retrieval to $allowedSpaceKeys",async({allowedSpaceKeys})=>{
+  const local=memory({pinned:true}),global=memory({spaceKey:"global",pinned:true,type:"strategy",statement:"When planning use global rules."}),other=memory({spaceKey:"other",pinned:true});
+  const rows=[local,global,other];
+  mock.profile.mockResolvedValue("Private global profile");
+  mock.aggregate.mockReturnValue({toArray:async()=>rows});
+  mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>rows})}),limit:()=>({toArray:async()=>rows})});
+  const result=await recall({ownerId:"alice",spaceKey:"s",allowedSpaceKeys,query:"plan yesterday"});
+  const permitted=rows.filter(m=>allowedSpaceKeys.includes(m.spaceKey)).map(m=>m._id.toHexString());
+  for(const list of [result.picks,result.candidates])expect(list.every(m=>permitted.includes(m.memoryId))).toBe(true);
+  for(const list of [result.core,result.strategies])expect(list.every(m=>permitted.includes(m.id))).toBe(true);
+  expect(result.notices.flatMap(n=>n.memoryIds).every(id=>permitted.includes(id))).toBe(true);
+  expect(result.profile).toBe(allowedSpaceKeys.includes("global")?"Private global profile":undefined);
+  if(!allowedSpaceKeys.includes("global"))expect(mock.profile).not.toHaveBeenCalled();
+  for(const [pipeline] of mock.aggregate.mock.calls){const first=pipeline[0];if(first.$vectorSearch)expect(first.$vectorSearch.filter.spaceKey.$in).toEqual(allowedSpaceKeys.includes("global")?["s","global"]:["s"]);else expect(first.$search.compound.filter.find((f:{in?:{path:string}})=>f.in?.path==="spaceKey").in.value).toEqual(allowedSpaceKeys.includes("global")?["s","global"]:["s"]);}
+  for(const [filter] of mock.find.mock.calls)expect(filter.spaceKey.$in.every((s:string)=>allowedSpaceKeys.includes(s))).toBe(true);
+  expect(mock.insertOne.mock.calls[0][0].candidates.every((m:{memoryId:string})=>permitted.includes(m.memoryId))).toBe(true);
+ });
+ it.each([{allowed:[]},{allowed:["other"]},{allowed:null},{allowed:[""]}])("fails closed before retrieval for invalid/effectively empty grants $allowed",async({allowed})=>{
+  await expect(recall({ownerId:"alice",spaceKey:"s",query:"plan",allowedSpaceKeys:allowed as unknown as string[]})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+  expect(mock.embed).not.toHaveBeenCalled();expect(mock.aggregate).not.toHaveBeenCalled();expect(mock.profile).not.toHaveBeenCalled();
+ });
+});

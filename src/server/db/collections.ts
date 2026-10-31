@@ -77,6 +77,7 @@ export interface MessageDoc {
 }
 
 export interface UserSettingsDoc {
+  reflectionRevision?: number; // Owner-wide successful reflection generation; distinct from ordinary writes.
   memoryRevision?: number; // Serializes owner memory mutations for cross-document budgets (C5).
   _id: string; // = ownerId
   displayName?: string;

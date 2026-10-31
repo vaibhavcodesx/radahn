@@ -189,6 +189,7 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(!generated.some(m=>/bullet/i.test(m.statement)&&/(?:5|five|short|concise)/i.test(m.statement)&&m.evidenceIds.length>=2))throw new SelfTestAssertion("Reflection did not produce an evidence-backed bullet strategy");
       const space=await c.spaces.findOne({ownerId,_id:new ObjectId(spaceKey)});
       if(space?.unitsSinceReflection!==0 || !space.lastReflectionAt)throw new SelfTestAssertion("Reflection counter reset failed");
+      if(((await c.settings.findOne({_id:ownerId}))?.reflectionRevision??0)<1)throw new SelfTestAssertion("Reflection generation was not committed");
       if(!(await listReflections(ownerId)).some(r=>r._id.equals(run._id)))throw new SelfTestAssertion("Reflection history missing");
     });
     await check("profile-summary-context-and-erasure",async()=>{
@@ -199,6 +200,21 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       const input={ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false};
       const current=await recall(input);
       if(current.profile!==profile.text || !buildSystemPrompt({recall:current,userName:"Aarav",timeZone:"Asia/Kolkata",spaceName:"selftest",now:new Date()}).system.includes(profile.text))throw new SelfTestAssertion("Profile context missing");
+      const key=await createAgentKey(ownerId,"Scoped synthetic selftest",[spaceKey]);
+      const access=await verifyAgentKey(key.key);
+      if(!access || access.spaceKeys.includes("global"))throw new SelfTestAssertion("Project key grant invalid");
+      const scoped=await recall({...input,allowedSpaceKeys:access.spaceKeys});
+      const ids=[...new Set([...scoped.picks.map(p=>p.memoryId),...scoped.candidates.map(p=>p.memoryId),...scoped.notices.flatMap(n=>n.memoryIds)])].map(id=>new ObjectId(id));
+      const scopedRows=await c.memories.find({ownerId,_id:{$in:ids}}).toArray();
+      const listed=await listMemories({ownerId,spaceKey:"all",allowedSpaceKeys:access.spaceKeys});
+      if(!scoped.picks.length || scoped.profile || scopedRows.length!==ids.length || scopedRows.some(unit=>unit.spaceKey!==spaceKey) || [...scoped.core,...scoped.strategies,...listed].some(unit=>unit.spaceKey!==spaceKey))throw new SelfTestAssertion("Project key widened into private spaces");
+      const unauthorized=await forgetMemory({ownerId,memoryId:profile.evidenceIds[0].toHexString(),allowedSpaceKeys:access.spaceKeys,actor:{kind:"external_agent",name:access.name}});
+      if(unauthorized.status!=="not_found" || !await c.memories.findOne({ownerId,_id:profile.evidenceIds[0]}))throw new SelfTestAssertion("Project key erased a global memory");
+      let denied=false;
+      try{await rememberExplicit({ownerId,spaceKey,scope:"global",allowedSpaceKeys:access.spaceKeys,statement:"A scoped synthetic agent must not save this global fact.",type:"fact",source:{kind:"agent_api",actor:{kind:"external_agent",name:access.name}}});}
+      catch(error){denied=!!error&&typeof error==="object"&&"code" in error&&error.code==="SPACE_ACCESS_DENIED";}
+      if(!denied || await c.memories.countDocuments({ownerId,statement:"A scoped synthetic agent must not save this global fact."}))throw new SelfTestAssertion("Project key wrote outside its grant");
+      await revokeAgentKey(ownerId,key.id);
       const historical=await recall({...input,asOf:new Date().toISOString()});
       if(historical.profile)throw new SelfTestAssertion("Historical recall included current profile");
       const result=await forgetMemory({ownerId,memoryId:profile.evidenceIds[0].toHexString(),actor:{kind:"system",name:"selftest"}});
