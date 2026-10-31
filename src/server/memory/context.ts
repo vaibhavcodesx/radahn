@@ -67,7 +67,10 @@ export function buildSystemPrompt(input: BuildContextInput): BuiltContext {
 
   if (recall.picks.length) {
     for (const p of recall.picks) refs[p.ref] = p.memoryId;
-    sections.push(`## Relevant memories\n${recall.picks.map(renderPick).join("\n")}`);
+    // Restated after the list: Flash-Lite fallbacks drop citations when the rule only sits at the top.
+    sections.push(
+      `## Relevant memories\n${recall.picks.map(renderPick).join("\n")}\n\nCite as you go: any sentence or bullet that uses one of these memories ends with its ref in double brackets, e.g. "- 09:00–09:45 Finish the auth flow [[m2]]". Most answers that use memory have at least one citation.`,
+    );
   }
 
   if (recall.notices.length) {
