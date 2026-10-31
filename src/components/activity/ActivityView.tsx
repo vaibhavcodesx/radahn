@@ -260,7 +260,7 @@ export function ActivityView() {
                     aria-selected={activeFilter === cat}
                     onClick={() => setActiveFilter(cat)}
                     className={cn(
-                      "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors",
+                      "rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-focus focus-visible:outline-offset-1",
                       activeFilter === cat
                         ? "bg-accent text-accent-ink"
                         : "text-ink-2 hover:text-ink",
