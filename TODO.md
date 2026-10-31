@@ -99,3 +99,6 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 - [x] [codex] K4 implemented 14:38 IST: uncertain/personal automatic extraction enters pending_review with message provenance; explicit sensitive consent and privacy ordering preserved. Review passed; full suite346 passed with concurrent K3 scenarios. Golden low-confidence fixture now explicitly models implicit extraction.
 - [ ] [lead] K4 composer: show pending items for the user messageId with Yes/No actions; engine pending events already carry that provenance.
+
+- [x] [codex] K3 implemented 14:43 IST: local temporal windows, scoped event joins, past-window eligibility, partial failure isolation and asOf cutoff. Hosted correction-chain/slot-paraphrase/forget/expiry/project cases authored; display-name extraction instruction shipped in K4.
+- [ ] [codex] K3 deployed acceptance: run POST /api/admin/eval after K3 deploy and replace evals/results.md with fresh measured results (existing 09:05 result is baseline only). Slot paraphrase case covers canonicalized writes; independent extraction semantic paraphrases remain a separate model-quality check.
