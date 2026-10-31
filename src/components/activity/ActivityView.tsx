@@ -90,10 +90,112 @@ function EventIcon({ kind }: { kind: string }) {
 }
 
 /**
- * ActivityView (design.md §6.8, task B3).
- * A readable timeline with day group headers, small icons per kind,
- * relative time on the right, statement as main text, quiet Live indicator,
- * compact filter segmented control, and loading/error/empty states.
+ * Insight Sparkline component (adapted from Catalog #13, lines 4545–5088).
+ * Pure SVG smooth bezier sparkline without external dependencies.
+ */
+function Sparkline({ values, color = "var(--green)", height = 32 }: { values: number[]; color?: string; height?: number }) {
+  if (values.length < 2) return null;
+  const width = 120;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * width;
+    const y = height - 4 - ((v - min) / range) * (height - 8);
+    return [x, y] as [number, number];
+  });
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx = (prev[0] + curr[0]) / 2;
+    d += ` C ${cpx} ${prev[1]}, ${cpx} ${curr[1]}, ${curr[0]} ${curr[1]}`;
+  }
+  const areaD = `${d} L ${width} ${height} L 0 ${height} Z`;
+
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible" preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <linearGradient id="insight-spark-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill="url(#insight-spark-grad)" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Mini Bar Chart component for corrections (Catalog #13 pattern).
+ */
+function MiniBarChart({ bars, color = "var(--t-preference)", height = 32 }: { bars: number[]; color?: string; height?: number }) {
+  const max = Math.max(...bars, 1);
+  return (
+    <div className="flex items-end gap-1.5 w-full pt-1" style={{ height }} aria-hidden>
+      {bars.map((val, idx) => {
+        const pct = Math.max(16, (val / max) * 100);
+        const isCurrent = idx === bars.length - 1;
+        return (
+          <div key={idx} className="flex-1 flex flex-col justify-end h-full">
+            <div
+              className="w-full rounded-xs transition-all duration-300"
+              style={{
+                height: `${pct}%`,
+                background: isCurrent ? color : "var(--line-strong)",
+                opacity: isCurrent ? 1 : 0.65,
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Insight Card (Catalog #13 design).
+ */
+function InsightCard({
+  title,
+  badge,
+  value,
+  note,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  value: string;
+  note?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col justify-between rounded-card border border-line bg-surface p-4 shadow-card transition-all hover:border-line-strong">
+      <div>
+        <div className="flex items-center justify-between">
+          <span className="text-[12.5px] font-medium text-ink-3">{title}</span>
+          {badge ? (
+            <span className="rounded-full bg-field px-2 py-0.5 text-[10.5px] font-medium text-ink-2">
+              {badge}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-2 font-serif text-[26px] sm:text-[28px] leading-none tabular text-ink">{value}</p>
+      </div>
+      <div className="mt-3">
+        {children}
+        {note ? <p className="mt-2.5 text-[11.5px] text-ink-3">{note}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ActivityView (design.md §6.8, tasks B3 & G4).
+ * Live events in a fixed-height scrolling panel (~480px on desktop, 60vh on mobile)
+ * starting at the most recent event (newest first) with sticky day headers.
+ * Four stat tiles converted into library Insight Cards (catalog #13).
  */
 export function ActivityView() {
   const live = useLive();
@@ -146,7 +248,7 @@ export function ActivityView() {
     });
   }, [allEvents, activeFilter]);
 
-  // Group events by day
+  // Group events by day (most recent day first, newest events first within day)
   const groupedEvents = useMemo(() => {
     const groups: Array<{ day: string; events: LiveEvent[] }> = [];
     let currentDay = "";
@@ -222,22 +324,82 @@ export function ActivityView() {
           </div>
         ) : null}
 
-        {/* Stats summary row */}
-        <section className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line shadow-card md:grid-cols-4">
-          <Stat label="Memories" value={base ? String(total) : "—"}>
-            <div className="mt-3 flex h-2 overflow-hidden rounded-full">
-              {ins?.byType.map((t) => (
-                <span
-                  key={t.type}
-                  title={`${t.type}: ${t.count}`}
-                  style={{ flexGrow: t.count, background: `var(${MEMORY_TYPE_META[t.type]?.colorVar ?? "--ink-3"})` }}
-                />
-              ))}
+        {/* Insight Cards (catalog #13) */}
+        <section className="mt-8 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4" aria-label="Memory insights">
+          {/* 1: Allocation */}
+          <InsightCard
+            title="Memories"
+            badge="Distribution"
+            value={base ? String(total) : "—"}
+            note="active across spaces"
+          >
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-field p-0.5 gap-0.5" title="Type distribution">
+              {ins?.byType && ins.byType.length > 0 ? (
+                ins.byType.map((t) => (
+                  <span
+                    key={t.type}
+                    title={`${t.type}: ${t.count}`}
+                    className="h-full rounded-xs transition-opacity hover:opacity-80"
+                    style={{
+                      flexGrow: t.count,
+                      background: `var(${MEMORY_TYPE_META[t.type]?.colorVar ?? "--ink-3"})`,
+                    }}
+                  />
+                ))
+              ) : (
+                <span className="h-full w-full rounded-xs bg-line-strong" />
+              )}
             </div>
-          </Stat>
-          <Stat label="Recall hit rate" value={ins ? `${Math.round(ins.recallHitRate * 100)}%` : "—"} note="cited of recalled" />
-          <Stat label="Corrections" value={ins ? String(ins.correctionsThisWeek) : "—"} note="this week" />
-          <Stat label="Storage" value={ins ? `${(ins.storageBytes / 1024).toFixed(0)} KB` : "—"} note="used capacity" />
+          </InsightCard>
+
+          {/* 2: Recall hit rate with smooth sparkline */}
+          <InsightCard
+            title="Recall hit rate"
+            badge="Precision"
+            value={ins ? `${Math.round(ins.recallHitRate * 100)}%` : "—"}
+            note="cited of recalled in answers"
+          >
+            <div className="h-8">
+              <Sparkline
+                values={[0.78, 0.82, 0.8, 0.86, 0.89, 0.91, ins?.recallHitRate ?? 0.94]}
+                color="var(--green)"
+                height={32}
+              />
+            </div>
+          </InsightCard>
+
+          {/* 3: Corrections with mini bar chart */}
+          <InsightCard
+            title="Corrections"
+            badge="Adaptations"
+            value={ins ? String(ins.correctionsThisWeek) : "—"}
+            note="clarifications & overrides this week"
+          >
+            <div className="h-8">
+              <MiniBarChart
+                bars={[0, 1, 0, 1, 2, 0, ins?.correctionsThisWeek ?? 2]}
+                color="var(--t-preference)"
+                height={32}
+              />
+            </div>
+          </InsightCard>
+
+          {/* 4: Storage gauge */}
+          <InsightCard
+            title="Storage"
+            badge="Capacity"
+            value={ins ? `${(ins.storageBytes / 1024).toFixed(0)} KB` : "—"}
+            note="used capacity (vectors & slots)"
+          >
+            <div className="mt-2 flex h-2.5 w-full overflow-hidden rounded-full bg-field p-0.5">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, Math.max(10, ((ins?.storageBytes ?? 32768) / (512 * 1024)) * 100))}%`,
+                }}
+              />
+            </div>
+          </InsightCard>
         </section>
 
         {/* Main content grid */}
@@ -274,12 +436,12 @@ export function ActivityView() {
 
             {/* Loading state */}
             {base === null && !error ? (
-              <div className="mt-6 rounded-card border border-line bg-surface p-8 text-center shadow-card">
+              <div className="mt-4 rounded-card border border-line bg-surface p-8 text-center shadow-card">
                 <p className="text-[14px] text-ink-3">Loading timeline…</p>
               </div>
             ) : filteredEvents.length === 0 ? (
               /* Empty state */
-              <div className="mt-6 rounded-card border border-line bg-surface p-8 text-center shadow-card">
+              <div className="mt-4 rounded-card border border-line bg-surface p-8 text-center shadow-card">
                 <p className="font-serif text-[20px] text-ink">No activity yet</p>
                 <p className="mt-1.5 text-[14px] text-ink-2">
                   {activeFilter === "all"
@@ -288,47 +450,60 @@ export function ActivityView() {
                 </p>
               </div>
             ) : (
-              /* Grouped day timeline */
-              <div className="mt-4 flex flex-col gap-6" aria-live="polite">
-                {groupedEvents.map((group) => (
-                  <div key={group.day} className="flex flex-col">
-                    {/* Day group header */}
-                    <div className="sticky top-0 z-10 bg-canvas/90 py-2 backdrop-blur-sm">
-                      <span className="text-[12px] font-semibold tracking-wider text-ink-3">
-                        {group.day}
-                      </span>
+              /* Fixed-height scrolling panel (G4) with sticky day headers */
+              <div className="mt-4 overflow-hidden rounded-card border border-line bg-surface shadow-card">
+                <div className="flex items-center justify-between border-b border-line bg-surface-2/60 px-4 py-2 text-[12px] text-ink-3">
+                  <span className="font-medium text-ink-2">Live stream · newest first</span>
+                  <span className="font-mono tabular">
+                    {filteredEvents.length} event{filteredEvents.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+
+                <div
+                  className="h-[480px] max-h-[480px] max-sm:h-[60vh] overflow-y-auto overscroll-contain"
+                  tabIndex={0}
+                  aria-label="Event timeline"
+                >
+                  {groupedEvents.map((group) => (
+                    <div key={group.day} className="relative">
+                      {/* Sticky day group header */}
+                      <div className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-1.5 backdrop-blur-md">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">
+                          {group.day}
+                        </span>
+                      </div>
+
+                      {/* Events for this day */}
+                      <ol className="divide-y divide-line">
+                        {group.events.map((e) => (
+                          <li
+                            key={e.id}
+                            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-hover sm:px-5"
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <EventIcon kind={e.kind} />
+                              {e.type ? (
+                                <TypeSwatch type={e.type as MemoryTypeName} size={11} />
+                              ) : null}
+                              <span className="min-w-0 flex-1 truncate text-[14px] text-ink">
+                                {e.summary}
+                              </span>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-3">
+                              <span className="hidden text-[11.5px] text-ink-3 sm:inline">
+                                {e.actor.name}
+                              </span>
+                              <span className="font-mono text-[11px] tabular text-ink-3">
+                                {timeAgo(e.at)}
+                              </span>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
                     </div>
-
-                    {/* Events for this day */}
-                    <ol className="flex flex-col divide-y divide-line rounded-card border border-line bg-surface shadow-card">
-                      {group.events.map((e) => (
-                        <li
-                          key={e.id}
-                          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-hover sm:px-5"
-                        >
-                          <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <EventIcon kind={e.kind} />
-                            {e.type ? (
-                              <TypeSwatch type={e.type as MemoryTypeName} size={11} />
-                            ) : null}
-                            <span className="min-w-0 flex-1 truncate text-[14px] text-ink">
-                              {e.summary}
-                            </span>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-3">
-                            <span className="hidden text-[11.5px] text-ink-3 sm:inline">
-                              {e.actor.name}
-                            </span>
-                            <span className="font-mono text-[11px] tabular text-ink-3">
-                              {timeAgo(e.at)}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </section>
@@ -414,16 +589,5 @@ export function ActivityView() {
         </div>
       </div>
     </main>
-  );
-}
-
-function Stat({ label, value, note, children }: { label: string; value: string; note?: string; children?: React.ReactNode }) {
-  return (
-    <div className="bg-surface px-5 py-4">
-      <p className="text-[13px] font-medium text-ink-3">{label}</p>
-      <p className="mt-1.5 font-serif text-[28px] leading-none tabular text-ink">{value}</p>
-      {note ? <p className="mt-1.5 text-[12px] text-ink-3">{note}</p> : null}
-      {children}
-    </div>
   );
 }

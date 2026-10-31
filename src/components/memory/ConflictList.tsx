@@ -13,6 +13,7 @@ interface Side {
   updatedAt: string;
   demo?: boolean;
 }
+
 interface Pair {
   id: string;
   left: Side;
@@ -22,12 +23,34 @@ interface Pair {
 }
 
 /**
- * ConflictList (task B2).
- * Contradictions and conflicting facts:
- * - Desktop: side by side
- * - Mobile: stacked
- * - Clear actions: Keep left / Keep right / Keep both
- * - Loading, error, and empty states.
+ * Signal / similarity meter adapted from Catalog #9 (Recommendation Card, lines 2803–2815).
+ */
+function SignalMeter({ signal, tone = "var(--orange)" }: { signal: number; tone?: string }) {
+  const activeCount = signal >= 0.8 ? 3 : signal >= 0.4 ? 2 : 1;
+  return (
+    <span className="flex items-end gap-1" title={`${Math.round(signal * 100)}% similarity signal`}>
+      {[1, 2, 3].map((bar) => (
+        <span
+          key={bar}
+          className="w-1 rounded-full transition-colors duration-300"
+          style={{
+            height: 7 + bar * 2.5,
+            background: bar <= activeCount ? tone : "var(--line-strong)",
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * ConflictList (tasks B2 & G5).
+ * Recommendation Card adapted from Catalog #9 (lines 2716–2911):
+ * - Clear question: "Which is current?"
+ * - Signal meter displaying match strength
+ * - Recommendation options side by side on desktop, stacked on mobile
+ * - Prominent "Keep this as current" actions and "Keep both" alternative
+ * - Preserves all fetch URLs, payloads, and state behavior
  */
 export function ConflictList() {
   const router = useRouter();
@@ -106,20 +129,32 @@ export function ConflictList() {
       ) : (
         <ul className="mt-6 flex flex-col gap-6">
           {pairs.map((pair) => (
-            <li key={pair.id} className="overflow-hidden rounded-card border border-line bg-surface p-5 shadow-card sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
-                <p className="text-[13.5px] font-medium text-orange">
-                  {pair.reason === "same_slot" ? "Same fact with different values" : "These statements contradict each other"}
-                </p>
-                <span className="font-mono text-[11px] tabular text-ink-3">
-                  {Math.round(pair.similarity * 100)}% match
-                </span>
+            <li
+              key={pair.id}
+              className="overflow-hidden rounded-card border border-line bg-surface p-5 shadow-card sm:p-6"
+            >
+              {/* Card top banner with SignalMeter */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3.5">
+                <div>
+                  <span className="text-[14px] font-medium text-ink">Which is current?</span>
+                  <p className="mt-0.5 text-[12.5px] text-orange">
+                    {pair.reason === "same_slot"
+                      ? "Same fact with different values"
+                      : "These statements contradict each other"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <SignalMeter signal={pair.similarity} />
+                  <span className="font-mono text-[11px] tabular text-ink-3">
+                    {Math.round(pair.similarity * 100)}% match
+                  </span>
+                </div>
               </div>
 
-              {/* Conflict comparison: side by side on desktop, stacked on mobile */}
+              {/* Recommendation options comparison: side by side on desktop, stacked on mobile */}
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                {/* Left Card */}
-                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4">
+                {/* Left Option */}
+                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4 transition-colors hover:border-line-strong">
                   <div>
                     <div className="flex items-center gap-2">
                       <TypeSwatch type={pair.left.type as MemoryTypeName} size={13} label />
@@ -129,22 +164,22 @@ export function ConflictList() {
                       {pair.left.statement}
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center justify-between pt-2">
+                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
                     <span className="font-mono text-[11px] text-ink-3">{timeAgo(pair.left.updatedAt)}</span>
                     <Button
-                      variant="secondary"
+                      variant="accent"
                       size="sm"
                       disabled={busy === pair.id}
                       onClick={() => resolveKeep(pair, "left")}
                       className="min-h-[36px] px-3.5 text-[13px]"
                     >
-                      Keep this
+                      Keep this as current
                     </Button>
                   </div>
                 </div>
 
-                {/* Right Card */}
-                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4">
+                {/* Right Option */}
+                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4 transition-colors hover:border-line-strong">
                   <div>
                     <div className="flex items-center gap-2">
                       <TypeSwatch type={pair.right.type as MemoryTypeName} size={13} label />
@@ -154,22 +189,22 @@ export function ConflictList() {
                       {pair.right.statement}
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center justify-between pt-2">
+                  <div className="mt-4 flex items-center justify-between border-t border-line/60 pt-3">
                     <span className="font-mono text-[11px] text-ink-3">{timeAgo(pair.right.updatedAt)}</span>
                     <Button
-                      variant="secondary"
+                      variant="accent"
                       size="sm"
                       disabled={busy === pair.id}
                       onClick={() => resolveKeep(pair, "right")}
                       className="min-h-[36px] px-3.5 text-[13px]"
                     >
-                      Keep this
+                      Keep this as current
                     </Button>
                   </div>
                 </div>
               </div>
 
-              {/* Bottom quick actions */}
+              {/* Bottom alternative action */}
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
                 <Button
                   variant="quiet"
