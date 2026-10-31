@@ -165,3 +165,5 @@ K4 follow-up [status: implemented 14:38 IST, codex/k4-review-uncertainty; pendin
 K3 follow-up [status: implemented 14:43 IST, codex/k3-temporal-scenarios; reviewed temporal/event retrieval and expanded hosted cases; fresh deployed run pending].
 
 K5 follow-up [status: implemented 14:53 IST, codex/k5-profile-demo; source-grounded partial profile recovery,40-unit demo with contradiction pair; independent review passed].
+
+K6 follow-up [status: implemented, codex/k6-model-options; typed catalog/stub and explicit preference behavior reviewed; lead model-picker integration remains app-owned].
