@@ -1,5 +1,7 @@
 # Radahn — demo video script (≈ 2:45)
 
+> **For recording and voice-over, use [`docs/video/`](video/):** `RECORDING.md` (exact OBS clips, durations, clicks), `voiceover.md` (spoken script, voice choice, ElevenLabs settings, file names) and `manifest.json` (clip ↔ audio map for the editor). This page is the overview.
+
 Short on purpose: judges see the four things that matter and nothing else. ~340 words of voice-over at a calm pace (≈ 130 wpm) leaves room for the UI to breathe. Generate the voice-over in ElevenLabs from the **Voice-over** column only (one paragraph per shot so each clip can be re-timed). Replaces the earlier 6-minute script.
 
 **No event names in the video** (the product stands on its own). The persona is synthetic and labelled Demo.
