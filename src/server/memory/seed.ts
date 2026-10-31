@@ -42,5 +42,19 @@ export async function seedDemo({ownerId,spaceIds,conversations}:SeedDemoInput):P
  });}finally{await session.endSession();}
  return {memories:rows.length};
 }
-export async function removeDemo(ownerId:string):Promise<void>{await collections().memories.deleteMany({ownerId,demo:true});}
-export async function deleteAll(ownerId:string):Promise<void>{const c=collections();await Promise.all([c.memories,c.events,c.recalls,c.reflections].map(collection=>collection.deleteMany({ownerId})));}
+/** Cleanup shares reflection's owner lock so derived memories cannot outlive a concurrent deletion. */
+export async function removeDemo(ownerId:string):Promise<void>{
+ const session=mongo().startSession();
+ try{await session.withTransaction(async()=>{
+  await lockOwner(ownerId,session);
+  await collections().memories.deleteMany({ownerId,demo:true},{session});
+ });}finally{await session.endSession();}
+}
+export async function deleteAll(ownerId:string):Promise<void>{
+ const c=collections(),session=mongo().startSession();
+ try{await session.withTransaction(async()=>{
+  await lockOwner(ownerId,session);
+  // MongoDB transactions require sequential operations on their shared session.
+  for(const collection of [c.memories,c.events,c.recalls,c.reflections])await collection.deleteMany({ownerId},{session});
+ });}finally{await session.endSession();}
+}

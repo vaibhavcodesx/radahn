@@ -23,8 +23,8 @@ test("seeds one owner-scoped batch with resolved links, real vectors and optiona
  expect(c.events.insertOne).toHaveBeenCalledTimes(1);expect(c.events.insertOne.mock.calls[0][0]).toMatchObject({ownerId:"owner",kind:"created"});
 });
 test("removeDemo preserves non-demo data and deleteAll clears owner memory history",async()=>{
- await removeDemo("owner");expect(c.memories.deleteMany).toHaveBeenCalledWith({ownerId:"owner",demo:true});expect(c.events.deleteMany).not.toHaveBeenCalled();
- await deleteAll("owner");for(const collection of [c.memories,c.events,c.recalls,c.reflections])expect(collection.deleteMany).toHaveBeenCalledWith({ownerId:"owner"});
+ await removeDemo("owner");expect(c.memories.deleteMany).toHaveBeenCalledWith({ownerId:"owner",demo:true},{session});expect(c.events.deleteMany).not.toHaveBeenCalled();
+ await deleteAll("owner");for(const collection of [c.memories,c.events,c.recalls,c.reflections])expect(collection.deleteMany).toHaveBeenCalledWith({ownerId:"owner"},{session});
 });
 
 const session=vi.hoisted(()=>({withTransaction:vi.fn(async(fn:()=>Promise<unknown>)=>fn()),endSession:vi.fn()}));
@@ -44,3 +44,16 @@ test("atomic replacement holds owner lock and preserves active non-demo slot tru
  expect(rows.find(m=>m.slotKey==="aarav.education")?.status).toBe("pending_review");
  expect(rows).toHaveLength(DEMO_MEMORIES.length);
 });
+
+test.each([removeDemo,deleteAll])("cleanup holds the owner lock and uses one session transaction",async cleanup=>{
+ await cleanup("owner");expect(session.withTransaction).toHaveBeenCalledTimes(1);expect(lockOwner).toHaveBeenCalledWith("owner",session);expect(session.endSession).toHaveBeenCalledTimes(1);
+ for(const collection of cleanup===removeDemo?[c.memories]:[c.memories,c.events,c.recalls,c.reflections]){
+  const call=collection.deleteMany.mock.calls[0];expect(call[0].ownerId).toBe("owner");expect(call[1]).toEqual({session});expect(lockOwner.mock.invocationCallOrder[0]).toBeLessThan(collection.deleteMany.mock.invocationCallOrder[0]);
+ }
+});
+test("deleteAll awaits each deletion sequentially within its transaction",async()=>{
+ let pending=0,peak=0;const remove=async()=>{pending++;peak=Math.max(peak,pending);await Promise.resolve();pending--;};
+ for(const collection of [c.memories,c.events,c.recalls,c.reflections])collection.deleteMany.mockImplementationOnce(remove);
+ await deleteAll("owner");expect(peak).toBe(1);
+});
+
