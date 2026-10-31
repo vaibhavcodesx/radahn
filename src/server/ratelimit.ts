@@ -12,6 +12,7 @@ const LIMITS = {
   ghost: { max: 5, windowSec: 600 },
   reflect: { max: 3, windowSec: 600 },
   write: { max: 60, windowSec: 600 },
+  agent: { max: 120, windowSec: 600 }, // MCP calls per owner, across all of its keys
 } as const;
 
 export type LimitKind = keyof typeof LIMITS;

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AgentKeys } from "./AgentKeys";
 import { Button } from "@/components/atoms";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +81,10 @@ export function SettingsForm({
 
       <Group title="Model">
         <Choice options={MODELS} value={v.chatModel} onChange={(chatModel) => save({ chatModel })} />
+      </Group>
+
+      <Group title="Connected agents">
+        <AgentKeys />
       </Group>
 
       <Group title="Data">
