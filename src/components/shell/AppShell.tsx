@@ -100,9 +100,14 @@ export function AppShell({
   const sidebar = (
     <nav aria-label="Primary" className="flex h-full w-[260px] flex-col bg-surface">
       <div className="flex items-center px-4 pb-3 pt-4">
-        <Link href="/" className="flex items-center gap-2.5">
-          <Image src="/brand/radahn-mark.png" alt="" width={28} height={28} className="rounded-[6px]" />
-          <span className="text-[18px] font-semibold tracking-[-0.01em] text-ink">Radahn</span>
+        <Link href="/" className="group flex items-center gap-3 rounded-control" aria-label="Radahn home">
+          <span className="flex size-10 items-center justify-center rounded-[10px] bg-[var(--t-ink-dark)] shadow-[inset_0_0_0_1px_var(--line-strong),0_1px_6px_rgb(0_0_0/0.25)] transition-transform group-hover:scale-[1.04]">
+            <Image src="/brand/radahn-mark.png" alt="" width={30} height={30} className="rounded-[6px]" />
+          </span>
+          <span className="flex flex-col leading-none">
+            <span className="font-serif text-[23px] tracking-[-0.01em] text-ink">Radahn</span>
+            <span className="mt-1 text-[11.5px] text-ink-3">Memory you can see</span>
+          </span>
         </Link>
       </div>
 
@@ -210,8 +215,10 @@ export function AppShell({
             <button onClick={() => setMobileOpen(true)} className="flex size-10 items-center justify-center rounded-control text-ink-2 hover:bg-hover" aria-label="Open navigation">
               <PanelLeft className="size-5" />
             </button>
-            <Image src="/brand/radahn-mark.png" alt="" width={22} height={22} className="rounded-[5px]" />
-            <span className="text-[16px] font-semibold text-ink">Radahn</span>
+            <span className="flex size-8 items-center justify-center rounded-[8px] bg-[var(--t-ink-dark)] shadow-[inset_0_0_0_1px_var(--line-strong)]">
+              <Image src="/brand/radahn-mark.png" alt="" width={24} height={24} className="rounded-[5px]" />
+            </span>
+            <span className="font-serif text-[19px] text-ink">Radahn</span>
             {pending ? (
               <Link href="/app/review" className="ml-auto mr-1 inline-flex h-7 items-center rounded-full bg-t-preference px-2.5 text-[12px] font-medium text-[var(--t-ink-dark)]">
                 {pending} to review

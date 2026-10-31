@@ -14,10 +14,24 @@ import { dataPart, dataParts, messageText } from "./parts";
 import { WriteChips } from "./WriteChips";
 
 export function UserMessage({ message }: { message: RadahnUIMessage }) {
+  const [copied, setCopied] = useState(false);
+  const text = messageText(message);
   return (
-    <div className="flex justify-end">
+    <div className="group flex flex-col items-end gap-1">
       <div className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-2 px-4 py-3 text-[15.5px] leading-relaxed text-ink shadow-card">
-        {messageText(message)}
+        {text}
+      </div>
+      <div className="opacity-60 transition-opacity group-hover:opacity-100 md:opacity-0 md:focus-within:opacity-100">
+        <IconBtn
+          label={copied ? "Copied" : "Copy message"}
+          onClick={() => {
+            void navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1200);
+          }}
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </IconBtn>
       </div>
     </div>
   );
@@ -31,11 +45,13 @@ export function AssistantMessage({
   onOpenMemory,
   onGhost,
   onRetry,
+  onShowMemory,
   streaming,
   isLatest,
 }: {
   message: RadahnUIMessage;
   isLatest: boolean;
+  onShowMemory?: () => void;
   userMessageId?: string;
   selected: boolean;
   onSelect: () => void;
@@ -73,7 +89,7 @@ export function AssistantMessage({
         <p className="mb-2 text-[13px] text-red">Not saved: that looked like a credential ({redaction.kinds.join(", ").replaceAll("_", " ")}).</p>
       ) : null}
 
-      <RecallLine recall={recall} />
+      <RecallLine recall={recall} onShow={onShowMemory} />
 
       {ops.length ? (
         <ul className="mb-2 flex flex-wrap gap-1.5">
@@ -116,9 +132,14 @@ export function AssistantMessage({
             {onGhost ? (
               <button
                 onClick={(e) => (e.stopPropagation(), onGhost())}
-                className="ml-1 flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover"
+                aria-label="Answer again without memory"
+                title="Answer again without memory"
+                className="group/ghost flex h-8 items-center rounded-full px-2 text-[13px] text-ink-3 transition-colors hover:bg-hover hover:text-ink focus-visible:text-ink"
               >
-                <Ghost className="size-3.5" /> Without memory
+                <Ghost className="size-4" strokeWidth={1.75} />
+                <span className="max-w-0 overflow-hidden whitespace-nowrap transition-[max-width,margin] duration-200 group-hover/ghost:ml-1.5 group-hover/ghost:max-w-[9rem] group-focus-visible/ghost:ml-1.5 group-focus-visible/ghost:max-w-[9rem] motion-reduce:transition-none">
+                  Without memory
+                </span>
               </button>
             ) : null}
           </div>
@@ -128,7 +149,7 @@ export function AssistantMessage({
   );
 }
 
-function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
+function RecallLine({ recall, onShow }: { recall?: RadahnDataParts["recall"]; onShow?: () => void }) {
   if (!recall) return null;
   if (recall.status === "running")
     return (
@@ -138,8 +159,14 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
     );
   if (recall.status === "error") return <p className="mb-2 text-[13px] text-ink-3">Memory was unavailable for this reply.</p>;
   const n = recall.picks?.length ?? 0;
+  const Tag = onShow && n > 0 ? "button" : "p";
   return (
-    <p className="mb-2 flex items-center gap-2 text-[13px] text-ink-3">
+    <Tag
+      {...(Tag === "button"
+        ? { type: "button" as const, onClick: (e: React.MouseEvent) => (e.stopPropagation(), onShow!()), title: "Show these memories", "aria-label": `Show the ${n} memories used` }
+        : {})}
+      className={cn("mb-2 flex items-center gap-2 rounded-control text-[13px] text-ink-3", Tag === "button" && "-mx-1.5 px-1.5 py-0.5 transition-colors hover:bg-hover hover:text-ink")}
+    >
       <span className="flex gap-0.5" aria-hidden>
         {(recall.picks ?? []).slice(0, 8).map((p) => (
           <span key={p.ref} className="size-2 rounded-[1px]" style={{ background: `var(${MEMORY_TYPE_META[p.type].colorVar})` }} />
@@ -147,7 +174,7 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
       </span>
       {n === 0 ? "No memories needed" : `Used ${n} ${n === 1 ? "memory" : "memories"}`}
       {recall.strategies?.length ? <span>· {recall.strategies.length} learned rule{recall.strategies.length > 1 ? "s" : ""}</span> : null}
-    </p>
+    </Tag>
   );
 }
 

@@ -7,6 +7,7 @@ import { ScoreBar, TypeSwatch } from "@/components/atoms";
 import { useLive } from "@/components/realtime/LiveProvider";
 import type { RadahnDataParts } from "@/lib/chat-types";
 import { changedWords, wordDiff } from "@/lib/diff";
+import { Markdown } from "@/lib/markdown";
 import { MEMORY_TYPE_META, type MemoryTypeName } from "@/lib/memory-types";
 import { cn, formatScore } from "@/lib/utils";
 import { PixelLoader } from "./MessageItem";
@@ -219,7 +220,11 @@ function Written({ writes }: { writes: ReturnType<ReturnType<typeof useLive>["fo
             {KIND_LABEL[e.kind] ?? e.kind}
             {e.type ? <span className="text-grove-ink-2">· {MEMORY_TYPE_META[e.type as MemoryTypeName]?.label ?? e.type}</span> : null}
           </span>
-          {e.diff?.after ? <span className="text-[13.5px] leading-snug text-grove-ink-2">{e.diff.after}</span> : null}
+          {e.diff?.after ? (
+            <span className="text-[14px] leading-snug text-grove-ink">{e.diff.after}</span>
+          ) : e.memoryId && e.kind !== "forgotten" && e.kind !== "blocked" ? (
+            <SavedStatement id={e.memoryId} />
+          ) : null}
           {e.memoryId && e.kind !== "forgotten" && e.kind !== "blocked" ? (
             <Link href={`/app/memory/${e.memoryId}`} className="text-[13px] text-grove-ink-2 underline-offset-4 hover:text-grove-ink hover:underline">
               Open memory
@@ -229,6 +234,39 @@ function Written({ writes }: { writes: ReturnType<ReturnType<typeof useLive>["fo
       ))}
     </ul>
   );
+}
+
+/** Saved-memory events carry ids, not text; fetch the statement so the user sees what was kept. */
+const statementCache = new Map<string, Promise<string | null>>();
+function SavedStatement({ id }: { id: string }) {
+  const [text, setText] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    if (!statementCache.has(id))
+      statementCache.set(
+        id,
+        fetch(`/api/memories/${id}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => (d?.memory?.statement as string | undefined) ?? null)
+          .catch(() => null),
+      );
+    void statementCache.get(id)!.then((t) => alive && setText(t));
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  if (text === undefined) return <span className="shimmer text-[13.5px]">Loading…</span>;
+  if (!text) return null;
+  return <span className="text-[14px] leading-snug text-grove-ink">{text}</span>;
+}
+
+/** Diff the words people read, not markdown syntax. */
+function plain(md: string) {
+  return md
+    .replace(/\[\[m\d+\]\]/g, "")
+    .replace(/```[a-z]*\n?/gi, "")
+    .replace(/\*\*|__|`/g, "")
+    .replace(/^#{1,6}\s+/gm, "");
 }
 
 function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDataParts["recall"] }) {
@@ -292,7 +330,7 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
 
 function GhostDiff({ ghost, replyText, recall }: { ghost: GhostState; replyText: string; recall?: RadahnDataParts["recall"] }) {
   const [mode, setMode] = useState<"diff" | "side">("diff");
-  const ops = useMemo(() => (ghost.text ? wordDiff(ghost.text, replyText) : []), [ghost.text, replyText]);
+  const ops = useMemo(() => (ghost.text ? wordDiff(plain(ghost.text), plain(replyText)) : []), [ghost.text, replyText]);
   if (ghost.status === "idle")
     return (
       <p className="flex items-start gap-2 text-[13px] leading-relaxed text-grove-ink-2">
@@ -331,11 +369,15 @@ function GhostDiff({ ghost, replyText, recall }: { ghost: GhostState; replyText:
         <div className="grid grid-cols-1 gap-2">
           <section className="rounded-control bg-grove-2 p-3">
             <p className="text-[12.5px] font-medium mb-1.5 text-grove-ink-2">Without memory</p>
-            <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed">{ghost.text}</p>
+            <div className="text-[13.5px] leading-relaxed [&_*]:text-[13.5px]">
+              <Markdown text={ghost.text ?? ""} cite={() => null} />
+            </div>
           </section>
           <section className="rounded-control bg-grove-2 p-3">
             <p className="text-[12.5px] font-medium mb-1.5 text-grove-ink-2">With memory</p>
-            <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed">{replyText.replace(/\[\[m\d+\]\]/g, "")}</p>
+            <div className="text-[13.5px] leading-relaxed [&_*]:text-[13.5px]">
+              <Markdown text={replyText.replace(/\[\[m\d+\]\]/g, "")} cite={() => null} />
+            </div>
           </section>
         </div>
       )}

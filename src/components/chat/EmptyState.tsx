@@ -1,7 +1,8 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button, TypeSwatch } from "@/components/atoms";
 import { MEMORY_TYPE_LIST } from "@/lib/memory-types";
 
@@ -9,6 +10,19 @@ import { MEMORY_TYPE_LIST } from "@/lib/memory-types";
  * Chat empty state (design.md §6.4): serif prompt, suggestion chips, and — when the user has
  * no memories yet — the one-click demo world (judge path, PRD §7.1).
  */
+const DISMISS_KEY = "radahn-demo-dismissed";
+const subscribeDismiss = (cb: () => void) => {
+  window.addEventListener("storage", cb);
+  return () => window.removeEventListener("storage", cb);
+};
+const readDismiss = () => {
+  try {
+    return localStorage.getItem(DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 export function EmptyState({
   suggestions,
   showDemo,
@@ -20,6 +34,15 @@ export function EmptyState({
 }) {
   const router = useRouter();
   const [seeding, setSeeding] = useState<"idle" | "busy" | "error">("idle");
+  const stored = useSyncExternalStore(subscribeDismiss, readDismiss, () => false);
+  const [hidden, setHidden] = useState(false);
+  const dismissed = hidden || stored;
+  function dismiss() {
+    setHidden(true);
+    try {
+      localStorage.setItem(DISMISS_KEY, "1");
+    } catch {}
+  }
 
   async function loadDemo() {
     setSeeding("busy");
@@ -47,15 +70,23 @@ export function EmptyState({
         ))}
       </div>
 
-      {showDemo ? (
-        <div className="mt-10 w-full rounded-card bg-surface p-5 text-left shadow-card">
+      {showDemo && !dismissed ? (
+        <div className="relative mt-10 w-full rounded-card bg-surface p-5 text-left shadow-card">
+          <button
+            onClick={dismiss}
+            aria-label="Hide the demo card"
+            title="Hide"
+            className="absolute right-2.5 top-2.5 flex size-8 items-center justify-center rounded-control text-ink-3 hover:bg-hover hover:text-ink"
+          >
+            <X className="size-4" strokeWidth={1.75} />
+          </button>
           <div className="flex items-start gap-4">
             <div className="grid shrink-0 grid-cols-5 gap-1" aria-hidden>
               {MEMORY_TYPE_LIST.map((t) => (
                 <TypeSwatch key={t} type={t} size={14} />
               ))}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 pr-6">
               <p className="text-[12.5px] font-medium text-ink-3">Demo</p>
               <p className="mt-1 text-[14px] text-ink">Load a demo memory world</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">

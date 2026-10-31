@@ -18,6 +18,30 @@ import { dataPart, dataParts, messageText } from "./parts";
 import { PendingSaves } from "./PendingSaves";
 
 /** Model choice persists per browser; server snapshot is the default so hydration matches. */
+const LENS_KEY = "radahn-lens-width";
+const LENS_DEFAULT = 380;
+const LENS_MIN = 320;
+const LENS_MAX = 720;
+const clampWidth = (w: number) => Math.round(Math.min(LENS_MAX, Math.max(LENS_MIN, w)));
+const widthListeners = new Set<() => void>();
+const subscribeWidth = (cb: () => void) => {
+  widthListeners.add(cb);
+  return () => widthListeners.delete(cb);
+};
+const readWidth = () => {
+  try {
+    const v = Number(localStorage.getItem(LENS_KEY));
+    return v ? clampWidth(v) : LENS_DEFAULT;
+  } catch {
+    return LENS_DEFAULT;
+  }
+};
+const writeWidth = (w: number) => {
+  try {
+    localStorage.setItem(LENS_KEY, String(w));
+  } catch {}
+  widthListeners.forEach((cb) => cb());
+};
 const MODEL_KEY = "radahn-model";
 const modelListeners = new Set<() => void>();
 function readModel(): ChatModelId {
@@ -145,6 +169,30 @@ export function ChatView({
 
   const send = useCallback((text: string) => void sendMessage({ text }), [sendMessage]);
 
+  const showMemory = useCallback((assistantId: string) => {
+    setSelectedId(assistantId);
+    setTab("recalled");
+    setLensOpen(true);
+    setMobileLens(true);
+  }, []);
+
+  // Drag the panel's left edge to resize it; the width is remembered per browser.
+  const storedWidth = useSyncExternalStore(subscribeWidth, readWidth, () => LENS_DEFAULT);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const lensWidth = dragWidth ?? storedWidth;
+  const startResize = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    const move = (ev: PointerEvent) => setDragWidth(clampWidth(window.innerWidth - ev.clientX));
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      writeWidth(clampWidth(window.innerWidth - ev.clientX));
+      setDragWidth(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }, []);
+
   const runGhost = useCallback(async (assistantId: string) => {
     setSelectedId(assistantId);
     setTab("ghost");
@@ -223,6 +271,7 @@ export function ChatView({
                     onSelect={() => setSelectedId(m.id)}
                     onOpenMemory={(id) => router.push(`/app/memory/${id}`)}
                     onGhost={busy ? undefined : () => runGhost(m.id)}
+                    onShowMemory={() => showMemory(m.id)}
                     onRetry={m.id === latestAssistant?.id && !busy ? () => void regenerate() : undefined}
                     streaming={busy && m.id === latestAssistant?.id}
                     isLatest={m.id === latestAssistant?.id && !historyIds.has(m.id)}
@@ -251,7 +300,28 @@ export function ChatView({
         </div>
       </section>
 
-      {lensOpen ? <div className="relative hidden w-[380px] shrink-0 border-l border-line lg:block">{lens}</div> : null}
+      {lensOpen ? (
+        <div className="relative hidden shrink-0 border-l border-line lg:block" style={{ width: lensWidth }}>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize memory panel"
+            aria-valuenow={lensWidth}
+            aria-valuemin={LENS_MIN}
+            aria-valuemax={LENS_MAX}
+            tabIndex={0}
+            onPointerDown={startResize}
+            onDoubleClick={() => writeWidth(LENS_DEFAULT)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") writeWidth(clampWidth(lensWidth + 24));
+              if (e.key === "ArrowRight") writeWidth(clampWidth(lensWidth - 24));
+            }}
+            title="Drag to resize · double-click to reset"
+            className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize touch-none after:absolute after:inset-y-0 after:left-[3px] after:w-px after:bg-transparent after:transition-colors hover:after:bg-accent focus-visible:after:bg-accent"
+          />
+          {lens}
+        </div>
+      ) : null}
       {mobileLens ? (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Memory">
           <button className="absolute inset-0 bg-black/40" aria-label="Close memory panel" onClick={() => setMobileLens(false)} />
