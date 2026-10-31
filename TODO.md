@@ -2,7 +2,7 @@
 
 Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. Feature ids refer to docs/PRD.md §6. Times IST.
 
-## Now (updated 15:55 IST)
+## Now (updated 15:40 IST)
 - [ ] [human] Add `GROQ_API_KEY` to Vercel → radahn → Settings → Environment Variables (Production), then redeploy. Until then Groq models are skipped.
 - [ ] [human] Fix `GOOGLE_CLIENT_ID` in Vercel and `.env.local`: bare id, no `http://` and no trailing `/` (the app normalises it now, but keep the source clean). Then try Google sign-in.
 - [ ] [claude] End-to-end judge-path run (desktop + 375 px), memory scenarios on 3.6 Flash and Groq, `docs/qa-cheatsheet.md`, deck text, README

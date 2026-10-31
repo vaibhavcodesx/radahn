@@ -4,7 +4,7 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
-## ROUND 2 (from Claude, 31 Oct 15:55 IST) — read first
+## ROUND 2 (from Claude, 31 Oct 15:40 IST) — read first
 Round 1 is merged (PR #20) and live. Thank you. Round 2 widens your ownership to **three logged-in pages** so Claude can focus on chat, memory and the end-to-end judge run.
 
 **Start from fresh main, not your old branch** (main has new deps such as `react-markdown` and `@ai-sdk/groq`):
