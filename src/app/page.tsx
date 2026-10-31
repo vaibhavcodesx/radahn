@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { ScoreBar, TypeSwatch } from "@/components/atoms";
+import { BackgroundPaths } from "@/components/landing/BackgroundPaths";
 import { GlyphField } from "@/components/landing/GlyphField";
+import { HalftoneFooter } from "@/components/landing/HalftoneFooter";
 import { MorphWord } from "@/components/landing/MorphWord";
 import { Nav } from "@/components/landing/Nav";
 import { ScreenshotsShowcase } from "@/components/landing/ScreenshotsShowcase";
+import { ScrollRevealManifesto } from "@/components/landing/ScrollRevealManifesto";
 import { wordDiff } from "@/lib/diff";
-import { MEMORY_TYPE_LIST, MEMORY_TYPE_META, type MemoryTypeName } from "@/lib/memory-types";
+import { type MemoryTypeName } from "@/lib/memory-types";
 
 /**
  * Landing (design.md §6.1, mode: Persuade).
@@ -187,11 +190,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-4 py-20 sm:px-6 md:px-10">
-        <p className="mx-auto max-w-[28ch] text-center font-serif text-[clamp(28px,3.6vw,46px)] leading-[1.12] tracking-[-0.01em]">
-          Most assistants forget you between tabs. <span className="text-ink-3">The rest remember you in secret.</span>
-        </p>
-      </section>
+      {/* SCROLL REVEAL MANIFESTO (E3) */}
+      <ScrollRevealManifesto />
 
       {/* TRUST */}
       <section id="trust" className="px-4 py-16 sm:px-6 md:px-10">
@@ -211,30 +211,25 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="px-4 py-24 text-center sm:px-6 md:px-10">
-        <h2 className="mx-auto max-w-[16ch] font-serif text-[clamp(36px,5vw,64px)] leading-[1.04] tracking-[-0.015em]">See what your agent remembers.</h2>
-        <Link href="/signin" className="mono-label mt-10 inline-flex h-11 items-center rounded-full bg-accent px-6 text-accent-ink hover:opacity-90">
-          Try it — no sign-up
-        </Link>
-        <p className="mt-4 text-[15px] text-ink-3">Load the demo world in one click.</p>
+      {/* CLOSING CTA WITH BG PATHS (E2) */}
+      <section className="relative overflow-hidden px-4 py-24 text-center sm:px-6 md:px-10">
+        <BackgroundPaths />
+        <div className="relative z-10">
+          <h2 className="mx-auto max-w-[16ch] font-serif text-[clamp(36px,5vw,64px)] leading-[1.04] tracking-[-0.015em]">
+            See what your agent remembers.
+          </h2>
+          <Link
+            href="/signin"
+            className="mono-label mt-10 inline-flex h-11 items-center rounded-full bg-accent px-6 text-accent-ink hover:opacity-90"
+          >
+            Try it — no sign-up
+          </Link>
+          <p className="mt-4 text-[15px] text-ink-3">Load the demo world in one click.</p>
+        </div>
       </section>
 
-      {/* FOOTER — A3: product name, GitHub, How it works. No stack credits. */}
-      <footer className="border-t border-line px-4 pb-8 pt-12 sm:px-6 md:px-10">
-        <div className="flex flex-wrap items-start justify-between gap-8">
-          <div className="flex gap-1.5" aria-hidden>
-            {MEMORY_TYPE_LIST.map((t) => (
-              <span key={t} className="size-3 rounded-[2px]" style={{ background: `var(${MEMORY_TYPE_META[t].colorVar})` }} />
-            ))}
-          </div>
-          <nav className="flex gap-8 text-[15px] text-ink-2">
-            <Link href="/how-it-works" className="hover:text-ink">How it works</Link>
-            <a href="https://github.com/vaibhavcodesx/radahn" className="hover:text-ink">GitHub</a>
-          </nav>
-        </div>
-        <p aria-hidden className="mt-12 select-none font-serif text-[clamp(64px,18vw,260px)] leading-[0.8] tracking-[-0.04em] text-[color-mix(in_srgb,var(--ink)_9%,transparent)]">RADAHN</p>
-        <p className="mt-6 text-[13px] text-ink-3">© 2026 Radahn. Example content is synthetic.</p>
-      </footer>
+      {/* HALFTONE WORDMARK FOOTER (E1) */}
+      <HalftoneFooter />
     </main>
   );
 }
