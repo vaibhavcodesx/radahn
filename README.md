@@ -19,7 +19,9 @@ Radahn remembers what matters (preferences, decisions, constraints, outcomes, fe
    - **Review:** the Review badge holds a sensitive memory until you approve or reject it.
    - **Expiry:** open any memory → **Expire → In 2 minutes**. Recall stops then; MongoDB's TTL monitor deletes it shortly after.
    - **Forget:** **Forget** hard-deletes the statement and its vector, leaving a content-free tombstone event.
-6. **Memory** shows the Atlas (filters, history, raw MongoDB document). **Activity** shows live events from a change stream and lets you run **Reflect now**.
+6. **Memory** shows the Atlas (filters, history, raw MongoDB document). Set **As of → Yesterday** to see what Radahn believed before later corrections (time travel). **Activity** shows live events from a change stream and lets you run **Reflect now**: duplicates merge, repeated feedback becomes a learned behaviour, each step streams in.
+7. **Review** also lists **contradictions**: two live memories that can't both be true; keep one and the other is superseded with history.
+8. **Connected agents (optional):** Settings → Connected agents → **Create key**, then run the shown command to give Claude Code (or any MCP client) scoped access to this memory. Whatever it saves appears live in Activity under its name.
 
 ## Track 1 brief → Radahn
 
@@ -54,6 +56,16 @@ Browser ── /api/chat ──► pre-scan ─► recall (vector · lexical · 
 **Scoring:** `final = 0.55·relevance(RRF) + 0.15·recency + 0.15·importance + 0.10·confidence + type boost`, threshold 0.35, MMR λ = 0.7, budget 8 units.
 
 **Resilience:** quota-aware model routing across keys (3.8 Flash → 3.6 Flash → 3.5 Flash-Lite) with a first-token deadline, so a quota-limited or hung model never stalls a reply; the UI shows which model answered.
+
+**Agent access (MCP):** `POST /api/mcp` is a stateless Streamable-HTTP MCP server with `memory_search`, `memory_list`, `memory_save`, `memory_forget`. A key is scoped to the spaces you grant; owner, scope and the agent's name come from the verified key, never from tool arguments. Only a SHA-256 of each key is stored.
+
+```bash
+claude mcp add --transport http radahn https://radahn-ai.vercel.app/api/mcp --header "Authorization: Bearer <key from Settings>"
+```
+
+## Measured
+
+Hosted run on production (Vercel + Atlas M0 + Gemini free tier), 31 Oct 2026, from [`evals/results.md`](evals/results.md): **10/10** live cases (write add / confirm / update-with-history, privacy no-store, cold-index plan recall, exact recall, temporal recall, ambiguous name ⇒ no delete, expired excluded, explicit forget), **31/31** deterministic checks, **0** secrets stored, write-op accuracy **1.0**, recall@5 **1.0**, recall p50 / p95 **507 / 562 ms** including the query embedding (warm retrieval + scoring ≈ 25–40 ms in the engine self-test). Live samples are deliberately small on the free tier.
 
 ## Tech stack
 
