@@ -61,20 +61,13 @@ export function Nav() {
         >
           GitHub
         </a>
-        <Link
-          href="/signin"
-          className="hidden text-[14px] text-ink-2 transition-colors hover:text-ink sm:inline"
-        >
-          Sign in
-        </Link>
-
-        {/* Primary CTA */}
+        {/* One entry point: /signin offers both "Continue as guest" and Google. */}
         <Link
           href="/signin"
           className="mono-label inline-flex h-11 items-center gap-2 rounded-full bg-accent px-4 text-accent-ink transition-opacity hover:opacity-90 sm:px-5"
         >
-          <span className="hidden sm:inline">Try it — no sign-up</span>
-          <span className="sm:hidden">Try it</span>
+          <span className="hidden sm:inline">Get started — free</span>
+          <span className="sm:hidden">Get started</span>
         </Link>
 
         {/* Mobile menu toggle (tap target >= 44px) */}
@@ -114,13 +107,6 @@ export function Nav() {
             >
               GitHub
             </a>
-            <Link
-              href="/signin"
-              className="flex min-h-[44px] items-center text-[15px] text-ink-2 hover:text-ink"
-              onClick={() => setMenuOpen(false)}
-            >
-              Sign in
-            </Link>
           </div>
         </div>
       )}

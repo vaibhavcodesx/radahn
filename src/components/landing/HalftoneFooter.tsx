@@ -56,14 +56,12 @@ interface HalftoneFooterProps {
   wordmark?: string;
   dotGap?: number;
   radius?: number;
-  crop?: number;
 }
 
 export function HalftoneFooter({
   wordmark = "RADAHN",
   dotGap = 6,
   radius = 85,
-  crop = 0.22,
 }: HalftoneFooterProps) {
   const rootRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -120,15 +118,18 @@ export function HalftoneFooter({
       const fontFamily = 'Hedvig Letters Serif, "Georgia", serif';
       m.font = `800 100px ${fontFamily}`;
       const measured = m.measureText(wordmark).width;
-      const fit = measured > 0 ? (w * 0.98 / measured) * 100 : 80;
+      // Fit the whole word between the top row (~96 px) and the copyright row (~72 px): limited by
+      // width or by the free height, whichever is tighter, so no letter is cut off or under text.
+      const top = 96, bottom = 72;
+      const fitW = measured > 0 ? (w * 0.94 / measured) * 100 : 80;
+      const fitH = Math.max(40, (h - top - bottom) / 0.74);
+      const fit = Math.min(fitW, fitH);
       m.font = `800 ${fit}px ${fontFamily}`;
       const box = m.measureText(wordmark);
-      const cap = box.actualBoundingBoxAscent || fit * 0.72;
-      const c = Math.max(0, Math.min(0.6, crop));
 
       m.fillStyle = "#000";
       m.textBaseline = "alphabetic";
-      m.fillText(wordmark, (w - box.width) / 2, h + cap * c);
+      m.fillText(wordmark, (w - box.width) / 2, h - bottom);
       const img = m.getImageData(0, 0, w, h).data;
 
       const gap = Math.max(4, dotGap);
@@ -308,7 +309,7 @@ export function HalftoneFooter({
       root.removeEventListener("pointerleave", onLeave);
       root.removeEventListener("pointerdown", onDown);
     };
-  }, [wordmark, dotGap, radius, crop]);
+  }, [wordmark, dotGap, radius]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });

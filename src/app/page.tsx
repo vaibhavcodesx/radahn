@@ -50,9 +50,11 @@ export default function Home() {
       {/* FIRST VIEWPORT */}
       <section className="grid items-center gap-12 px-4 pb-10 pt-6 sm:px-6 md:grid-cols-12 md:px-10 md:pt-10 overflow-hidden min-w-0">
         <div className="md:col-span-7 min-w-0">
-          <h1 className="font-serif text-[clamp(44px,7vw,92px)] leading-[1.02] tracking-[-0.02em]">
+          <h1 className="relative isolate font-serif text-[clamp(44px,7vw,92px)] leading-[1.06] tracking-[-0.02em]">
             An agent that{" "}
-            <mark className="bg-[linear-gradient(transparent_14%,var(--t-preference)_14%,var(--t-preference)_86%,transparent_86%)] px-1 text-[var(--t-ink-dark)] [-webkit-box-decoration-break:clone]">
+            {/* Highlighter sits behind every glyph (so "agent"'s descender above stays visible) and
+                covers the x-height band only; <mark>'s default yellow background is cleared. */}
+            <mark className="relative bg-transparent px-1 text-[var(--t-ink-dark)] before:absolute before:inset-x-0 before:bottom-[6%] before:top-[30%] before:-z-10 before:rounded-[3px] before:bg-[var(--t-preference)] before:content-['']">
               remembers
             </mark>
             <br />

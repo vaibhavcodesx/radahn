@@ -122,7 +122,7 @@ export function MemoryLens({
       </div>
       <div className="relative min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {!recall && tab !== "ghost" ? (
-          <p className="text-[14.5px] leading-relaxed text-grove-ink-2">Send a message. Each reply shows here which memories shaped it and why.</p>
+          <LensEmpty />
         ) : tab === "recalled" ? (
           <Recalled recall={recall!} notices={notices} />
         ) : tab === "written" ? (
@@ -212,6 +212,57 @@ const KIND_LABEL: Record<string, string> = {
   approved: "Approved",
   rejected: "Rejected",
 };
+
+/** Empty panel: a preview of what will appear, not a blank wall (user review, 31 Oct). */
+const PREVIEW_TYPES: MemoryTypeName[] = ["constraint", "preference", "decision", "goal", "fact", "outcome", "feedback", "strategy", "profile", "observation"];
+function LensEmpty() {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex gap-1" aria-hidden>
+        {PREVIEW_TYPES.map((t, i) => (
+          <span
+            key={t}
+            className="h-2.5 flex-1 rounded-[2px] animate-pixel-on motion-reduce:animate-none"
+            style={{ background: `var(${MEMORY_TYPE_META[t].colorVar})`, animationDelay: `${i * 140}ms`, animationDuration: "2.8s" }}
+          />
+        ))}
+      </div>
+      <div>
+        <p className="font-serif text-[22px] leading-tight text-grove-ink">Memory, shown as it works</p>
+        <p className="mt-2 text-[14px] leading-relaxed text-grove-ink-2">Ask anything. Every reply lands here with the memories that shaped it.</p>
+      </div>
+      <div className="rounded-control bg-grove-2 p-3.5 opacity-70" aria-hidden>
+        <span className="flex items-center gap-2 text-[12.5px] text-grove-ink-2">
+          <TypeSwatch type="constraint" size={11} /> Constraint · example
+        </span>
+        <p className="mt-1.5 font-serif text-[15px] leading-snug text-grove-ink">Kestrel&apos;s beta ships on 7 Nov at 9 PM.</p>
+        <div className="mt-2.5 flex h-1.5 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--grove-ink)_12%,transparent)]">
+          <span className="w-[46%] bg-[var(--t-fact)]" />
+          <span className="w-[14%] bg-[var(--t-outcome)]" />
+          <span className="w-[16%] bg-[var(--t-preference)]" />
+          <span className="w-[9%] bg-[var(--t-feedback)]" />
+        </div>
+        <p className="mt-1.5 text-[12px] text-grove-ink-2">relevant to planning · high importance</p>
+      </div>
+      <ul className="flex flex-col gap-3 text-[13.5px] leading-snug text-grove-ink-2">
+        {[
+          ["Used", "the memories behind the reply, with citations"],
+          ["Saved", "what Radahn kept from this turn, as it happens"],
+          ["Why", "the scores that picked each memory"],
+          ["Without memory", "the same answer with memory switched off"],
+        ].map(([k, v]) => (
+          <li key={k} className="flex gap-2.5">
+            <span className="w-[7.5rem] shrink-0 font-medium text-grove-ink">{k}</span>
+            <span>{v}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-[12px] text-grove-ink-2">
+        Tip: <kbd className="rounded-[4px] bg-grove-2 px-1.5 py-0.5 font-mono text-[11px]">Ctrl/⌘ .</kbd> shows or hides this panel; drag its edge to resize.
+      </p>
+    </div>
+  );
+}
 
 const OP_KIND: Record<string, string> = { remember: "Remembered", correct: "Corrected", forget: "Forgotten" };
 
