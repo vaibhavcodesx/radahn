@@ -37,3 +37,9 @@ Hosted write accuracy, precision@5, secrets stored, memory-changed rate and reca
 | historical-update | true |
 | short-expiry-grace | true |
 | long-expiry-grace | true |
+
+## C14 measured tuning
+
+Controlled cold-index comparison: actual baseline `06c5145` returned 0/3 relevant picks; current `954dd8f` returned 3/3 with identical fixtures and empty search channels (one query, three relevant rows, mocked DB/embeddings). Current deterministic checks: 31/31. Ranking weights and thresholds retained; these samples cannot justify retuning. Hosted metrics remain unmeasured: automatic approval review blocked the authenticated request before execution; no authenticated HTTP status was observed. A later public GET without credentials returned HTTP 404 (parent, approximately 07:00 IST); no hosted job ran.
+
+Persistent methodology, limitations and reproduction: [C14 tuning record](tuning.md). This separate record survives regeneration of this deterministic report.
