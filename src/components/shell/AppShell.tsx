@@ -56,10 +56,13 @@ export function AppShell({
   const pendingLive = live.events.filter((e) => e.kind === "pending").length - live.events.filter((e) => e.kind === "approved" || e.kind === "rejected").length;
   const pending = Math.max(0, pendingCount + pendingLive);
 
-  // Refresh the server-rendered sidebar (chat titles) when memory events land.
+  // Refresh server-rendered lists when memory events land — but never on a chat page: a refresh
+  // there remounts the conversation from the DB mid-stream and the live reply vanishes. Chat
+  // pages refresh themselves when a reply finishes.
+  const onChat = pathname === "/app" || pathname.startsWith("/app/chat/");
   useEffect(() => {
-    if (live.version) router.refresh();
-  }, [live.version, router]);
+    if (live.version && !onChat) router.refresh();
+  }, [live.version, router, onChat]);
 
   // Keyboard: N new chat · G M memory · G R review · G A activity (design.md §6).
   useEffect(() => {

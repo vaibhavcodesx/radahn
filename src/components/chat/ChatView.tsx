@@ -104,7 +104,9 @@ export function ChatView({
         window.history.replaceState(null, "", `/app/chat/${part.data.conversationId}`);
       }
     },
-    onFinish: () => router.refresh(),
+    // The server persists the reply as the stream closes; refreshing at once can remount this page
+    // from the DB before that lands (the reply would vanish). Give it a moment.
+    onFinish: () => void setTimeout(() => router.refresh(), 2500),
   });
 
   const busy = status === "submitted" || status === "streaming";
