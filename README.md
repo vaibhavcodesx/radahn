@@ -11,6 +11,10 @@ Radahn remembers what matters (preferences, decisions, constraints, outcomes, fe
 |---|---|---|
 | ![Chat reply citing memories, with the Memory panel open](public/screens/chat-memory.webp) | ![Memory page listing typed memories](public/screens/memory-list.webp) | ![Review queue with a pending memory](public/screens/review-queue.webp) |
 
+**Deck:** [`docs/deck/Radahn.pdf`](docs/deck/Radahn.pdf) · **Guide:** [`docs/how-radahn-works.md`](docs/how-radahn-works.md)
+
+![The core loop: a plan that cites its memories, then the same answer without memory](docs/media/judge-path.gif)
+
 ## How judges can test (no account needed)
 
 1. Open https://radahn-ai.vercel.app → **Enter as guest**.
@@ -24,7 +28,8 @@ Radahn remembers what matters (preferences, decisions, constraints, outcomes, fe
    - **Unsure saves:** when Radahn isn't sure something is worth keeping, it asks above the prompt box: “Remember this? Remember / Don't”.
    - **Expiry:** open any memory → **Expire → In 2 minutes**. Recall stops then; MongoDB's TTL monitor deletes it shortly after.
    - **Forget:** the bin on any Memory row (or **Forget** on a memory) hard-deletes the statement and its vector, leaving a content-free tombstone event.
-6. **Memory** lists every memory (filters, List/Map views, history per memory). Set **As of → Yesterday** to see what Radahn believed before later corrections (time travel). **Activity** shows live events from a change stream and lets you run **Reflect now**: duplicates merge, repeated feedback becomes a learned behaviour, each step streams in.
+6. Chats can be renamed or deleted from the sidebar; maths in answers renders as LaTeX.
+7. **Memory** lists every memory (filters, List/Map views, history per memory). Set **As of → Yesterday** to see what Radahn believed before later corrections (time travel). **Activity** shows live events from a change stream and lets you run **Reflect now**: duplicates merge, repeated feedback becomes a learned behaviour, each step streams in.
 7. **Review** also lists **contradictions**: two live memories that can't both be true; keep one and the other is superseded with history.
 8. **Connected agents (optional):** Settings → Connected agents → **Create key**, then run the shown command to give Claude Code (or any MCP client) scoped access to this memory. Whatever it saves appears live in Activity under its name.
 
