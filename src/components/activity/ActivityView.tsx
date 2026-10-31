@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, TypeSwatch } from "@/components/atoms";
 import { useLive, type LiveEvent } from "@/components/realtime/LiveProvider";
@@ -19,7 +20,7 @@ interface Reflection {
   trigger: string;
   status: string;
   steps: Array<{ name: string; status: string; detail?: string }>;
-  outputs: { merged: string[]; observations: string[]; strategies: string[] };
+  outputs: Record<"merged" | "observations" | "strategies", Array<{ id: string; statement: string }>>;
   startedAt: string;
 }
 
@@ -124,13 +125,13 @@ export function ActivityView() {
                     {r.outputs.strategies.length || r.outputs.observations.length || r.outputs.merged.length ? (
                       <ul className="mt-3 flex flex-col gap-1 border-t border-line pt-3 text-[12.5px] text-ink-2">
                         {r.outputs.strategies.map((s) => (
-                          <li key={s} className="flex gap-2"><TypeSwatch type="strategy" size={12} className="mt-[3px]" />{s}</li>
+                          <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 hover:text-ink"><TypeSwatch type="strategy" size={12} className="mt-[3px]" />{s.statement}</Link></li>
                         ))}
                         {r.outputs.observations.map((s) => (
-                          <li key={s} className="flex gap-2"><TypeSwatch type="observation" size={12} className="mt-[3px]" />{s}</li>
+                          <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 hover:text-ink"><TypeSwatch type="observation" size={12} className="mt-[3px]" />{s.statement}</Link></li>
                         ))}
                         {r.outputs.merged.map((s) => (
-                          <li key={s} className="flex gap-2 text-ink-3"><span className="mono-label text-[9px]">merged</span>{s}</li>
+                          <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 text-ink-3 hover:text-ink"><span className="mono-label text-[9px]">merged</span>{s.statement}</Link></li>
                         ))}
                       </ul>
                     ) : null}
