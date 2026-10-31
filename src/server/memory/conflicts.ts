@@ -28,7 +28,7 @@ function slot(m:MemoryUnit):string|undefined {return m.slotKey?normalise(m.slotK
 function sameSlot(a:MemoryUnit,b:MemoryUnit):boolean{return !!slot(a)&&slot(a)===slot(b)&&!!a.value?.trim()&&!!b.value?.trim()&&normalise(a.value)!==normalise(b.value);}
 function candidates(rows:CachedUnit[]):Pair[]{const pairs:Pair[]=[];for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++) {const a=rows[i],b=rows[j];if(a.spaceKey!==b.spaceKey||a.needsEmbedding||b.needsEmbedding||!a.embedding.length||a.embedding.length!==b.embedding.length)continue;const similarity=cosine(a.embedding,b.embedding);if(!Number.isFinite(similarity)||similarity<0.85)continue;pairs.push({id:`${a._id.toHexString()}:${b._id.toHexString()}`,left:a,right:b,similarity,reason:sameSlot(a,b)?"same_slot":"model"});}return pairs.sort((a,b)=>b.similarity-a.similarity||a.id.localeCompare(b.id)).slice(0,PAIRS);}
 const liveFilter=(ownerId:string,now:Date)=>({ownerId,status:"active" as const,$and:[{$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]},{$or:[{validTo:{$exists:false}},{validTo:{$gt:now}}]}]});
-async function scan(ownerId:string,now:Date):Promise<CachedUnit[]>{return (await collections().memories.find(liveFilter(ownerId,now)).sort({_id:1}).limit(DOCUMENTS).toArray()).filter(m=>alive(m,ownerId,now)).sort((a,b)=>a._id.toHexString().localeCompare(b._id.toHexString()));}
+async function scan(ownerId:string,now:Date):Promise<CachedUnit[]>{return (await collections().memories.find(liveFilter(ownerId,now)).sort({updatedAt:-1,_id:1}).limit(DOCUMENTS).toArray()).filter(m=>alive(m,ownerId,now)).sort((a,b)=>a._id.toHexString().localeCompare(b._id.toHexString()));}
 async function detect(ownerId:string):Promise<Pair[]> {
  if(!ownerId.trim())throw new Error("Invalid conflict owner");
  const now=new Date(),rows=await scan(ownerId,now),fp=fingerprint(rows),pairs=candidates(rows);
@@ -50,7 +50,7 @@ async function detect(ownerId:string):Promise<Pair[]> {
  const session=mongo().startSession();
  try{return await session.withTransaction(async()=>{
   await lockOwner(ownerId,session);
-  const current=(await collections().memories.find(liveFilter(ownerId,new Date()),{session}).sort({_id:1}).limit(DOCUMENTS).toArray()).filter(m=>alive(m,ownerId,new Date())).sort((a,b)=>a._id.toHexString().localeCompare(b._id.toHexString()));
+  const current=(await collections().memories.find(liveFilter(ownerId,new Date()),{session}).sort({updatedAt:-1,_id:1}).limit(DOCUMENTS).toArray()).filter(m=>alive(m,ownerId,new Date())).sort((a,b)=>a._id.toHexString().localeCompare(b._id.toHexString()));
   if(fingerprint(current)!==fp)return [];
   if(cacheable)await collections().memories.bulkWrite(rows.map(row=>({updateOne:{filter:{ownerId,_id:row._id},update:{$set:{conflictWith:accepted.flatMap(p=>p.left._id.equals(row._id)?[p.right._id]:p.right._id.equals(row._id)?[p.left._id]:[]),conflictCheckedAt:now,conflictFingerprint:fp}}}})),{session});
   return accepted;
@@ -73,5 +73,6 @@ export async function resolveConflict(input:ResolveConflictInput):Promise<Resolv
   return {status:"resolved" as const,keep:memoryDTO(kept),supersededIds:drops.map(id=>id.toHexString())};
  });}finally{await session.endSession();}
 }
+
 
 
