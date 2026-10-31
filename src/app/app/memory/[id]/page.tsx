@@ -87,7 +87,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
                 <li key={v.id} className="relative">
                   <span className="absolute -left-[25px] top-1.5 size-2 rounded-full" style={{ background: v.status === "active" ? `var(${MEMORY_TYPE_META[v.type as MemoryTypeName].colorVar})` : "var(--ink-3)" }} />
                   <p className="mono-label text-[9.5px] text-ink-3">
-                    {fmt(v.createdAt)} · {v.status === "superseded" ? "OUTDATED" : STATUS_LABEL[v.status]}
+                    {fmt(v.createdAt)} · {STATUS_LABEL[v.status]}
                     {i > 0 && v.supersedeReason ? ` · ${v.supersedeReason}` : ""}
                   </p>
                   {v.id === m.id ? (

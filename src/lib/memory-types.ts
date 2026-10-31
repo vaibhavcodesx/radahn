@@ -49,9 +49,9 @@ export function typeInk(type: MemoryTypeName): string {
 }
 
 export const STATUS_LABEL: Record<string, string> = {
-  active: "ACTIVE",
-  pending_review: "NEEDS REVIEW",
-  superseded: "OUTDATED",
-  expired: "EXPIRED",
-  rejected: "REJECTED",
+  active: "Active",
+  pending_review: "Needs review",
+  superseded: "Outdated",
+  expired: "Expired",
+  rejected: "Rejected",
 };

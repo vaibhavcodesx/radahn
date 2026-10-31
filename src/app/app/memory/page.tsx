@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TypeSwatch, ValuePill } from "@/components/atoms";
 import { AtlasField } from "@/components/memory/AtlasField";
 import { AtlasToolbar } from "@/components/memory/AtlasToolbar";
+import { ForgetButton } from "@/components/memory/ForgetButton";
 import { MEMORY_TYPE_LIST, MEMORY_TYPE_META, STATUS_LABEL, type MemoryTypeName } from "@/lib/memory-types";
 import { cn, timeAgo } from "@/lib/utils";
 import { requirePageUser } from "@/server/auth/session";
@@ -64,7 +65,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-[34px] leading-none tracking-[-0.01em]">Memory</h1>
-            <p className="mono-label mt-3 text-[10.5px] text-ink-3">
+            <p className="mt-3 text-[14px] text-ink-3">
               {active.length} active · {all.filter((m) => m.status === "pending_review").length} need review · {all.filter((m) => m.status === "superseded").length} outdated · {all.filter((m) => m.status === "expired").length} expired
             </p>
           </div>
@@ -74,9 +75,9 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                 key={v}
                 href={href({ view: v === "field" ? "field" : undefined })}
                 aria-current={view === v ? "page" : undefined}
-                className={cn("mono-label flex h-7 items-center gap-1.5 rounded-full px-3 text-[10px]", view === v ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink")}
+                className={cn("flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13.5px] capitalize", view === v ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink")}
               >
-                {v} <span className="opacity-60">{v === "table" ? "T" : "F"}</span>
+                {v === "table" ? "List" : "Map"}
               </Link>
             ))}
           </nav>
@@ -112,11 +113,11 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
 
         {asOfIso ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-4 py-3 shadow-card">
-            <p className="text-[13px] text-ink-2">
-              <span className="mono-label mr-2 text-[10px] text-orange">TIME TRAVEL</span>
+            <p className="text-[14px] text-ink-2">
+              <span className="mr-2 font-medium text-orange">Time travel</span>
               What Radahn believed {ASOF_LABEL[asof!]} · {new Date(asOfIso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })}. Later corrections are hidden.
             </p>
-            <Link href={href({ asof: undefined })} className="mono-label text-[10px] text-ink underline underline-offset-4">Back to now</Link>
+            <Link href={href({ asof: undefined })} className="text-[14px] font-medium text-ink underline underline-offset-4">Back to now</Link>
           </div>
         ) : null}
 
@@ -135,8 +136,8 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
           </div>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-card shadow-card">
-            <table className="w-full min-w-[860px] border-collapse bg-surface text-left text-[12.5px]">
-              <thead className="mono-label text-[10px] text-ink-3">
+            <table className="w-full min-w-[900px] border-collapse bg-surface text-left text-[14px]">
+              <thead className="text-[12.5px] text-ink-3">
                 <tr className="border-b border-line">
                   <th className="px-4 py-2.5 font-normal">Statement</th>
                   <th className="px-3 py-2.5 font-normal">Type</th>
@@ -146,6 +147,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                   <th className="px-3 py-2.5 text-right font-normal">Recalled</th>
                   <th className="px-3 py-2.5 font-normal">Updated</th>
                   <th className="px-3 py-2.5 font-normal">Status</th>
+                  <th className="w-24 px-2 py-2.5 font-normal"><span className="sr-only">Forget</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -162,13 +164,14 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                     <td className="px-3 py-2.5 text-right"><ValuePill value={m.importance} /></td>
                     <td className="px-3 py-2.5 text-right font-mono text-[11.5px] tabular text-ink-2">{m.confidence.toFixed(2)}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-[11.5px] tabular text-ink-2">{m.stats.recallCount}×</td>
-                    <td className="px-3 py-2.5 font-mono text-[11px] text-ink-3">{timeAgo(m.updatedAt)}</td>
+                    <td className="px-3 py-2.5 text-[13px] text-ink-3">{timeAgo(m.updatedAt)}</td>
                     <td className="px-3 py-2.5">
-                      <span className={cn("mono-label text-[9.5px]", m.status === "active" ? "text-ink-3" : m.status === "pending_review" ? "text-orange" : "text-ink-3")}>
-                        {asOfIso ? "VALID THEN" : m.expiresAt && m.status === "active" ? `EXPIRES ${timeAgo(m.expiresAt).replace(" ago", "")}`.replace("EXPIRES just now", "EXPIRING") : STATUS_LABEL[m.status]}
+                      <span className={cn("text-[12.5px]", m.status === "active" ? "text-ink-3" : m.status === "pending_review" ? "text-orange" : "text-ink-3")}>
+                        {asOfIso ? "Valid then" : m.expiresAt && m.status === "active" ? `Expires in ${timeAgo(m.expiresAt).replace(" ago", "")}`.replace("Expires in just now", "Expiring") : STATUS_LABEL[m.status]}
                       </span>
-                      {m.demo ? <span className="mono-label ml-2 text-[9.5px] text-ink-3">DEMO</span> : null}
+                      {m.demo ? <span className="ml-2 text-[12px] text-ink-3">Demo</span> : null}
                     </td>
+                    <td className="px-2 py-2">{asOfIso ? null : <ForgetButton id={m.id} statement={m.statement} />}</td>
                   </tr>
                 ))}
               </tbody>
