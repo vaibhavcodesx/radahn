@@ -43,14 +43,14 @@ Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/rad
 
 ## Slide 4: Demo Flow — The Four Beats
 
-**Tested live with Aarav — a synthetic SVNIT student racing a hackathon deadline.**
+**Tested live with Aarav Mehta — a final-year student building Kestrel with two friends.**
 
 1. **Beat 1: Instant Entry & Demo Seeding**  
-   Click *Enter as guest* → *Load demo memories*. Seeds 38 typed memories across hackathon, personal, and internship spaces with pre-computed vector embeddings.
+   Click *Enter as guest* → *Load demo memories*. Seeds 38 typed memories across Kestrel, Personal, and Internships spaces with pre-computed vector embeddings.
 2. **Beat 2: Recall & The Ghost Diff**  
-   Ask *"Plan my next 4 hours."* Radahn cites Aarav's 9 PM build window, 30–60 min timebox preference, and top-16 goal. Click *Without memory* to see the real-time word-level diff.
+   Ask *"What is our launch plan for Kestrel?"* Radahn cites Kestrel's 7 Nov 9:00 PM IST public beta release constraint, Aarav's preference for concise bullet lists over long paragraphs, and his goal of 500 active pilots by January. Click *Without memory* to see the real-time word-level diff.
 3. **Beat 3: Hard Cases Live**  
-   - *Correction:* "Actually, the build deadline moved to 10 PM." (Old memory becomes *outdated* history; active record updates).
+   - *Correction:* "Actually, the beta launch moved to 10 PM." (Old memory becomes *outdated* history; active record updates).
    - *Privacy:* Paste a fake key `sk-test_...` → Redacted instantly ("Not saved — looked like a credential").
    - *Review:* Sensitive memory held in Review queue until approved.
    - *Expiry:* Set memory expiry to "In 2 minutes" and watch TTL deletion.
@@ -87,7 +87,7 @@ MongoDB Atlas Multi-Document Transaction:
 
 - **Four Parallel Recall Channels:**
   1. *Atlas Vector Search:* 768-dimensional cosine vector similarity (`gemini-embedding-2`), pre-filtered by `ownerId`, `spaceKey`, and `status: active`.
-  2. *Atlas Search (Lexical):* Full-text Lucene search for exact keywords, acronyms, and codes ("M0", "SVNIT").
+  2. *Atlas Search (Lexical):* Full-text Lucene search for exact keywords, acronyms, and codes ("Next.js", "Vercel", "Kestrel").
   3. *Temporal Window:* Recency decay based on memory type half-life and explicit time queries.
   4. *Linked Entities:* Graph-lite entity linking across shared subjects and referenced items.
 - **Transparent Scoring Formula:**
@@ -103,7 +103,7 @@ MongoDB Atlas Multi-Document Transaction:
 
 | Challenge | How Radahn Solves It | MongoDB Mechanism |
 |---|---|---|
-| **Correction** | "Deadline is 10 PM." Supersedes old belief; old record marked *outdated* with link to replacement. | Partial unique index `{ownerId, spaceKey, slotKey}` where `status: 'active'`. Guaranteed 1 active truth. |
+| **Correction** | "Beta launch is 10 PM." Supersedes old belief; old record marked *outdated* with link to replacement. | Partial unique index `{ownerId, spaceKey, slotKey}` where `status: 'active'`. Guaranteed 1 active truth. |
 | **Expiry** | "Remind me this weekend." Stops recalling at `expiresAt`; deleted physically shortly after. | TTL index on `purgeAt`. Queries filter `expiresAt > now`; TTL monitor purges documents. |
 | **Forget** | "Forget my dietary preferences." Immediate hard delete of statement and vector embedding. | `deleteOne` on `memories` + content-free tombstone logged to `memory_events`. |
 | **Contradictions** | Disagreeing statements flagged during ingestion. Review UI lets user pick winner. | Stored contradiction pairs in Review page; resolution transaction supersedes loser. |
@@ -123,7 +123,7 @@ MongoDB Atlas Multi-Document Transaction:
 - **Learned Strategy in Production:**
   - *Observed Feedback:* User repeatedly requests "keep it concise", "shorter please", "bullet points".
   - *Learned Strategy:* `"When asked for a plan, give at most 5 time-boxed bullets."`
-  - *Visible Impact:* Automatically injected into subsequent turns; shapes the 4-hour hackathon plan.
+  - *Visible Impact:* Automatically injected into subsequent turns; shapes the Kestrel launch plan.
 
 ---
 

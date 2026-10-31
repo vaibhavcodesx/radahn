@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 /**
- * 404 page (design.md §6.11, task E4).
+ * 404 page (design.md §6.11, task E4 & G7).
  * Reuses the landing GlyphField atmosphere with one prominent missing memory cell.
+ * Responsive grid that cleanly fits 375px mobile without overflowing (G7).
  */
 export default function NotFound() {
   const quietGlyphs = "·:;/\\|·:·;·@+#^!=~<%*";
@@ -11,13 +12,13 @@ export default function NotFound() {
 
   // Deterministic memory scatter mapping (simulating the memory glyph field)
   const isTypeCell = (r: number, c: number): string | null => {
-    // Missing memory in the dead center
-    if (r === 7 && c === 14) return "missing";
-    if (r === 3 && c === 6) return "--t-preference";
-    if (r === 4 && c === 21) return "--t-fact";
-    if (r === 10 && c === 8) return "--t-goal";
-    if (r === 11 && c === 23) return "--t-strategy";
-    if (r === 2 && c === 18) return "--t-observation";
+    // Missing memory in the center
+    if (r === 7 && c === 8) return "missing";
+    if (r === 3 && c === 5) return "--t-preference";
+    if (r === 4 && c === 12) return "--t-fact";
+    if (r === 10 && c === 6) return "--t-goal";
+    if (r === 11 && c === 14) return "--t-strategy";
+    if (r === 2 && c === 11) return "--t-observation";
     if (r === 8 && c === 3) return "--t-outcome";
     return null;
   };
@@ -28,21 +29,24 @@ export default function NotFound() {
   };
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 text-center sm:px-6">
-      {/* Glyph Field Backdrop */}
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 text-center sm:px-6 min-w-0 max-w-full">
+      {/* Glyph Field Backdrop (G7: responsive columns, zero overflow at 375px) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 flex items-center justify-center select-none overflow-hidden p-6 opacity-35 [html[data-theme='light']_&]:opacity-20"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center select-none overflow-hidden p-3 sm:p-6 opacity-35 [html[data-theme='light']_&]:opacity-20 max-w-full"
       >
-        <div className="grid grid-cols-[repeat(28,minmax(0,1fr))] gap-2 font-mono text-[12px] leading-none text-ink-3">
+        <div className="grid grid-cols-[repeat(16,minmax(0,1fr))] sm:grid-cols-[repeat(28,minmax(0,1fr))] gap-1.5 sm:gap-2 font-mono text-[11px] sm:text-[12px] leading-none text-ink-3 max-w-full overflow-hidden">
           {Array.from({ length: rows }).map((_, r) =>
             Array.from({ length: cols }).map((__, c) => {
               const type = isTypeCell(r, c);
+              const hideOnMobile = c >= 16;
+              const mobileClass = hideOnMobile ? "hidden sm:flex" : "flex";
+
               if (type === "missing") {
                 return (
                   <span
                     key={`${r}-${c}`}
-                    className="relative flex size-4 items-center justify-center rounded-[3px] border border-dashed border-red/80 bg-red/10 text-red animate-pulse"
+                    className={`relative ${mobileClass} size-3.5 sm:size-4 items-center justify-center rounded-[3px] border border-dashed border-red/80 bg-red/10 text-red animate-pulse`}
                     title="Missing memory"
                   >
                     ?
@@ -53,7 +57,7 @@ export default function NotFound() {
                 return (
                   <span
                     key={`${r}-${c}`}
-                    className="flex size-4 items-center justify-center rounded-[2px]"
+                    className={`${mobileClass} size-3.5 sm:size-4 items-center justify-center rounded-[2px]`}
                     style={{ background: `var(${type})` }}
                   />
                 );
@@ -61,7 +65,7 @@ export default function NotFound() {
               return (
                 <span
                   key={`${r}-${c}`}
-                  className="flex size-4 items-center justify-center opacity-40"
+                  className={`${mobileClass} size-3.5 sm:size-4 items-center justify-center opacity-40`}
                 >
                   {getGlyph(r, c)}
                 </span>

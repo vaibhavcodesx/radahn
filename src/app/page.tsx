@@ -44,12 +44,12 @@ const VALUES = [
 export default function Home() {
   const diff = wordDiff(WITHOUT, WITH);
   return (
-    <main className="flex min-h-dvh flex-col overflow-x-hidden">
+    <main className="flex min-h-dvh flex-col overflow-hidden max-w-full min-w-0">
       <Nav />
 
       {/* FIRST VIEWPORT */}
-      <section className="grid items-center gap-12 px-4 pb-10 pt-6 sm:px-6 md:grid-cols-12 md:px-10 md:pt-10">
-        <div className="md:col-span-7">
+      <section className="grid items-center gap-12 px-4 pb-10 pt-6 sm:px-6 md:grid-cols-12 md:px-10 md:pt-10 overflow-hidden min-w-0">
+        <div className="md:col-span-7 min-w-0">
           <h1 className="font-serif text-[clamp(44px,7vw,92px)] leading-[1.02] tracking-[-0.02em]">
             An agent that{" "}
             <mark className="bg-[linear-gradient(transparent_14%,var(--t-preference)_14%,var(--t-preference)_86%,transparent_86%)] px-1 text-[var(--t-ink-dark)] [-webkit-box-decoration-break:clone]">
@@ -73,7 +73,7 @@ export default function Home() {
         </div>
 
         {/* floating recall card (Teak) */}
-        <div className="md:col-span-5">
+        <div className="md:col-span-5 min-w-0 overflow-hidden">
           <div className="rotate-[0.6deg] rounded-card bg-grove p-5 text-grove-ink shadow-overlay">
             <div className="flex items-center justify-between">
               <p className="mono-label text-[10.5px]">Recalled 3 · 41 ms</p>
@@ -95,7 +95,7 @@ export default function Home() {
       </section>
 
       {/* GLYPH FIELD BAND with floating section nav (Griffin) */}
-      <section aria-label="How memory moves" className="relative h-[34vh] min-h-[240px] border-y border-line">
+      <section aria-label="How memory moves" className="relative h-[34vh] min-h-[240px] border-y border-line overflow-hidden w-full max-w-full min-w-0">
         <GlyphField className="absolute inset-0" />
         <SectionNavPill />
       </section>

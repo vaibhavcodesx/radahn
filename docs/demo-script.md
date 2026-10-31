@@ -3,7 +3,7 @@
 **Target Duration:** ≤ 6:30 (actual script timed at 6:15)  
 **Track:** UNCHARTED 2026 · MongoDB Student Hackathon · Track 1: Agentic Memory  
 **Live Site:** https://radahn-ai.vercel.app  
-**Persona:** Aarav (synthetic SVNIT college student racing the 9:00 PM hackathon deadline; labelled DEMO throughout).  
+**Persona:** Aarav Mehta (final-year CSE student building Kestrel, a flight-log app for hobby drone pilots, with two friends; labelled DEMO throughout).  
 **Setup Checklist Before Recording:**
 - Clear cookies or use fresh incognito window.
 - Screen resolution set to 1920×1080 (16:9), browser zoomed to 100%.
@@ -18,7 +18,7 @@
 **Timestamp: [00:00 – 00:40] (40s)**
 
 * **On Screen / Action:**  
-  Start on the Radahn landing page (`https://radahn-ai.vercel.app`). Mouse hovers over the headline: *"An agent that remembers..."* Scroll smoothly down past the ghost diff proof section to show the contrast between answers with and without memory.
+  Start on the Radahn landing page (`https://radahn-ai.vercel.app`). Mouse hovers over the headline: *"An agent whose memory you can inspect, steer, and trust."* Scroll smoothly down past the ghost diff proof section to show the contrast between answers with and without memory.
 * **Voice-Over (Spoken):**  
   *"Most AI assistants suffer from chronic amnesia. Every time you open a new chat, you start from zero—re-explaining your stack constraints, your deadlines, and how you like your answers formatted.  
   And when agents do try to remember, memory is bolted on as an invisible black box. You have no idea what was stored, why an answer changed, or how to fix it when it gets things wrong.  
@@ -34,11 +34,11 @@
 * **On Screen / Action:**  
   1. Click **Try it — no sign-up** in the top navigation.
   2. Land on `/signin`. Click **Enter as guest** (or press keyboard key `G`).
-  3. Land on `/app`. Point mouse to the empty chat state and click **Load demo memories**.
+  3. Land on `/app`. Point mouse to the empty chat screen and click **Load demo memories**.
   4. Watch the brief 2-second seed indicator transition as 38 memories and vector embeddings load.
 * **Voice-Over (Spoken):**  
   *"To make evaluating effortless for judges, Radahn requires zero sign-up. One click on 'Enter as guest' provisions an anonymous session secured by Better Auth.  
-  On the empty chat screen, we click 'Load demo memories'. Behind the scenes, MongoDB Atlas seeds the world of Aarav—a synthetic student hacker with 38 typed memory units spanning project constraints, personal preferences, and internship goals, all embedded with 768-dimensional vectors using gemini-embedding-2."*
+  On the empty chat screen, we click 'Load demo memories'. Behind the scenes, MongoDB Atlas seeds the world of Aarav Mehta—a student developer building Kestrel, a flight-log app for hobby drone pilots, with 38 typed memory units spanning project constraints, personal preferences, and internship goals, all embedded with 768-dimensional vectors using gemini-embedding-2."*
 * **Technical Note:**  
   `MongoDB Atlas document model + gemini-embedding-2 (768-d) + anonymous auth session`
 
@@ -48,16 +48,16 @@
 **Timestamp: [01:25 – 02:40] (75s)**
 
 * **On Screen / Action:**  
-  1. In the suggested prompt chips, click **"Plan my next 4 hours."**
+  1. In the suggested prompt chips, click **"What is our launch plan for Kestrel?"**
   2. The message sends. The assistant reply streams in rapidly with bullet points and inline citation squares like `[1]`, `[2]`, `[3]`.
   3. Click on the memory badge (or citation square) to slide open the **Memory Lens** side drawer.
   4. In the Memory Lens, switch from **Used** to the **Why** tab to show the score breakdown bar and plain-language explanation.
   5. Close drawer. Click the **Without memory** button right beneath the assistant's response.
   6. Show the real-time word-level ghost diff with green additions and red deletions.
 * **Voice-Over (Spoken):**  
-  *"Let's test Aarav's world. We click the suggested prompt: 'Plan my next 4 hours.'  
+  *"Let's test Aarav's world. We click the suggested prompt: 'What is our launch plan for Kestrel?'  
   Watch what happens. Before generating a single token, Radahn fires four parallel recall channels in MongoDB: Vector Search, full-text Atlas Search, temporal window filters, and linked entity graphs. These are fused via Reciprocal Rank Fusion, scored for recency, importance, and confidence, and capped to the top eight units.  
-  The response immediately respects Aarav's 9:00 PM build deadline, his preference for 30-minute timeboxes, and his goal of a top-16 finish. Every fact is cited inline.  
+  The response immediately respects Kestrel's 7 Nov 9:00 PM IST public beta release constraint, Aarav's preference for concise bullet lists over long paragraphs, and his goal of 500 active pilots by January. Every fact is cited inline.  
   Opening the Memory Lens, we don't just see what was recalled—we see the exact math: relevance, recency decay, and type boost.  
   And to prove memory actually altered the output, clicking 'Without memory' runs the identical prompt through the model with memory stripped, displaying a live word-by-word diff."*
 * **Technical Note:**  
@@ -69,14 +69,14 @@
 **Timestamp: [02:40 – 03:35] (55s)**
 
 * **On Screen / Action:**  
-  1. In the composer, type: *"Actually, the build deadline moved to 10 PM tonight."* and hit Enter.
+  1. In the composer, type: *"Actually, the beta launch moved to 10 PM tonight."* and hit Enter.
   2. The assistant responds confirming the update.
   3. Notice the green write chip appear live in the top corner: `1 UPDATED`.
   4. Navigate to the **Memory** page from the sidebar.
-  5. Search for `deadline`. Click on the updated memory row to open its archival record (`/app/memory/<id>`).
-  6. Highlight the prominent 32px serif statement, the compact facts row, and the vertical history timeline showing the old 9:00 PM belief struck through as *outdated*.
+  5. Search for `launch`. Click on the updated memory row to open its archival record (`/app/memory/<id>`).
+  6. Highlight the prominent 32px serif statement, the compact facts row, and the vertical history timeline showing the old 9:00 PM launch belief struck through as *outdated*.
 * **Voice-Over (Spoken):**  
-  *"Now let's test how Radahn handles corrections. In the chat, we tell it: 'Actually, the build deadline moved to 10 PM tonight.'  
+  *"Now let's test how Radahn handles corrections. In the chat, we tell it: 'Actually, the beta launch moved to 10 PM tonight.'  
   In traditional chat bots, the model gets confused by conflicting context. Radahn treats memory as a single source of truth.  
   Its reconcile engine supersedes the old belief. In MongoDB, a partial unique index on ownerId, spaceKey, and slotKey guarantees that only one value can ever be active.  
   When we open the memory's detail page, we see an archival record: the new statement is active, while the original 9:00 PM deadline is preserved in a vertical history timeline with full provenance."*
@@ -94,76 +94,45 @@
   3. Now click the **Review** item in the sidebar (showing a badge count).
   4. Point to the pending sensitive memory card (e.g., medical or financial item). Click **Keep**.
   5. Scroll down to **Contradictions** showing two conflicting memory cards side-by-side.
-  6. Click **Keep this** on the left card; watch the right card automatically supersede with a clean animation.
+  6. Click **Keep this as current** on the chosen card; watch the other card automatically supersede with a clean animation.
 * **Voice-Over (Spoken):**  
   *"Privacy isn't an afterthought in Radahn. If a user accidentally pastes a sensitive API key or token, our deterministic pre-scan gate catches it with entropy detection before the model or database ever sees it. Zero secrets are ever stored.  
   For sensitive facts—like medical details or personal finances—memories are held in a human Review inbox. You decide whether to Keep, Edit, or Drop each item.  
-  And when two active memories contradict each other, Radahn surfaces them as contradiction pairs. One click on 'Keep this' promotes the winner and archives the loser into history."*
+  And when memories contradict, our Recommendation Card presents them side by side, letting you pick which statement is current while maintaining the database audit log."*
 * **Technical Note:**  
-  `Zero-leakage privacy pre-scan + human-in-the-loop review + contradiction reconciliation`
+  `Deterministic entropy + pattern pre-scan + human-in-the-loop approval & contradiction resolution`
 
 ---
 
-### Act 6: Beat 5 — Memory Atlas: Time Travel, TTL Expiry & Hard Forget
-**Timestamp: [04:30 – 05:20] (50s)**
+### Act 6: Beat 5 — Time-Travel, Realtime Activity & Reflection
+**Timestamp: [04:30 – 05:30] (60s)**
 
 * **On Screen / Action:**  
-  1. Navigate to **Memory** in the sidebar.
-  2. Click the **As of** dropdown in the toolbar and select **Yesterday**.
-  3. Show the table re-rendering past beliefs before today's corrections took place (Time Travel).
-  4. Switch back to current time. Click on a demo memory (e.g. snack reminder). Click **Expire → In 2 minutes**.
-  5. Point to the countdown badge.
-  6. Now click the trash bin icon on another memory row. A confirmation dialog appears: *"Forget this memory forever?"* Click **Forget**.
+  1. Click **Memory** in the sidebar. Demonstrate the **As of** dropdown ("As of yesterday") to watch outdated memories resurrect as they were historically.
+  2. Click **Activity** in the sidebar. Show the live fixed-height event stream and the 4 Insight Cards.
+  3. Click **Reflect now** in the top right. Watch the background job execute its multi-stage pipeline: gathering unreflected observations, topic clustering, and synthesizing new learned strategies.
+  4. Show the new strategy card generated in real time.
 * **Voice-Over (Spoken):**  
-  *"In the Memory Atlas, we can time-travel. Using the 'As of' selector, we can view the agent's exact state of belief yesterday, before our deadline correction occurred.  
-  Temporary facts shouldn't clutter memory forever. With our TTL integration, we can set any memory to expire in two minutes. The query engine stops recalling it immediately, and MongoDB's background TTL monitor purges the document.  
-  And when you want something forgotten, clicking Forget triggers a true physical delete: the statement text and its vector are permanently purged, leaving only a content-free tombstone event."*
+  *"Because Radahn maintains a complete append-only history of memory state transitions, you can time-travel. Selecting 'As of yesterday' rebuilds the memory table exactly as it existed 24 hours ago.  
+  On the Activity page, MongoDB change streams power a live event feed of every memory created, updated, or purged.  
+  Best of all is Reflection. When we click 'Reflect now', Radahn consolidates repeated user corrections and feedback into high-level strategies—like learning that Aarav wants concise 5-bullet plans. The agent actually learns from experience."*
 * **Technical Note:**  
-  `Bi-temporal validity + TTL index on purgeAt + physical deletion with tombstone logging`
+  `Temporal point-in-time reconstruct + MongoDB Change Streams + background consolidation pipeline`
 
 ---
 
-### Act 7: Beat 6 — Real-Time Activity Feed & Sleep-Time Reflection
-**Timestamp: [05:20 – 06:00] (40s)**
+### Act 7: The Close & Live Evaluation Results
+**Timestamp: [05:30 – 06:15] (45s)**
 
 * **On Screen / Action:**  
-  1. Navigate to **Activity** in the sidebar. Show the green **Live** badge.
-  2. Point to the segmented filters (`All`, `Saved`, `Updated`, `Reviewed`, `Forgotten`).
-  3. Click the **Reflect now** button in the header.
-  4. Watch the reflection steps animate: *gather → cluster → consolidate → write*.
-  5. Highlight the newly minted learned strategy card: *"When asked for a plan, give at most 5 time-boxed bullets."*
+  1. Open the project README or `evals/results.md` on screen.
+  2. Point to the verified benchmark numbers: 20/20 live test cases passed, 31/31 deterministic checks, 0 secrets leaked, 566ms recall latency, 100% recall@5.
+  3. Switch to terminal: run `npm test` showing all 386 unit tests passing.
+  4. End on the clean, warm landing page with the URL clearly visible: `https://radahn-ai.vercel.app`.
 * **Voice-Over (Spoken):**  
-  *"The Activity feed listens to MongoDB change streams over Server-Sent Events, streaming memory events across all your tabs in real time.  
-  In the background, Radahn runs sleep-time reflection. When we click 'Reflect now', it gathers unreflected feedback memories, clusters recurring critiques, and consolidates them into learned strategies.  
-  Notice how repeated user requests for brevity produced an active strategy: 'When asked for a plan, give at most 5 time-boxed bullets.' Radahn now automatically applies this format in future turns."*
-* **Technical Note:**  
-  `MongoDB change streams via SSE + background reflection pipeline (MemGPT lineage)`
-
----
-
-### Act 8: Beat 7 — Connected Agents (MCP) & Closing
-**Timestamp: [06:00 – 06:15] (15s)**
-
-* **On Screen / Action:**  
-  1. Jump to **Settings → Connected agents**.
-  2. Show the scoped key generation form and the one-time `claude mcp add` setup command.
-  3. Switch to terminal: run `claude mcp list` showing Radahn connected with `memory_search` and `memory_save` tools.
-  4. Return to browser, showing the GitHub repository and live URL.
-* **Voice-Over (Spoken):**  
-  *"Finally, Radahn exposes a Model Context Protocol endpoint, allowing external agents like Claude Code or Cursor to read and write memories with scoped permissions.  
-  Radahn: persistent, visible, steerable memory—built natively on MongoDB Atlas.  
-  Try it live right now at radahn-ai.vercel.app. Thank you."*
-* **Technical Note:**  
-  `Stateless HTTP MCP endpoint + SHA-256 scoped agent keys`
-
----
-
-## Technical Summary Cheat Sheet for Judges
-
-| Evaluation Pillar | Implementation in Radahn |
-|---|---|
-| **Core Memory Contract** | 10 Typed atomic units (`preference`, `constraint`, `fact`, `goal`, `decision`, etc.) |
-| **Visible Proof** | Inline citations, Memory Lens with real RRF scores, live word-level Ghost Diff |
-| **Hard Cases** | Reconcile engine, bi-temporal history, TTL expiry, hard delete, privacy pre-scan |
-| **MongoDB Native Stack** | Document model, Vector Search, Atlas Search, TTL indexes, Partial unique index, Transactions, Change streams, Aggregation pipelines |
-| **Measured Verification** | 20/20 live test cases, 31/31 deterministic checks, 0 secrets stored, 566ms p50 recall |
+  *"Radahn isn't a mockup or a prompt trick. It is a fully deployed, production-grade memory engine running on MongoDB Atlas and Gemini.  
+  In our hosted evaluation suite, Radahn achieved 20 out of 20 live test cases, 100% recall precision, zero secrets leaked, and a median recall latency of just 566 milliseconds.  
+  Try it yourself right now at radahn-ai.vercel.app with zero sign-up required.  
+  Thank you."*
+* **On-Screen Final Title Card:**  
+  `Radahn · Visible, Steerable Memory · Live at radahn-ai.vercel.app`

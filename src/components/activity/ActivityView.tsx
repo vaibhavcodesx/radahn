@@ -555,30 +555,39 @@ export function ActivityView() {
 
                     {r.outputs.strategies.length || r.outputs.observations.length || r.outputs.merged.length ? (
                       <ul className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3 text-[13px] text-ink-2">
-                        {r.outputs.strategies.map((s) => (
-                          <li key={s.id}>
-                            <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 hover:text-ink">
-                              <TypeSwatch type="strategy" size={12} />
-                              <span className="truncate">{s.statement}</span>
-                            </Link>
-                          </li>
-                        ))}
-                        {r.outputs.observations.map((s) => (
-                          <li key={s.id}>
-                            <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 hover:text-ink">
-                              <TypeSwatch type="observation" size={12} />
-                              <span className="truncate">{s.statement}</span>
-                            </Link>
-                          </li>
-                        ))}
-                        {r.outputs.merged.map((s) => (
-                          <li key={s.id}>
-                            <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 text-ink-3 hover:text-ink">
-                              <span className="text-[11.5px] font-medium uppercase">merged</span>
-                              <span className="truncate">{s.statement}</span>
-                            </Link>
-                          </li>
-                        ))}
+                        {r.outputs.strategies.map((s) => {
+                          const text = s.statement && !/^[0-9a-f]{24}$/i.test(s.statement) ? s.statement : "Learned strategy";
+                          return (
+                            <li key={s.id}>
+                              <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 hover:text-ink">
+                                <TypeSwatch type="strategy" size={12} />
+                                <span className="truncate">{text}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                        {r.outputs.observations.map((s) => {
+                          const text = s.statement && !/^[0-9a-f]{24}$/i.test(s.statement) ? s.statement : "Observation";
+                          return (
+                            <li key={s.id}>
+                              <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 hover:text-ink">
+                                <TypeSwatch type="observation" size={12} />
+                                <span className="truncate">{text}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
+                        {r.outputs.merged.map((s) => {
+                          const text = s.statement && !/^[0-9a-f]{24}$/i.test(s.statement) ? s.statement : "Consolidated duplicate memory";
+                          return (
+                            <li key={s.id}>
+                              <Link href={`/app/memory/${s.id}`} className="flex items-center gap-2 text-ink-3 hover:text-ink">
+                                <span className="text-[11.5px] font-medium uppercase">merged</span>
+                                <span className="truncate">{text}</span>
+                              </Link>
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : null}
                   </li>
