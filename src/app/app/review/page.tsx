@@ -1,3 +1,4 @@
+import { ConflictList } from "@/components/memory/ConflictList";
 import { ReviewStack } from "@/components/memory/ReviewStack";
 import { requirePageUser } from "@/server/auth/session";
 import { listSpaces } from "@/server/app/workspace";
@@ -24,6 +25,8 @@ export default async function ReviewPage() {
           Radahn holds anything sensitive or uncertain here until you decide. Nothing in this list is used in answers yet.
         </p>
         <ReviewStack items={pending.map((m) => ({ ...m, spaceName: spaceName[m.spaceKey] ?? "—" }))} />
+
+        <ConflictList />
 
         <section className="mt-14">
           <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">Blocked · never stored</h2>
