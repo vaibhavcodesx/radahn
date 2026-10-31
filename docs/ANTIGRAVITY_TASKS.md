@@ -53,4 +53,36 @@ PRs: B1 alone first (fast win), then B2+B3, then B4–B6. **All PRs open by 17:3
 - Never commit `.env*` or `Inputs/`. Don't put keys, emails or personal data in screenshots (demo data is synthetic and fine).
 
 ## Requests to lead
-(append here)
+- **Task B6 — OpenGraph / Twitter metadata for `src/app/layout.tsx`**:
+  `public/og.png` (1200×630) has been generated and committed. Please update `export const metadata: Metadata` in `src/app/layout.tsx` with:
+  ```ts
+  export const metadata: Metadata = {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://radahn-ai.vercel.app"),
+    title: { default: "Radahn — an agent whose memory you can see", template: "%s · Radahn" },
+    description:
+      "Radahn keeps what matters from every conversation, uses it to shape its next answer, and shows you exactly which memory did it.",
+    icons: { icon: "/brand/radahn-mark.png" },
+    openGraph: {
+      title: "Radahn — an agent whose memory you can see",
+      description: "Radahn keeps what matters from every conversation, uses it to shape its next answer, and shows you exactly which memory did it.",
+      url: "https://radahn-ai.vercel.app",
+      siteName: "Radahn",
+      images: [
+        {
+          url: "/og.png",
+          width: 1200,
+          height: 630,
+          alt: "Radahn — An agent whose memory you can see & steer",
+        },
+      ],
+      locale: "en_US",
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "Radahn — an agent whose memory you can see",
+      description: "Radahn keeps what matters from every conversation, uses it to shape its next answer, and shows you exactly which memory did it.",
+      images: ["/og.png"],
+    },
+  };
+  ```
