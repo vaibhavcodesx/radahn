@@ -1,7 +1,7 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),embed:vi.fn(),profile:vi.fn()}));
+const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),findOneAndUpdate:vi.fn(),embed:vi.fn(),profile:vi.fn()}));
 vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock,events:mock,recalls:mock,settings:{findOne:async()=>({timeZone:"Asia/Kolkata"})}})}));
 vi.mock("@/server/llm/registry",()=>({embed:mock.embed}));
 vi.mock("./profile",()=>({readProfile:mock.profile}));
@@ -9,7 +9,7 @@ const {recall,temporalWindow}=await import("./recall");
 import type {MemoryUnit} from "./types";
 const now=new Date("2026-10-31T00:00:00Z");
 const memory=(patch:Partial<MemoryUnit>={}):MemoryUnit=>({_id:new ObjectId(),ownerId:"alice",spaceKey:"s",type:"constraint",statement:"Aarav's deadline is 9 PM.",entities:["radahn"],tags:[],importance:10,confidence:0.9,pinned:false,sensitivity:"none",status:"active",source:{kind:"chat",actor:{kind:"user",name:"you"}},evidenceIds:[],relatedIds:[],validFrom:now,createdAt:now,updatedAt:now,stats:{recallCount:0,confirmCount:0,citedCount:0},embedding:[1,0],embeddingModel:"gemini-embedding-2@768",...patch});
-beforeEach(()=>{vi.clearAllMocks();mock.embed.mockResolvedValue([[1,0]]);mock.aggregate.mockReturnValue({toArray:async()=>[]});mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>[]})}),limit:()=>({toArray:async()=>[]}),toArray:async()=>[]});mock.insertOne.mockResolvedValue({});mock.bulkWrite.mockResolvedValue({});});
+beforeEach(()=>{vi.clearAllMocks();mock.embed.mockResolvedValue([[1,0]]);mock.aggregate.mockReturnValue({toArray:async()=>[]});mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>[]})}),limit:()=>({toArray:async()=>[]}),toArray:async()=>[]});mock.insertOne.mockResolvedValue({});mock.bulkWrite.mockResolvedValue({});mock.findOneAndUpdate.mockResolvedValue(null);});
 describe("hybrid recall",()=>{
  it("degrades to lexical when embeddings fail and scopes every DB operation",async()=>{
   const m=memory();mock.embed.mockRejectedValue(new Error("offline"));mock.aggregate.mockReturnValue({toArray:async()=>[m]});
@@ -140,4 +140,44 @@ describe("trusted credential space restrictions",()=>{
   await expect(recall({ownerId:"alice",spaceKey:"s",query:"plan",allowedSpaceKeys:allowed as unknown as string[]})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
   expect(mock.embed).not.toHaveBeenCalled();expect(mock.aggregate).not.toHaveBeenCalled();expect(mock.profile).not.toHaveBeenCalled();
  });
+});
+
+
+describe('changed-notice announcement claims',()=>{
+ const setup=()=>{
+  const current=memory({type:'fact',slotKey:'alice.deadline',value:'10 PM',statement:'Alice deadline is 10 PM.',entities:[],vector:.95} as Partial<MemoryUnit>);
+  const old=memory({type:'fact',slotKey:'alice.deadline',value:'9 PM',status:'superseded',supersededBy:current._id});
+  mock.aggregate.mockReturnValue({toArray:async()=>[current]});
+  mock.find.mockImplementation(filter=>({sort:()=>({limit:()=>({toArray:async()=>filter.status==='superseded'?[old]:[]})}),limit:()=>({toArray:async()=>filter.status==='superseded'?[old]:[]})}));
+  mock.findOneAndUpdate.mockResolvedValueOnce(current).mockResolvedValue(null);
+  return {current,old};
+ };
+ it('announces a real query-relevant change once even when concurrent search snapshots are stale',async()=>{
+  setup();
+  const first=await recall({ownerId:'alice',spaceKey:'s',query:'what is my deadline?'});
+  const second=await recall({ownerId:'alice',spaceKey:'s',query:'what is my deadline?'});
+  expect(first.notices.filter(n=>n.kind==='changed')).toHaveLength(1);
+  expect(second.notices.filter(n=>n.kind==='changed')).toHaveLength(0);
+  expect(mock.findOneAndUpdate.mock.calls[0][0]).toMatchObject({ownerId:'alice',status:'active',spaceKey:{$in:['s','global']}});
+ });
+ it('does not consume or emit an announcement in a read-only recall',async()=>{
+  setup();const result=await recall({ownerId:'alice',spaceKey:'s',query:'what is my deadline?',persistTrace:false});
+  expect(result.notices.filter(n=>n.kind==='changed')).toEqual([]);expect(mock.findOneAndUpdate).not.toHaveBeenCalled();
+ });
+});
+
+
+
+it('never moves recall timestamps backwards and claims after a supersede that happens during retrieval',async()=>{
+ const started=Date.now(),supersededAt=new Date(started+1000);
+ const current=memory({type:'fact',entities:[],slotKey:'alice.deadline',value:'10 PM',statement:'Alice deadline is 10 PM.',vector:.95,updatedAt:supersededAt} as Partial<MemoryUnit>);
+ const old=memory({type:'fact',slotKey:'alice.deadline',value:'9 PM',status:'superseded',supersededBy:current._id,updatedAt:supersededAt});
+ mock.aggregate.mockReturnValue({toArray:async()=>[current]});
+ mock.find.mockImplementation(filter=>({sort:()=>({limit:()=>({toArray:async()=>filter.status==='superseded'?[old]:[]})})}));
+ mock.findOneAndUpdate.mockResolvedValue(current);
+ const result=await recall({ownerId:'alice',spaceKey:'s',query:'what is my deadline?'});
+ expect(result.notices.filter(n=>n.kind==='changed')).toHaveLength(1);
+ expect(+mock.findOneAndUpdate.mock.calls[0][1].$max['stats.lastRecalledAt']).toBeGreaterThanOrEqual(+supersededAt);
+ expect(mock.bulkWrite.mock.calls[0][0][0].updateOne.update).toHaveProperty('$max');
+ expect(mock.bulkWrite.mock.calls[0][0][0].updateOne.update).not.toHaveProperty('$set');
 });

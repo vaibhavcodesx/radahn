@@ -8,6 +8,7 @@ import { cosine, score, select, type Ranked, type Hits } from "./score";
 import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
 import {effectiveSpaceKeys} from "./scope";
 import {readProfile} from "./profile";
+import {shouldAnnounceChange} from "./change-notices";
 import { memoryDTO } from "./serialize";
 import type { MemoryUnit, RecallInput, RecallResult, RecallIntent, RecallChannel, RecallNotice, ReasonCode, RecallLatency } from "./types";
 export function detectIntent(query: string): RecallIntent {
@@ -106,14 +107,17 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const [a,b]=picked;
   if(a && b && a.unit.value && b.unit.value && a.unit.value!==b.unit.value && ((a.unit.slotKey && a.unit.slotKey===b.unit.slotKey) || (a.unit.subject && a.unit.subject===b.unit.subject && a.unit.attribute===b.unit.attribute && Math.abs(a.scores.final-b.scores.final)<0.03))) notices.push({kind:"ambiguous",text:"Conflicting memories match. Ask one short clarifying question.",memoryIds:[a.unit._id.toHexString(),b.unit._id.toHexString()]});
   const ids=picked.map(row=>row.unit._id);
-  if(ids.length && !at) {
-    const history=await c.memories.find({ownerId:input.ownerId,spaceKey:{$in:spaces},status:"superseded",supersededBy:{$in:ids},updatedAt:{$gte:new Date(+now-86400000)}}).limit(8).toArray().catch(()=>[]);
+  if(ids.length && !at && input.persistTrace!==false) {
+    const history=(await Promise.all(ids.map(id=>c.memories.find({ownerId:input.ownerId,spaceKey:{$in:spaces},status:"superseded",supersededBy:id,updatedAt:{$gte:new Date(+now-86400000)}}).sort({updatedAt:-1,createdAt:-1}).limit(1).toArray().catch(()=>[])))).flat();
     // One notice per current memory (its newest prior version), in words both the model and the UI can use.
     const seen=new Set<string>();
     for(const old of history.filter(m=>m.ownerId===input.ownerId&&spaces.includes(m.spaceKey)).sort((x,y)=>+y.createdAt-+x.createdAt)) {
       const current=picked.find(p=>p.unit._id.equals(old.supersededBy!));
-      if(!current || seen.has(current.unit._id.toHexString()))continue;
+      if(!current || seen.has(current.unit._id.toHexString()) || !shouldAnnounceChange(old,current))continue;
       seen.add(current.unit._id.toHexString());
+      // Atomic compare-and-set consumes this announcement even if two recalls read the same stale snapshot.
+      const claimed=await c.memories.findOneAndUpdate({ownerId:input.ownerId,_id:current.unit._id,spaceKey:{$in:spaces},status:"active",updatedAt:current.unit.updatedAt,$or:[{"stats.lastRecalledAt":{$exists:false}},{"stats.lastRecalledAt":{$lt:old.updatedAt}}]},{$max:{"stats.lastRecalledAt":new Date(Math.max(Date.now(),+old.updatedAt))}},{returnDocument:"before"}).catch(()=>null);
+      if(!claimed)continue;
       const when=old.createdAt.toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"Asia/Kolkata"});
       notices.push({kind:"changed",text:`Earlier (${when}): ${old.statement} Now: ${current.unit.statement}`,memoryIds:[old._id.toHexString(),current.unit._id.toHexString()]});
     }
@@ -130,8 +134,10 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     const _id=new ObjectId();
     try { await c.recalls.insertOne({_id,...snapshot,ownerId:input.ownerId,conversationId:input.conversationId,messageId:input.messageId,query,intent,channelsRan:channels,candidates,picks:picks.map(({ref,memoryId})=>({ref,memoryId})),notices,latencyMs:latency,createdAt:wallNow});
     recallId=_id.toHexString(); } catch { /* Trace storage is best effort during a DB interruption. */ }
-    if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,spaceKey:{$in:spaces},status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
+    if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,spaceKey:{$in:spaces},status:"active"},update:{$inc:{"stats.recallCount":1},$max:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
   }
   return {recallId,...snapshot,...(profile?{profile}:{}),intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
 }
 export async function getRecallTrace(ownerId:string,messageId:string) {return collections().recalls.findOne({ownerId,messageId});}
+
+

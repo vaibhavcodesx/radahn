@@ -155,3 +155,5 @@ Final review follow-up [07:24]: scoped-agent allowlists and reflection generatio
 
 K1 follow-up [status: implemented 14:31 IST, codex/k1-extraction-latency; shared eight-second inference budget reviewed; hosted finish-to-first-event measurements and lead zero-candidate UI completion pending].
 
+
+K2 follow-up [status: implemented 14:33 IST, codex/k2-change-notices; relevance/refinement gate, atomic one-time notice claims, reviewed; hosted scenario acceptance pending].

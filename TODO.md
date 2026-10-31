@@ -94,3 +94,5 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] K1 engine implemented 14:31 IST: shared eight-second extraction inference budget including quota reads/reports; low thinking and batched embeddings. Independent review passed.
 - [ ] [codex/lead] K1 acceptance: deploy, measure finish-to-first-event p50 (<4s target), and stop zero-candidate UI waiting from existing empty assistant writeSummary or a dedicated completion signal. Engine emits no fake write event.
 
+
+- [x] [codex] K2 implemented 14:33 IST: strong relevance and real slot changes only; atomic announcement claim, monotonic stats, per-pick history, historical/read-only exclusion. Independent review passed; hosted acceptance follows deployment.
