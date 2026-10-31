@@ -181,3 +181,62 @@ it('never moves recall timestamps backwards and claims after a supersede that ha
  expect(mock.bulkWrite.mock.calls[0][0][0].updateOne.update).toHaveProperty('$max');
  expect(mock.bulkWrite.mock.calls[0][0][0].updateOne.update).not.toHaveProperty('$set');
 });
+
+it("cold planning includes an unpinned semantically relevant diet profile without admitting unrelated profiles",async()=>{
+ // Explicit synthetic query/document vectors only in this mocked unit fixture.
+ const diet=memory({type:"profile",importance:6,statement:"Aarav switched to a vegetarian diet in October 2026.",embedding:[.8,.6]});
+ const unrelated=memory({type:"profile",statement:"Aarav studies engineering.",embedding:[0,1]});
+ mock.find.mockImplementation(filter=>({sort:()=>({limit:()=>({toArray:async()=>filter.type?.$in?.includes("profile")?[diet,unrelated]:[]})}),limit:()=>({toArray:async()=>[]})}));
+ const result=await recall({ownerId:"alice",spaceKey:"s",query:"What should I eat before tonight's demo?",persistTrace:false});
+ expect(result.picks.map(p=>p.memoryId)).toContain(diet._id.toHexString());
+ expect(result.picks.map(p=>p.memoryId)).not.toContain(unrelated._id.toHexString());
+});
+
+it("focuses meal semantics on the eating request while retaining demo context for lexical search",async()=>{
+ await recall({ownerId:"alice",spaceKey:"s",query:"What should I eat before tonight's demo?",persistTrace:false});
+ expect(mock.embed.mock.calls[0][0]).toEqual([{text:"What should I eat"}]);
+ const lexical=mock.aggregate.mock.calls.find(([pipeline])=>pipeline[0].$search)?.[0][0].$search;
+ expect(lexical.compound.must[0].text.query).toBe("What should I eat before tonight's demo?");
+});
+
+it("finds newly saved diet through scoped local semantic comparison while demo indexes are already warm",async()=>{
+ const diet=memory({type:"profile",importance:6,statement:"Aarav switched to a vegetarian diet in October 2026.",embedding:[.8,.6]});
+ const demo=memory({statement:"The demo deadline is tonight",embedding:[.2,Math.sqrt(.96)]});
+ mock.aggregate.mockReturnValue({toArray:async()=>[demo]});
+ mock.find.mockImplementation(filter=>({sort:()=>({limit:()=>({toArray:async()=>filter.type?.$in?.includes("profile")?[diet,memory({ownerId:"bob"}),memory({spaceKey:"private"}),memory({expiresAt:new Date(0)})]:[]})}),limit:()=>({toArray:async()=>[]})}));
+ const result=await recall({ownerId:"alice",spaceKey:"s",query:"What should I eat before tonight's demo?",persistTrace:false});
+ expect(result.picks.some(p=>p.memoryId===diet._id.toHexString()&&p.reasons.includes("semantic_match"))).toBe(true);
+ expect(result.picks.every(p=>!p.statement.includes("9 PM"))).toBe(true);
+});
+
+describe("bounded cold local semantic recall",()=>{
+ const classic=(rows:MemoryUnit[])=>mock.find.mockImplementation((filter)=>({sort:()=>({limit:()=>({toArray:async()=>filter.pinned===false?rows:[]})}),limit:()=>({toArray:async()=>[]})}));
+ it("recalls a just-written exact memory while both indexes are empty",async()=>{
+  const m=memory({type:"fact",statement:"The launch codename is Moonstone."});classic([m]);
+  const result=await recall({ownerId:"alice",spaceKey:"s",allowedSpaceKeys:["s"],types:["fact"],query:"What is the launch codename?",persistTrace:false});
+  expect(result.picks.map(p=>p.memoryId)).toEqual([m._id.toHexString()]);
+  const filter=mock.find.mock.calls.find(([f])=>f.pinned===false)?.[0];
+  expect(filter).toMatchObject({ownerId:"alice",spaceKey:{$in:["s"]},type:{$in:["fact"]},status:"active"});
+ });
+ it("excludes unrelated, missing-embedding and out-of-scope cold rows",async()=>{
+  classic([memory({type:"fact",embedding:[0,1]}),memory({type:"fact",embedding:undefined}),memory({type:"fact",ownerId:"bob"}),memory({type:"fact",spaceKey:"elsewhere"}),memory({type:"fact",status:"superseded"}),memory({type:"fact",expiresAt:new Date(0)}),memory({type:"goal"})]);
+  expect((await recall({ownerId:"alice",spaceKey:"s",types:["fact"],query:"launch codename",persistTrace:false})).picks).toEqual([]);
+ });
+ it("does not attempt local cosine retrieval without a query embedding",async()=>{
+  classic([memory()]);mock.embed.mockRejectedValue(new Error("offline"));
+  expect((await recall({ownerId:"alice",spaceKey:"s",query:"launch codename",persistTrace:false})).picks).toEqual([]);
+  expect(mock.find.mock.calls.some(([f])=>f.pinned===false)).toBe(false);
+ });
+ it("sanitizes historical metadata in the classic meal pool",async()=>{
+  const asOf="2026-10-01T00:00:00Z",start=new Date("2026-09-01T00:00:00Z");
+  const m=memory({type:"preference",validFrom:start,createdAt:start,updatedAt:now,stats:{confirmCount:9,recallCount:0,citedCount:0,lastConfirmedAt:now}});classic([m]);
+  const result=await recall({ownerId:"alice",spaceKey:"s",query:"What should I eat?",asOf,persistTrace:false});
+  expect(result.picks[0].confirmCount).toBe(0);expect(result.picks[0].ageDays).toBe(30);
+ });
+});
+
+it("allows an exact cold food fact without forcing dietary types",async()=>{
+ const m=memory({type:"fact",statement:"The dinner reservation code is Moonstone.",embedding:[.6,.8]});
+ mock.find.mockImplementation((filter)=>({sort:()=>({limit:()=>({toArray:async()=>filter.pinned===false&&(!filter.type||filter.type.$in.includes("fact"))?[m]:[]})}),limit:()=>({toArray:async()=>[]})}));
+ expect((await recall({ownerId:"alice",spaceKey:"s",query:"What is my dinner reservation code?",persistTrace:false})).picks.map(p=>p.memoryId)).toEqual([m._id.toHexString()]);
+});

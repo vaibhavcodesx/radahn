@@ -1,0 +1,9 @@
+# Query focus and semantic recall — 31 Oct 2026
+
+A controlled synthetic probe used the committed gemini-embedding-2@768 demo vectors plus one vegetarian profile and query embedding. The complete eating question ranked diet seventh; removing its incidental before-tonight-demo suffix ranked diet first. Whole-query cosine0.598678; focused0.619713, next candidate0.605358. No user data was used. This is n=1, not an aggregate model-quality result.
+
+Pure reweighting failed the close-cosine regression because lexical/entity metadata and importance still filled the eight slots. The implemented meal-only semantic leader reservation keeps exactly one strongest query match, then applies ordinary thresholds, budgets and MMR. It does not reserve a profile type. Relevance blends actual cosine75% and app RRF25%, preserving raw Atlas score separately and falling back to RRF when no query embedding exists.
+
+Bounded classic reads cover index visibility: food queries inspect40recent eligible profile/preference/constraint documents; both-index-empty non-plan queries inspect40recent eligible documents. All filters retain owner, allowed spaces, status, expiry, requested types and historical projection. Older unindexed memories outside this bound can still be missed. English suffix focus can remove meaningful context; lexical retrieval retains the full query. Broader multilingual/topical focus and representative precision evaluation remain future work.
+
+Implementation references: `src/server/memory/recall.ts`, `score.ts`, and their failing-first regressions; original scoring spec `docs/memory-engine.md` §5. Tuning and hosted baseline are in `evals/tuning.md` and `evals/results-before-food-2026-10-31.md`. Existing raw vector-score semantics are preserved; an additive cosine trace contract is proposed in TODO.md.

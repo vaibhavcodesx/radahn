@@ -167,3 +167,5 @@ K3 follow-up [status: implemented 14:43 IST, codex/k3-temporal-scenarios; review
 K5 follow-up [status: implemented 14:53 IST, codex/k5-profile-demo; source-grounded partial profile recovery,40-unit demo with contradiction pair; independent review passed].
 
 K6 follow-up [status: implemented, codex/k6-model-options; typed catalog/stub and explicit preference behavior reviewed; lead model-picker integration remains app-owned].
+
+K3 food/cold-recall follow-up [status: implemented15:04 IST, codex/k3-food-relevance; final review has no remaining Important/Critical findings; new hosted food cases and K1 extraction metrics await deploy].

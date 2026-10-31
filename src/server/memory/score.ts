@@ -1,6 +1,6 @@
 /** Deterministic recall scoring: memory-engine.md §5.3–§5.5. */
 import type { MemoryUnit, MemoryType, RecallIntent, ScoreBreakdown, RecallChannel } from "./types";
-export interface Hits { ranks: Partial<Record<RecallChannel, number>>; vector?: number }
+export interface Hits { ranks: Partial<Record<RecallChannel, number>>; vector?: number; semanticSimilarity?: number }
 export interface Ranked { unit: MemoryUnit; hits: Hits; scores: ScoreBreakdown; selected: boolean; droppedBy?: "threshold" | "mmr" | "budget" }
 const HALF_LIFE: Record<MemoryType, number> = { profile: Infinity, preference: 90, fact: 60, goal: 14, constraint: 14, decision: 30, outcome: 30, feedback: 21, strategy: Infinity, observation: 60 };
 export function cosine(a: number[], b: number[]): number {
@@ -19,25 +19,31 @@ export function score(unit: MemoryUnit, hits: Hits, intent: RecallIntent, channe
   const importance = unit.importance / 10;
   const typeBoost = (intent === "plan" && ["constraint", "goal", "decision", "preference"].includes(unit.type)) || (intent === "recall" && ["fact", "decision", "outcome"].includes(unit.type)) ? 0.10 : 0;
   const fused = rrf(Object.values(hits.ranks), channels);
-  return { vector: hits.vector, lexicalRank: hits.ranks.lexical, temporalRank: hits.ranks.temporal, graphRank: hits.ranks.graph, rrf: fused, recency, importance, confidence: unit.confidence, typeBoost, final: 0.55 * fused + 0.15 * recency + 0.15 * importance + 0.10 * unit.confidence + typeBoost };
+  // Compute cosine from stored/query embeddings upstream; do not assume search-score normalization.
+  // Semantic strength gets 75% of relevance so repeated incidental words/entities cannot outvote meaning.
+  const semantic = hits.semanticSimilarity === undefined ? undefined : Math.max(0, Math.min(1, hits.semanticSimilarity));
+  const relevance = semantic === undefined ? fused : 0.75 * semantic + 0.25 * fused;
+  return { vector: hits.vector, lexicalRank: hits.ranks.lexical, temporalRank: hits.ranks.temporal, graphRank: hits.ranks.graph, rrf: fused, recency, importance, confidence: unit.confidence, typeBoost, final: 0.55 * relevance + 0.15 * recency + 0.15 * importance + 0.10 * unit.confidence + typeBoost };
 }
-export function select(rows: Ranked[], opts: { maxUnits?: number; maxTokens?: number } = {}): Ranked[] {
+export function select(rows: Ranked[], opts: { maxUnits?: number; maxTokens?: number; preserveSemanticBest?: boolean } = {}): Ranked[] {
   const maxUnits = Math.max(0, Math.min(8, opts.maxUnits ?? 8));
   const maxTokens = Math.max(0, Math.min(1200, opts.maxTokens ?? 1200));
   const pool = rows.filter(row => {
     row.selected = false; delete row.droppedBy;
     if (row.unit.pinned || row.unit.type === "strategy") return false;
     const otherHit = Object.keys(row.hits.ranks).some(key => key !== "semantic");
-    if (row.scores.final < 0.35 || (!otherHit && (row.hits.vector ?? 0) < 0.55)) { row.droppedBy = "threshold"; return false; }
+    if (row.scores.final < 0.35 || (!otherHit && (row.hits.semanticSimilarity === undefined ? (row.hits.vector ?? 0) < 0.55 : row.hits.semanticSimilarity < 0.3))) { row.droppedBy = "threshold"; return false; }
     return true;
   });
+  // One focused semantic leader survives multi-channel keyword voting; no type is forced.
+  const semanticBest=opts.preserveSemanticBest ? pool.filter(r=>(r.hits.semanticSimilarity??0)>=0.55).sort((a,b)=>(b.hits.semanticSimilarity??0)-(a.hits.semanticSimilarity??0))[0] : undefined;
   const picked: Ranked[] = [];
   let tokens = 0;
   while (pool.length) {
     let best = 0, bestUtility = -Infinity;
     pool.forEach((row, i) => {
       const similarity = picked.reduce((max, p) => Math.max(max, cosine(p.unit.embedding, row.unit.embedding)), 0);
-      const utility = 0.7 * row.scores.final - 0.3 * similarity;
+      const utility = !picked.length && row===semanticBest ? Infinity : 0.7 * row.scores.final - 0.3 * similarity;
       if (utility > bestUtility) { best = i; bestUtility = utility; }
     });
     const [row] = pool.splice(best, 1);

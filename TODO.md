@@ -107,3 +107,8 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 - [x] [codex] K6: Gemini chatModelOptions() metadata plus typed GROQ_PROVIDER unavailable stub; explicit supported preference is honored and exhausted models fall back silently.22 registry tests, full356 tests, lint/typecheck pass; independent review passed.
 - [ ] [lead] K6: consume chatModelOptions() for app model choices. available means configured credentials, not a guarantee of quota. Groq remains unavailable until its provider/env wiring is intentionally added.
+
+- [x] [codex] K3 food regression: measured synthetic full-query diet rank7→focusedrank1, bounded fresh-diet local semantic pool plus exactly one semantic leader; scoped exact cold recall regression also fixed. Historical metadata/notice scoring and extraction probe budget findings resolved by final review.
+- [ ] [codex] Run fresh hosted eval after food/probe deployment: previous measured baseline31pure+15/16live, exactrecallmiss, cleanuptrue,secrets0; preserve before/after measurements and report K1 engine-to-event p50 separately from browser/chat scheduling.
+- [ ] [lead contract proposal] Add optional ScoreBreakdown.semanticSimilarity (or a named relevance component) to trace cosine used in final weighting. Existing vector field remains raw Atlas score; CODEX read-only types.ts remains unchanged. Prompt/query-focus visibility in the Trace UI is lead-owned.
+- [x] [user authorization] Explicit hosted-eval exception confirmed in chat: disposable eval:<uuid> owners in radahn, exact-owner finally cleanup; CRON_SECRET only to verified Radahn operator endpoint, never printed.

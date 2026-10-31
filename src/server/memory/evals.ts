@@ -9,6 +9,7 @@ import {ObjectId} from 'mongodb';
 import {forgetMemory} from './tools';
 import {candidate,jaccard,percentile,runDeterministic} from '../../../evals/measure';
 import {preScan} from './gate';
+import {measureExtractionLatency,type ExtractionSample} from './extraction-probe';
 import {generateText} from 'ai';
 import {candidates,report,classifyError,thinkingOptions} from '@/server/llm/registry';
 import {buildSystemPrompt,buildGhostPrompt} from './context';
@@ -16,7 +17,7 @@ export async function runEvals(){
  const database=db();if(database.databaseName!=='radahn')throw new Error('Evaluation database is not authorized');
  const c=collections(database),ownerId=`eval:${randomUUID()}`,spaceKey='eval',now=new Date(),start=performance.now();
  const deterministic=runDeterministic(),rows:Array<{id:string;passed:boolean}>=[],latencies:number[]=[],precisions:number[]=[],recalls:number[]=[];
- let budgetExceeded=false;
+ let budgetExceeded=false;let extractionSamples:ExtractionSample[]=[];
  // Leave 210 seconds before each phase: slow provider/retry/transaction work plus cleanup headroom.
  const checkBudget=()=>{if(performance.now()-start>60000){budgetExceeded=true;throw new Error('Evaluation budget exhausted');}};
  let cleanupSucceeded=false;
@@ -81,15 +82,34 @@ export async function runEvals(){
  checkBudget();const erased=await recall({ownerId,spaceKey:temporalSpace,allowedSpaceKeys:[temporalSpace],query:'What did I do last night?',persistTrace:false});
  rows.push({id:'temporal-forgotten-event-no-resurrection',passed:erased.picks.length===0});
  }
+ // Authorized disposable eval owner in radahn; real write-path embeddings, never fabricated vectors.
+ checkBudget();const foodSpace='eval-food',foodCtx={...ctx,spaceKey:foodSpace};
+ const dietary=await writeCandidates([{...candidate('Aarav switched to a vegetarian diet in October 2026.'),type:'profile',subject:'aarav',attribute:'diet',value:'vegetarian',entities:['aarav']}],foodCtx);
+ const dietId=dietary.ops.find(op=>op.memoryId)?.memoryId;
+ const details=['The demo deadline is tonight at 9 PM.','The demo video must be three minutes long.','The demo uses the memory track.','The demo target is a top-16 finish.','The demo slides need a problem statement.','The demo requires a working prototype.','The demo judges assess usefulness.','The demo submission needs a repository link.'];
+ checkBudget();await writeCandidates(details.map((statement,i)=>({...candidate(statement),type:'constraint' as const,subject:'demo',attribute:`detail-${i}`,value:statement,entities:['demo'],importance:10})),foodCtx);
+ const foodInput={ownerId,spaceKey:foodSpace,allowedSpaceKeys:[foodSpace],query:"What should I eat before tonight's demo?",persistTrace:false};
+ checkBudget();let food=await recall(foodInput);
+ rows.push({id:'food-cold-index-diet-recalled',passed:Boolean(dietId&&food.picks.some(p=>p.memoryId===dietId))});
+ // Require an actual semantic candidate before ranking; its source may be Atlas or bounded local fallback.
+ for(let attempt=0;attempt<3&&!food.candidates.some(p=>p.memoryId===dietId&&p.reasons.includes('semantic_match'));attempt++){
+ checkBudget();await new Promise(resolve=>setTimeout(resolve,500));food=await recall(foodInput);
+ }
+ const visible=Boolean(dietId&&food.candidates.some(p=>p.memoryId===dietId&&p.reasons.includes('semantic_match')));
+ rows.push({id:'food-semantic-candidate-present',passed:visible});
+ rows.push({id:'food-ranked-diet-beats-demo-flood',passed:visible&&food.picks.slice(0,3).some(p=>p.memoryId===dietId)});
  checkBudget();secretsStored=0;for(const m of await c.memories.find({ownerId},{projection:{statement:1}}).toArray())if(preScan(m.statement).kinds.length)secretsStored++;
+ checkBudget();const extraction=await measureExtractionLatency(ownerId,'eval-extraction',3,()=>{try{checkBudget();return true;}catch{errorCount++;return false;}});extractionSamples=extraction.samples;errorCount+=extraction.errorCount;
+ const firstEvents=extractionSamples.flatMap(sample=>sample.firstEventObservedMs!==null&&!sample.failed?[sample.firstEventObservedMs]:[]);
+ rows.push({id:'extraction-first-event-p50-under-4s',passed:firstEvents.length===3&&extraction.errorCount===0&&(percentile(firstEvents,.5)??Infinity)<4000});
  }catch{errorCount++;}
  finally{
  // Never discover owners. These exact unique-owner deletes also run on partial failure.
  const cleanup=await Promise.allSettled([...([c.memories,c.events,c.recalls,c.reflections,c.messages,c.conversations,c.spaces].map(collection=>collection.deleteMany({ownerId}))),c.settings.deleteOne({_id:ownerId}),database.collection<{_id:string}>('profiles').deleteOne({_id:ownerId})]);
  cleanupSucceeded=cleanup.every(r=>r.status==='fulfilled');if(!cleanupSucceeded)errorCount++;
  }
- const metrics={writeOpAccuracy:rows.filter(r=>r.id.startsWith('write-')).length?rows.filter(r=>r.id.startsWith('write-')&&r.passed).length/rows.filter(r=>r.id.startsWith('write-')).length:null,writeSamples:rows.filter(r=>r.id.startsWith('write-')).length,precisionAt5:precisions.length?precisions.reduce((a,b)=>a+b,0)/precisions.length:null,recallAt5:recalls.length?recalls.reduce((a,b)=>a+b,0)/recalls.length:null,recallSamples:latencies.length,secretsStored,memoryChangedRate:changed,abSamples,model,p50RecallMs:percentile(latencies,.5),p95RecallMs:percentile(latencies,.95),errorCount};
- const markdown=`# Memory evaluation\n\nMode: hosted; budgetExceeded=${budgetExceeded}; ${cleanupSucceeded?'Disposable eval owner cleaned in finally.':'Cleanup incomplete; operator action required.'}\n\n${deterministic.passed}/${deterministic.samples} deterministic cases passed. Live samples are intentionally small on M0.\n\n| Metric | Measured value |\n|---|---|\n${Object.entries(metrics).map(([k,v])=>`| ${k} | ${v??'pending'} |`).join('\n')}\n\nPrecision@5 uses a fixed denominator of five; recall@5 uses relevant active units. Cold-index query runs immediately. A/B uses identical served model, temperature and token limit; Jaccard < 0.7 is a difference heuristic, not proof of answer quality.\n\n| Case | Passed |\n|---|---|\n${rows.map(r=>`| ${r.id} | ${r.passed} |`).join('\n')}\n`;
+ const extractionFirstEvents=extractionSamples.flatMap(sample=>sample.firstEventObservedMs!==null&&!sample.failed?[sample.firstEventObservedMs]:[]);
+ const metrics={extractionAttempts:extractionSamples.length,extractionEventSamples:extractionFirstEvents.length,p50ExtractionFirstEventMs:percentile(extractionFirstEvents,.5),p95ExtractionFirstEventMs:percentile(extractionFirstEvents,.95),p50ExtractionCompletionMs:percentile(extractionSamples.filter(sample=>!sample.failed).map(sample=>sample.completionMs),.5),writeOpAccuracy:rows.filter(r=>r.id.startsWith('write-')).length?rows.filter(r=>r.id.startsWith('write-')&&r.passed).length/rows.filter(r=>r.id.startsWith('write-')).length:null,writeSamples:rows.filter(r=>r.id.startsWith('write-')).length,precisionAt5:precisions.length?precisions.reduce((a,b)=>a+b,0)/precisions.length:null,recallAt5:recalls.length?recalls.reduce((a,b)=>a+b,0)/recalls.length:null,recallSamples:latencies.length,secretsStored,memoryChangedRate:changed,abSamples,model,p50RecallMs:percentile(latencies,.5),p95RecallMs:percentile(latencies,.95),errorCount};
+ const markdown=`# Memory evaluation\n\nMode: hosted; budgetExceeded=${budgetExceeded}; ${cleanupSucceeded?'Disposable eval owner cleaned in finally.':'Cleanup incomplete; operator action required.'}\n\n${deterministic.passed}/${deterministic.samples} deterministic cases passed. Live samples are intentionally small on M0.\n\n| Metric | Measured value |\n|---|---|\n${Object.entries(metrics).map(([k,v])=>`| ${k} | ${v??'pending'} |`).join('\n')}\n\nExtraction timing starts at the engine invocation and ends when its committed event is observed by a scoped poll (200ms interval); it excludes chat-finish scheduling and browser SSE delivery.\n\nPrecision@5 uses a fixed denominator of five; recall@5 uses relevant active units. Cold-index query runs immediately. A/B uses identical served model, temperature and token limit; Jaccard < 0.7 is a difference heuristic, not proof of answer quality.\n\n| Case | Passed |\n|---|---|\n${rows.map(r=>`| ${r.id} | ${r.passed} |`).join('\n')}\n`;
  return {mode:'hosted' as const,budgetExceeded,cleanupSucceeded,...(!cleanupSucceeded?{cleanupOwnerId:ownerId}:{}),metrics,rows,deterministic,markdown};
 }
-

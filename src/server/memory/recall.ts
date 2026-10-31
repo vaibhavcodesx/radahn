@@ -81,7 +81,11 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   };
   let queryVector:number[]|undefined;
   const embedStart=performance.now();
-  const vectorPromise=embed([{text:query}],"query").then(([vector])=>{queryVector=vector;return vector;}).catch(()=>undefined).finally(()=>{latency.embed=performance.now()-embedStart;});
+  // Meal constraints concern the eating request; incidental demo context otherwise dominates embeddings.
+  const mealQuestion=/\b(eat|food|meal|snack|breakfast|lunch|dinner)\b/i.test(input.query);
+  const semanticQuery=mealQuestion
+    ? query.replace(/\s+\b(?:before|after|during)\b.*$/i,"").trim() : query;
+  const vectorPromise=embed([{text:semanticQuery}],"query").then(([vector])=>{queryVector=vector;return vector;}).catch(()=>undefined).finally(()=>{latency.embed=performance.now()-embedStart;});
   // Temporal fields are not vector-index filters; broaden the bounded pool before the historical postfilter.
   const semanticPromise=vectorPromise.then(vector=>vector ? run("semantic",()=>c.memories.aggregate<MemoryUnit & {vector:number}>([
     {$vectorSearch:{index:"memories_vec",path:"embedding",queryVector:vector,numCandidates:at?600:150,limit:at?150:40,filter:base}},
@@ -109,6 +113,23 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   })();
   const corePromise=c.memories.find({...filter,$and:[...(filter.$and ?? []),expiry,{$or:[{pinned:true},{type:"strategy"}]}]}).sort({importance:-1}).limit(200).toArray().catch(()=>[]);
   const [semantic,lexical,temporal,coreRows]=await Promise.all([semanticPromise,lexicalPromise,temporalPromise,corePromise]);
+  // Cold general recall and recent dietary constraints remain searchable while Atlas indexes catch up.
+  // Planning retains its existing bounded context fallback; general recall requires actual cosine support.
+  // This bounded classic read uses the same scope and eligibility as every other channel.
+  const coldSemantic=!semantic.length&&!lexical.length&&intent!=="plan";
+  if((mealQuestion || coldSemantic) && queryVector) {
+    const types:MemoryUnit["type"][]=["profile","preference","constraint"];
+    const allowed=coldSemantic ? (input.types?.length?input.types:undefined) : types.filter(type=>!input.types?.length || input.types.includes(type));
+    if(!allowed || allowed.length) {
+      const recent=await c.memories.find({...filter,...(allowed?{type:{$in:allowed}}:{}),pinned:false}).sort({updatedAt:-1}).limit(40).toArray().catch(()=>[]);
+      const visible=new Set(semantic.map(m=>m._id.toHexString()));
+      // 0.55 positive cosine excludes weak broad-profile matches; rank by actual local similarity.
+      for(const unit of recent.filter(live).map(m=>at?historicalMetadata(m,at):m).filter(m=>Array.isArray(m.embedding)&&cosine(queryVector!,m.embedding)>=0.55).sort((a,b)=>cosine(queryVector!,b.embedding)-cosine(queryVector!,a.embedding))) {
+        if(!visible.has(unit._id.toHexString())) {semantic.push(unit);visible.add(unit._id.toHexString());}
+      }
+      if(semantic.length&&!channels.includes("semantic"))channels.push("semantic");
+    }
+  }
   const top=[...semantic.slice(0,3),...lexical.slice(0,3)].slice(0,3);
   const entities=[...new Set(top.flatMap(m=>m.entities))];
   const planningTypes:MemoryUnit["type"][]=["constraint","goal","decision","preference"];
@@ -123,7 +144,12 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     const id=unit._id.toHexString();
     const row=fused.get(id) ?? {unit,hits:{ranks:{}}};
     row.hits.ranks[channel]=index+1;
-    if(channel==="semantic") row.hits.vector=(unit as MemoryUnit & {vector?:number}).vector;
+    if(channel==="semantic") {
+      row.hits.vector=(unit as MemoryUnit & {vector?:number}).vector;
+      if(queryVector)row.hits.semanticSimilarity=cosine(queryVector,unit.embedding);
+    }
+    // Score every candidate against the query, including lexical/entity-only hits.
+    if(queryVector)row.hits.semanticSimilarity=cosine(queryVector,unit.embedding);
     fused.set(id,row);
   });
   const ranked:Ranked[]=[...fused.values()].map(row=>({...row,scores:score(row.unit,row.hits,intent,channels.length,now),selected:false}));
@@ -135,7 +161,7 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     if(!row.hits.ranks.temporal)row.droppedBy="threshold";
     else row.scores=score(row.unit,row.hits,intent,1,now);
   }
-  const picked=select(eligible,{maxUnits:input.limit});
+  const picked=select(eligible,{maxUnits:input.limit,preserveSemanticBest:mealQuestion&&!temporalQuestion});
   const notices:RecallNotice[]=[];
   const [a,b]=picked;
   if(a && b && a.unit.value && b.unit.value && a.unit.value!==b.unit.value && ((a.unit.slotKey && a.unit.slotKey===b.unit.slotKey) || (a.unit.subject && a.unit.subject===b.unit.subject && a.unit.attribute===b.unit.attribute && Math.abs(a.scores.final-b.scores.final)<0.03))) notices.push({kind:"ambiguous",text:"Conflicting memories match. Ask one short clarifying question.",memoryIds:[a.unit._id.toHexString(),b.unit._id.toHexString()]});
