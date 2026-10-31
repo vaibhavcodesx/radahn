@@ -6,7 +6,22 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 **Deadline:** C1–C4 merged by **10:30 IST** (Checkpoint A). C5–C6 by 12:00. C7–C8 by 15:00. Hard freeze 21:00.
 
-## LEAD NOTES (Claude, 09:07 IST) — read first
+## LEAD NOTES (Claude, 14:20 IST) — read first; supersedes the 09:07 "next" list
+User testing at 14:00 says the memory feels slow and noisy. Antigravity (a third agent) now owns the public pages; Claude owns the app UI. Your files are unchanged (`src/server/memory/**`, `src/server/llm/**`, `scripts/**`, `evals/**`). PRs by **17:00 IST**, small and green; Claude merges.
+
+**K1 — Extraction latency (top priority).** After the reply finishes, the "Updating memory…" chip waits too long before write events arrive. Measure finish→first `memory_events` insert on the hosted path and get p50 < 4 s: `thinkingLevel` minimal/low for extraction, skip the reconcile LLM when no neighbour is ambiguous, embed candidates in one batch, cap extraction at ~8 s. Emit a `memory_events` row (or nothing) quickly when extraction yields zero candidates so the UI can stop waiting. Report numbers in `evals/tuning.md`.
+
+**K2 — "Changed" notice is shown too often.** Screenshot: two unrelated questions ("what did I do last night?") both showed "Earlier: The user is a student at SVNIT Surat. Now: … B.Tech 2nd year." Emit a `changed` notice only when (a) the current memory is a strong pick for this query (final ≥ 0.5 and relevance-dominated, not just recency), and (b) the supersede happened after that memory was last recalled/shown (use `stats.lastRecalledAt` or record a `noticeShownAt`), so each change is announced at most once. Refinements ("student" → "student, 2nd year") should not announce at all — only real value changes (slot value differs).
+
+**K3 — Memory-system scenarios (the core of the brief).** Add hosted self-test/eval cases and fix what fails: temporal questions ("what did I do yesterday / last night") should use the temporal channel over `memories`+`memory_events` created in that window (today it recalls 1 unrelated unit); correction chains (A→B→C keeps one active, history intact); "forget X" then ask about X → nothing; expiry; same fact phrased differently confirms (not duplicates); third-person "The user" vs name consistency (use the display name when known); project-space isolation. Update `evals/results.md` with a fresh hosted run (`POST /api/admin/eval`).
+
+**K4 — Ask instead of guess.** Low-confidence or borderline candidates (personal details, ambiguous scope) should become `pending_review` with `source.messageId` set — not dropped — so the UI can show "Save this to memory? Yes / No" above the composer for that turn. Keep sensitive-category rules as they are.
+
+**K5 — Profile robustness + demo contradiction** (from 09:07): don't discard the whole profile when the model cites one ineligible id; add one demo contradiction pair (with precomputed embedding) to the C6 fixture.
+
+**K6 — Model options.** Export `chatModelOptions(): {id,label,provider,available}[]` from the registry (Gemini models now; a Groq provider behind optional `GROQ_API_KEY` using `@ai-sdk/groq` if you can add it cleanly — else leave a typed stub). The user-chosen model is preferred, with silent fallback. Never surface "fell back to …" text (Claude removed it from the UI).
+
+## LEAD NOTES (Claude, 09:07 IST)
 - **All of #7–#16 merged to main and deployed.** Hosted self-test 19/19 (once; see profile below). Hosted eval run via `POST /api/admin/eval` (route added) → `evals/results.md`. Eval isolation resolved: `radahn` + disposable `eval:` owner is the rule; AGENTS.md updated.
 - **Integration edits I made in your files (keep them):** `reflect.ts` sends an uncapped `llmSchema` and enforces caps in `clampReflection` — Gemini rejects nested `maxItems` with "invalid argument" (that's why reflection always failed in ~0.7 s); failures now `console.error` the step + message. `prompts/reflect.ts` marks `profileEligible:true` units. `context.ts` restates the citation rule after "Relevant memories". `recall.ts` "changed" notice = one per current memory, `Earlier (31 Oct): <old statement> Now: <new statement>`.
 - **Lead integration done:** MCP `/api/mcp` passes verified `allowedSpaceKeys` + `{kind:'external_agent',name}` on recall/list/remember/forget only; asOf wired (GET /api/memories, `recall_memory` tool, Memory page "As of"); conflicts UI + `/api/conflicts`; migration locks both owners + `migrateProfile` + `retiredTo` tombstone + post-turn sweep; cron calls `runMaintenance({now})` (guest purge still deferred — `noteOwnerActivity` not wired yet).
