@@ -6,11 +6,24 @@ const hedvig = Hedvig_Letters_Serif({ variable: "--font-hedvig", subsets: ["lati
 const hanken = Hanken_Grotesk({ variable: "--font-hanken", subsets: ["latin"] });
 const martian = Martian_Mono({ variable: "--font-martian", subsets: ["latin"], axes: ["wdth"] });
 
+const TITLE = "Radahn — an agent whose memory you can see";
+const DESCRIPTION =
+  "Radahn keeps what matters from every conversation, uses it to shape its next answer, and shows you exactly which memory did it.";
+
 export const metadata: Metadata = {
-  title: { default: "Radahn — an agent whose memory you can see", template: "%s · Radahn" },
-  description:
-    "Radahn keeps what matters from every conversation, uses it to shape its next answer, and shows you exactly which memory did it.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://radahn-ai.vercel.app"),
+  title: { default: TITLE, template: "%s · Radahn" },
+  description: DESCRIPTION,
   icons: { icon: "/brand/radahn-mark.png" },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "Radahn",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "Radahn — an agent whose memory you can see and steer" }],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.png"] },
 };
 
 export const viewport: Viewport = {
