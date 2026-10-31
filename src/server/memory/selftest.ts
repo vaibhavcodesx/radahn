@@ -63,6 +63,8 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(confirmed.confirmed!==1)throw new SelfTestAssertion("Confirm failed");
       const updated=await writeCandidates([{...candidate,statement:"Aarav's integration deadline is 10 PM.",value:"10 PM"}],{...context,source:{...context.source,messageId:"selftest-update"}});
       if(updated.superseded!==1 || !updated.notices.length)throw new SelfTestAssertion("Supersede failed");
+      const paraphrase=await writeCandidates([{...candidate,statement:"The integration cutoff for Aarav is ten in the evening.",value:"10 PM"}],{...context,source:{...context.source,messageId:"selftest-paraphrase"}});
+      if(paraphrase.confirmed!==1)throw new SelfTestAssertion("Paraphrase did not confirm");
       const chain=await c.memories.find({ownerId,slotKey:"aarav.integration_deadline"}).toArray();
       if(chain.filter(m=>m.status==="active").length!==1 || chain.filter(m=>m.status==="superseded").length!==1)throw new SelfTestAssertion("Single truth failed");
       const historical=await writeCandidates([{...candidate,validFrom:"2026-01-01T00:00:00Z"}],{...context,source:{...context.source,messageId:"selftest-history"}});
@@ -93,6 +95,9 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(!source)throw new SelfTestAssertion("Missing correction fixture");
       const corrected=await correctMemory({ownerId,spaceKey,memoryId:source._id.toHexString(),newStatement:"Aarav's integration deadline is 11 PM.",actor:{kind:"system",name:"selftest"}});
       if(corrected.status!=="updated" || !corrected.after)throw new SelfTestAssertion("Explicit correction failed");
+      const chain=await c.memories.find({ownerId,slotKey:"aarav.integration_deadline"}).toArray();
+      const active=chain.filter(m=>m.status==="active");
+      if(active.length!==1 || active[0]._id.toHexString()!==corrected.after.id || chain.filter(m=>m.status==="superseded").length<2)throw new SelfTestAssertion("Correction chain lost single truth/history");
       const pending=await c.memories.findOne({ownerId,status:"pending_review"});
       if(pending && (await reviewMemory({ownerId,memoryId:pending._id.toHexString(),decision:"approve",actor:{kind:"system",name:"selftest"}}))?.status!=="active")throw new SelfTestAssertion("Approval failed");
       const forgotten=await forgetMemory({ownerId,memoryId:corrected.after.id,actor:{kind:"system",name:"selftest"}});

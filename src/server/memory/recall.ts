@@ -21,6 +21,20 @@ function timezoneOffset(date: Date, timeZone: string): number {
 }
 export function temporalWindow(query: string, now: Date, timeZone: string): {start: Date; end: Date} | null {
   const offset = timezoneOffset(now, timeZone);
+  // Relative calendar words need local dates; chrono can shift "last night" back an extra day.
+  if (/\b(last night|yesterday)\b/i.test(query)) {
+    const local=new Date(+now+offset*60000);
+    const midnight=Date.UTC(local.getUTCFullYear(),local.getUTCMonth(),local.getUTCDate());
+    const instant=(localMs:number)=>{
+      let utc=localMs-offset*60000;
+      // Resolve each boundary separately so DST nights/calendar days keep local wall time.
+      for(let i=0;i<3;i++)utc=localMs-timezoneOffset(new Date(utc),timeZone)*60000;
+      return new Date(utc);
+    };
+    return /\b(last night|yesterday (?:evening|night))\b/i.test(query)
+      ? {start:instant(midnight-86400000+18*3600000),end:instant(midnight+6*3600000)}
+      : {start:instant(midnight-86400000),end:instant(midnight)};
+  }
   const parsed = chrono.parse(query, {instant: now, timezone: offset})[0];
   if (!parsed) return null;
   if (parsed.start.isCertain("hour")) {
@@ -77,10 +91,21 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     {$search:{index:"memories_text",compound:{must:[{text:{query,path:["statement","entities","tags"]}}],filter:[{equals:{path:"ownerId",value:input.ownerId}},at?{in:{path:"status",value:["active","superseded"]}}:{equals:{path:"status",value:"active"}},{in:{path:"spaceKey",value:spaces}}]}}},
     {$match:filter},{$limit:40},
   ],{maxTimeMS:1500}).toArray());
+  let requestedWindow:ReturnType<typeof temporalWindow>=null;
   const temporalPromise=(async()=>{
     const settings=await c.settings.findOne({_id:input.ownerId}).catch(()=>null);
     const window=temporalWindow(query,now,settings?.timeZone ?? "Asia/Kolkata");
-    return window ? run("temporal",()=>c.memories.find({...filter,$and:[...(filter.$and ?? []),{$or:[{createdAt:{$gte:window.start,$lt:window.end}},{validFrom:{$gte:window.start,$lt:window.end}}]}]}).sort({createdAt:-1}).limit(20).toArray()) : [];
+    requestedWindow=window;
+    return window ? run("temporal",async()=>{
+      const [direct,events]=await Promise.all([
+        c.memories.find({...filter,$and:[...(filter.$and ?? []),{$or:[{createdAt:{$gte:window.start,$lt:window.end}},{validFrom:{$gte:window.start,$lt:window.end}}]}]}).sort({createdAt:-1}).limit(40).toArray().catch(()=>[]),
+        c.events.find({ownerId:input.ownerId,spaceKey:{$in:spaces},at:{$gte:window.start,$lt:window.end,...(at?{$lte:at}:{})},kind:{$nin:["forgotten","blocked"]}}).sort({at:-1}).limit(100).toArray().catch(()=>[]),
+      ]);
+      const ids=events.filter(e=>e.ownerId===input.ownerId && spaces.includes(e.spaceKey) && e.at>=window.start && e.at<window.end && (!at || e.at<=at) && e.kind!=="forgotten" && e.kind!=="blocked").flatMap(e=>e.memoryId?[e.memoryId]:[]);
+      // Event summaries can retain old wording: resolve IDs through the same live/snapshot filter.
+      const linked=ids.length?await c.memories.find({...filter,_id:{$in:ids}}).limit(40).toArray().catch(()=>[]):[];
+      return [...new Map([...direct,...linked].map(m=>[m._id.toHexString(),m])).values()];
+    }) : [];
   })();
   const corePromise=c.memories.find({...filter,$and:[...(filter.$and ?? []),expiry,{$or:[{pinned:true},{type:"strategy"}]}]}).sort({importance:-1}).limit(200).toArray().catch(()=>[]);
   const [semantic,lexical,temporal,coreRows]=await Promise.all([semanticPromise,lexicalPromise,temporalPromise,corePromise]);
@@ -102,7 +127,15 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     fused.set(id,row);
   });
   const ranked:Ranked[]=[...fused.values()].map(row=>({...row,scores:score(row.unit,row.hits,intent,channels.length,now),selected:false}));
-  const picked=select(ranked,{maxUnits:input.limit});
+  // Explicit time questions use their requested window as an eligibility boundary, not a weak semantic boost.
+  // Otherwise one fresh, high-importance semantic neighbour can displace every actual event.
+  const temporalQuestion=requestedWindow && (intent!=="plan" || /\b(what did|when did|yesterday|last night|last week)\b/i.test(query));
+  const eligible=temporalQuestion?ranked.filter(row=>row.hits.ranks.temporal):ranked;
+  if(temporalQuestion)for(const row of ranked){
+    if(!row.hits.ranks.temporal)row.droppedBy="threshold";
+    else row.scores=score(row.unit,row.hits,intent,1,now);
+  }
+  const picked=select(eligible,{maxUnits:input.limit});
   const notices:RecallNotice[]=[];
   const [a,b]=picked;
   if(a && b && a.unit.value && b.unit.value && a.unit.value!==b.unit.value && ((a.unit.slotKey && a.unit.slotKey===b.unit.slotKey) || (a.unit.subject && a.unit.subject===b.unit.subject && a.unit.attribute===b.unit.attribute && Math.abs(a.scores.final-b.scores.final)<0.03))) notices.push({kind:"ambiguous",text:"Conflicting memories match. Ask one short clarifying question.",memoryIds:[a.unit._id.toHexString(),b.unit._id.toHexString()]});
