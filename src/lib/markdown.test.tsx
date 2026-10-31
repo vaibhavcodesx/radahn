@@ -16,7 +16,17 @@ describe("Markdown", () => {
   it("never renders raw HTML from the model", () => {
     const out = html('<img src=x onerror="alert(1)"> hi');
     expect(out).not.toContain("<img");
-    expect(out).toContain("&lt;img");
+    expect(out).not.toContain("onerror");
+  });
+
+  it("renders GFM tables and fenced code blocks", () => {
+    const table = html(["| a | b |", "|---|---|", "| 1 | 2 |"].join("\n"));
+    expect(table).toContain("<table");
+    expect(table.match(/<td/g)?.length).toBe(2);
+    const code = html(["```python", "x = [1]", "print(x)", "```"].join("\n"));
+    expect(code).toContain("<pre");
+    expect(code).toContain("python");
+    expect(code).toContain("print(x)");
   });
 
   it("handles bold and code", () => {

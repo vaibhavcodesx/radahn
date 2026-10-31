@@ -21,7 +21,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
   const user = await requirePageUser();
   const detail = await (await engine()).getMemory(user.id, id).catch(() => null);
   if (!detail) notFound();
-  const { memory: m, versions, evidence, related, recallHistory, events, raw } = detail;
+  const { memory: m, versions, evidence, related, recallHistory, events } = detail;
   const spaces = await listSpaces(user.id);
   const spaceName = m.spaceKey === "global" ? "Global (every space)" : (spaces.find((s) => s._id.toHexString() === m.spaceKey)?.name ?? "—");
   const type = m.type as MemoryTypeName;
@@ -150,7 +150,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
               {events.map((e) => (
                 <li key={e.id} className="flex gap-3 text-ink-2">
                   <span className="shrink-0 tabular text-ink-3">{fmt(e.at)}</span>
-                  <span className="shrink-0 uppercase text-ink-3">{e.kind}</span>
+                  <span className="shrink-0 capitalize text-ink-3">{e.kind}</span>
                   <span className="truncate">{e.summary}</span>
                 </li>
               ))}
@@ -158,14 +158,6 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
           </Section>
         ) : null}
 
-        <Section title="MongoDB document">
-          <pre className="max-h-[420px] overflow-auto rounded-card bg-surface p-4 font-mono text-[11.5px] leading-relaxed text-ink-2 shadow-card">
-            {JSON.stringify(raw, null, 2)}
-          </pre>
-          <p className="mt-2 text-[12px] text-ink-3">
-            This is the stored unit in the <code className="font-mono">memories</code> collection. The 768-float embedding is summarised.
-          </p>
-        </Section>
       </div>
     </main>
   );

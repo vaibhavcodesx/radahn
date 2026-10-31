@@ -60,7 +60,7 @@ export function MemoryActions({
   async function expireIn(ms: number | null) {
     const j = await call("PATCH", { expiresAt: ms === null ? null : fromNow(ms) });
     if (j) {
-      setMsg(ms === null ? "Expiry cleared." : ms <= 3 * 60_000 ? "Set to expire in 2 minutes. Recall stops then; MongoDB's TTL monitor deletes it a few minutes later." : "Expiry set.");
+      setMsg(ms === null ? "Expiry cleared." : ms <= 3 * 60_000 ? "Set to expire in 2 minutes. Radahn stops using it then, and it is deleted for good shortly after." : "Expiry set.");
       router.refresh();
       setMode("idle");
     }
@@ -105,7 +105,7 @@ export function MemoryActions({
         <div role="alertdialog" aria-labelledby="forget-title" className="rounded-card bg-surface p-4 shadow-card">
           <p id="forget-title" className="text-[14px] text-ink">Forget this memory?</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
-            This is a hard delete. The statement and its embedding are removed from MongoDB; only a content-free tombstone event remains.
+            It&apos;s deleted for good. Radahn keeps only a note that something was forgotten, never what it was.
           </p>
           <div className="mt-3 flex gap-2">
             <Button variant="danger" size="sm" onClick={forget} disabled={busy}>

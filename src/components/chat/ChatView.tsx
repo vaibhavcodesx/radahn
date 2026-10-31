@@ -2,17 +2,43 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { PanelRight } from "lucide-react";
+import { PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Kbd } from "@/components/atoms";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useLive } from "@/components/realtime/LiveProvider";
 import type { RadahnUIMessage } from "@/lib/chat-types";
+import { CHAT_MODELS, DEFAULT_CHAT_MODEL, type ChatModelId } from "@/lib/models";
 import { cn } from "@/lib/utils";
 import { Composer } from "./Composer";
 import { EmptyState } from "./EmptyState";
 import { MemoryLens, type GhostState } from "./MemoryLens";
 import { AssistantMessage, UserMessage } from "./MessageItem";
-import { dataPart, messageText } from "./parts";
+import { dataPart, dataParts, messageText } from "./parts";
+import { PendingSaves } from "./PendingSaves";
+
+/** Model choice persists per browser; server snapshot is the default so hydration matches. */
+const MODEL_KEY = "radahn-model";
+const modelListeners = new Set<() => void>();
+function readModel(): ChatModelId {
+  try {
+    const v = localStorage.getItem(MODEL_KEY);
+    return CHAT_MODELS.some((m) => m.id === v) ? (v as ChatModelId) : DEFAULT_CHAT_MODEL;
+  } catch {
+    return DEFAULT_CHAT_MODEL;
+  }
+}
+function writeModel(m: ChatModelId) {
+  try {
+    localStorage.setItem(MODEL_KEY, m);
+  } catch {
+    /* private mode */
+  }
+  modelListeners.forEach((l) => l());
+}
+function subscribeModel(l: () => void) {
+  modelListeners.add(l);
+  return () => modelListeners.delete(l);
+}
 
 export function ChatView({
   conversationId: initialConversationId,
@@ -42,6 +68,12 @@ export function ChatView({
   const [ghosts, setGhosts] = useState<Record<string, GhostState>>({});
   const [prefill, setPrefill] = useState<string | undefined>();
   const scroller = useRef<HTMLDivElement>(null);
+  const model = useSyncExternalStore(subscribeModel, readModel, () => DEFAULT_CHAT_MODEL);
+  const modelRef = useRef(model);
+  useEffect(() => {
+    modelRef.current = model;
+  }, [model]);
+  const live = useLive();
 
   const transport = useMemo(
     () =>
@@ -52,6 +84,7 @@ export function ChatView({
             message: messages[messages.length - 1],
             conversationId: conversationIdRef.current ?? undefined,
             spaceId,
+            model: modelRef.current,
           },
         }),
       }),
@@ -77,7 +110,14 @@ export function ChatView({
   const latestAssistant = assistants.at(-1);
   const selected = messages.find((m) => m.id === selectedId) ?? latestAssistant;
   const selectedIdx = selected ? messages.indexOf(selected) : -1;
+  const latestUser = [...messages].reverse().find((m) => m.role === "user");
   const userBefore = selectedIdx > 0 ? [...messages.slice(0, selectedIdx)].reverse().find((m) => m.role === "user") : undefined;
+
+  // Open a conversation at its latest message, like any chat app.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
 
   // Follow the newest reply while streaming.
   useEffect(() => {
@@ -119,6 +159,11 @@ export function ChatView({
   const lens = (
     <MemoryLens
       recall={selected ? dataPart(selected, "recall") : undefined}
+      notices={selected ? dataParts(selected, "notice") : []}
+      onClose={() => {
+        setLensOpen(false);
+        setMobileLens(false);
+      }}
       assistantId={selected?.id}
       userMessageId={userBefore?.id}
       replyText={selected ? messageText(selected) : ""}
@@ -131,30 +176,36 @@ export function ChatView({
   return (
     <div className="flex min-h-0 flex-1">
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 items-center gap-3 border-b border-line px-4">
-          <h1 className="truncate text-[13.5px] text-ink">{messages.length ? title : "New chat"}</h1>
-          <span className="mono-label hidden h-6 items-center rounded-full bg-hover px-2.5 text-[10px] text-ink-2 sm:inline-flex">{spaceName}</span>
-          {isDemoConversation ? <span className="mono-label text-[10px] text-ink-3">Demo</span> : null}
+        <header className="flex h-14 items-center gap-3 border-b border-line px-4 md:px-5">
+          <h1 className="truncate text-[15px] font-medium text-ink">{messages.length ? title : "New chat"}</h1>
+          <span className="hidden h-7 items-center rounded-full bg-hover px-3 text-[12.5px] text-ink-2 sm:inline-flex">{spaceName}</span>
+          {isDemoConversation ? <span className="text-[12.5px] text-ink-3">Demo</span> : null}
           <span className="flex-1" />
           <button
             onClick={() => {
-              setLensOpen((o) => !o);
-              setMobileLens((o) => !o);
+              setLensOpen(true);
+              setMobileLens(true);
             }}
-            className="flex items-center gap-2 rounded-control px-2 py-1.5 text-ink-2 hover:bg-hover hover:text-ink"
-            aria-pressed={lensOpen}
-            aria-label="Toggle memory lens"
+            className={cn(
+              "flex h-9 items-center gap-2 rounded-full px-3 text-[13.5px] text-ink-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover hover:text-ink",
+              lensOpen && "lg:hidden",
+            )}
+            aria-label="Show memory panel"
+            title="Show memory panel (Ctrl/Cmd + .)"
           >
-            <PanelRight className="size-4" strokeWidth={1.75} />
-            <Kbd className="hidden lg:inline-flex">⌘ .</Kbd>
+            <PanelRightOpen className="size-4" strokeWidth={1.75} />
+            Memory
+            {latestAssistant && dataPart(latestAssistant, "recall")?.picks?.length ? (
+              <span className="tabular text-ink-3">{dataPart(latestAssistant, "recall")!.picks!.length}</span>
+            ) : null}
           </button>
         </header>
 
-        <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={scroller} className="relative min-h-0 flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <EmptyState suggestions={suggestions} showDemo={showDemo} onPick={(s) => setPrefill(s)} />
           ) : (
-            <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 pb-10 pt-8">
+            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 pb-10 pt-8 md:px-6">
               {messages.map((m, i) =>
                 m.role === "user" ? (
                   <UserMessage key={m.id} message={m} />
@@ -174,13 +225,13 @@ export function ChatView({
                 ),
               )}
               {status === "submitted" && messages.at(-1)?.role === "user" ? (
-                <p className="mono-label shimmer text-[10.5px]">Recalling…</p>
+                <p className="shimmer text-[14px]">Remembering…</p>
               ) : null}
               {error ? (
                 <div role="alert" className="rounded-card bg-surface p-4 text-[13px] text-ink-2 shadow-card">
-                  <p className="mono-label mb-1 text-[10.5px] text-red">Reply failed</p>
+                  <p className="mb-1 text-[13px] font-medium text-red">Reply failed</p>
                   {/rate|busy|429|quota|fast/i.test(error.message) ? error.message : "Something went wrong getting that reply. Your memory is fine."}
-                  <button onClick={() => void regenerate()} className="mono-label ml-3 text-[10.5px] text-ink underline-offset-4 hover:underline">
+                  <button onClick={() => void regenerate()} className="ml-3 text-[13px] font-medium text-ink underline-offset-4 hover:underline">
                     Retry
                   </button>
                 </div>
@@ -189,30 +240,19 @@ export function ChatView({
           )}
         </div>
 
-        <div className="mx-auto w-full max-w-[760px] px-4 pb-4">
-          <Composer key={prefill ?? "composer"} onSend={send} onStop={stop} busy={busy} initial={prefill} />
+        <div className="mx-auto w-full max-w-[800px] px-3 pb-3 md:px-6 md:pb-5">
+          {!busy && latestUser ? <PendingSaves events={live.forMessage(latestUser.id)} /> : null}
+          <Composer key={prefill ?? "composer"} onSend={send} onStop={stop} busy={busy} initial={prefill} model={model} onModel={writeModel} />
         </div>
       </section>
 
-      {lensOpen ? <div className="hidden w-[360px] shrink-0 border-l border-line lg:block">{lens}</div> : null}
+      {lensOpen ? <div className="relative hidden w-[380px] shrink-0 border-l border-line lg:block">{lens}</div> : null}
       {mobileLens ? (
-        <div className={cn("fixed inset-x-0 bottom-0 z-40 h-[70dvh] animate-fade-up rounded-t-[16px] shadow-overlay lg:hidden")}>
-          <div className="h-full overflow-hidden rounded-t-[16px]">
-            <MemoryLensMobile onClose={() => setMobileLens(false)}>{lens}</MemoryLensMobile>
-          </div>
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Memory">
+          <button className="absolute inset-0 bg-black/40" aria-label="Close memory panel" onClick={() => setMobileLens(false)} />
+          <div className="absolute inset-x-0 bottom-0 h-[78dvh] animate-fade-up overflow-hidden rounded-t-[18px] shadow-overlay">{lens}</div>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function MemoryLensMobile({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="relative h-full">
-      <button onClick={onClose} className="mono-label absolute right-3 top-2.5 z-10 rounded-full bg-grove-2 px-3 py-1 text-[10px] text-grove-ink">
-        Close
-      </button>
-      {children}
     </div>
   );
 }

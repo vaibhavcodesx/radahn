@@ -15,7 +15,7 @@ import { WriteChips } from "./WriteChips";
 export function UserMessage({ message }: { message: RadahnUIMessage }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] whitespace-pre-wrap rounded-card bg-surface-2 px-4 py-2.5 text-[14px] leading-relaxed text-ink shadow-card">
+      <div className="max-w-[85%] whitespace-pre-wrap rounded-[18px] bg-surface-2 px-4 py-3 text-[15.5px] leading-relaxed text-ink shadow-card">
         {messageText(message)}
       </div>
     </div>
@@ -45,10 +45,8 @@ export function AssistantMessage({
 }) {
   const live = useLive();
   const recall = dataPart(message, "recall");
-  const notices = dataParts(message, "notice");
   const ops = dataParts(message, "memory-op");
   const redaction = dataPart(message, "redaction");
-  const model = dataPart(message, "model");
   const text = messageText(message);
   const picks = new Map((recall?.picks ?? []).map((p) => [p.ref, p] as const));
   const [copied, setCopied] = useState(false);
@@ -71,23 +69,17 @@ export function AssistantMessage({
       aria-label="Radahn's reply"
     >
       {redaction ? (
-        <p className="mono-label mb-2 text-[10.5px] text-red">Not saved — looked like a credential ({redaction.kinds.join(", ").replaceAll("_", " ")})</p>
+        <p className="mb-2 text-[13px] text-red">Not saved: that looked like a credential ({redaction.kinds.join(", ").replaceAll("_", " ")}).</p>
       ) : null}
-      {notices.map((n, i) => (
-        <p key={i} className="mono-label mb-2 text-[10.5px] text-t-preference">
-          {n.kind === "changed" ? "Updated since last time: " : "Needs a check: "}
-          <span className="normal-case tracking-normal">{n.text}</span>
-        </p>
-      ))}
 
       <RecallLine recall={recall} />
 
       {ops.length ? (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           {ops.map((o, i) => (
-            <li key={i} className="flex h-6 items-center gap-1.5 rounded-chip bg-hover px-2 text-[11.5px] text-ink-2">
+            <li key={i} className="flex h-7 items-center gap-1.5 rounded-full bg-hover px-2.5 text-[13px] text-ink-2">
               {o.type ? <TypeSwatch type={o.type} size={11} /> : null}
-              <span className="mono-label text-[10px]">{o.op}</span>
+              <span className="font-medium text-ink">{OP_LABEL[o.op] ?? o.op}</span>
               <span className="max-w-[40ch] truncate">
                 {o.status === "blocked" ? "blocked: looked unsafe" : o.before && o.after ? `${o.before} → ${o.after}` : (o.statement ?? o.status)}
               </span>
@@ -96,15 +88,14 @@ export function AssistantMessage({
         </ul>
       ) : null}
 
-      <div className="text-[14.5px] leading-[1.65] text-ink-2 [&_strong]:text-ink">
-        {text ? <Markdown text={normalizeCitations(text)} cite={cite} /> : streaming ? <span className="shimmer">Thinking…</span> : null}
+      <div className="text-[16px] leading-[1.7] text-ink">
+        {text ? <Markdown text={normalizeCitations(text)} cite={cite} /> : streaming ? <span className="shimmer text-[15px]">Thinking…</span> : null}
       </div>
 
       <div className="mt-3 flex min-h-6 flex-wrap items-center gap-x-4 gap-y-2">
         <WriteChips events={writes} waiting={isLatest && !streaming && Boolean(text)} />
         {!streaming && text ? (
           <div className="ml-auto flex items-center gap-0.5 opacity-60 transition-opacity group-hover:opacity-100">
-            {model ? <span className="mono-label mr-2 text-[10px] text-ink-3">{model.fallback ? `fell back to ${model.label}` : model.label}</span> : null}
             <IconBtn
               label={copied ? "Copied" : "Copy"}
               onClick={(e) => {
@@ -124,7 +115,7 @@ export function AssistantMessage({
             {onGhost ? (
               <button
                 onClick={(e) => (e.stopPropagation(), onGhost())}
-                className="mono-label ml-1 flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[10.5px] text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover"
+                className="ml-1 flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover"
               >
                 <Ghost className="size-3.5" /> Without memory
               </button>
@@ -140,22 +131,22 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
   if (!recall) return null;
   if (recall.status === "running")
     return (
-      <p className="mono-label mb-2 flex items-center gap-2 text-[10.5px]">
+      <p className="mb-2 flex items-center gap-2 text-[13px]">
         <PixelLoader />
-        <span className="shimmer">Recalling…</span>
+        <span className="shimmer">Remembering…</span>
       </p>
     );
-  if (recall.status === "error") return <p className="mono-label mb-2 text-[10.5px] text-ink-3">Memory unavailable for this turn</p>;
+  if (recall.status === "error") return <p className="mb-2 text-[13px] text-ink-3">Memory was unavailable for this reply.</p>;
   const n = recall.picks?.length ?? 0;
   return (
-    <p className="mono-label mb-2 flex items-center gap-2 text-[10.5px] text-ink-3">
+    <p className="mb-2 flex items-center gap-2 text-[13px] text-ink-3">
       <span className="flex gap-0.5" aria-hidden>
         {(recall.picks ?? []).slice(0, 8).map((p) => (
           <span key={p.ref} className="size-2 rounded-[1px]" style={{ background: `var(${MEMORY_TYPE_META[p.type].colorVar})` }} />
         ))}
       </span>
-      {n === 0 ? "No memories needed" : `Recalled ${n} · ${Math.round(recall.latencyMs ?? 0)} ms`}
-      {recall.strategies?.length ? <span>· {recall.strategies.length} learned behaviour{recall.strategies.length > 1 ? "s" : ""}</span> : null}
+      {n === 0 ? "No memories needed" : `Used ${n} ${n === 1 ? "memory" : "memories"}`}
+      {recall.strategies?.length ? <span>· {recall.strategies.length} learned rule{recall.strategies.length > 1 ? "s" : ""}</span> : null}
     </p>
   );
 }
@@ -200,9 +191,11 @@ function Citation({ pick, index, onOpen }: { pick: RecallPickWire; index: number
   );
 }
 
+const OP_LABEL: Record<string, string> = { remember: "Remembered", recall: "Searched memory", correct: "Corrected", forget: "Forgot" };
+
 function IconBtn({ children, label, onClick }: { children: React.ReactNode; label: string; onClick: (e: React.MouseEvent) => void }) {
   return (
-    <button onClick={onClick} aria-label={label} title={label} className="rounded-control p-1.5 text-ink-3 hover:bg-hover hover:text-ink">
+    <button onClick={onClick} aria-label={label} title={label} className="rounded-control p-2 text-ink-3 hover:bg-hover hover:text-ink">
       {children}
     </button>
   );

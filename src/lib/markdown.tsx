@@ -1,88 +1,95 @@
-import { Fragment, type ReactNode } from "react";
+"use client";
+
+import { Check, Copy } from "lucide-react";
+import { memo, useState, type ReactNode } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 /**
- * Tiny, safe markdown for assistant replies: paragraphs, bullet/numbered lists, **bold**,
- * *italic*, `code`, and [[mN]] citation tokens. No raw HTML is ever rendered (TRD §14).
- * Citations are resolved by the caller through the turn's recall picks only.
+ * Assistant reply rendering: GitHub-flavoured markdown (headings, lists, fenced code, tables)
+ * via react-markdown, which never renders raw HTML (TRD §14). `[[mN]]` citation tokens become
+ * `#cite-mN` links and are resolved by the caller through the turn's recall picks only.
  */
 export type CitationRenderer = (ref: string, key: string) => ReactNode;
 
-const INLINE = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[\[m\d{1,2}\]\])/g;
+const toLinks = (text: string) => text.replace(/\[\[(m\d{1,2})\]\]/g, "[$1](#cite-$1)");
 
-export function renderInline(text: string, cite: CitationRenderer, keyPrefix: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  let i = 0;
-  for (const piece of text.split(INLINE)) {
-    const key = `${keyPrefix}-${i++}`;
-    if (!piece) continue;
-    if (piece.startsWith("[[m") && piece.endsWith("]]")) out.push(cite(piece.slice(2, -2), key));
-    else if (piece.startsWith("**") && piece.endsWith("**")) out.push(<strong key={key} className="font-semibold text-ink">{piece.slice(2, -2)}</strong>);
-    else if (piece.startsWith("`") && piece.endsWith("`")) out.push(<code key={key} className="rounded-[4px] bg-hover-2 px-1 font-mono text-[12px]">{piece.slice(1, -1)}</code>);
-    else if (piece.startsWith("*") && piece.endsWith("*") && piece.length > 2) out.push(<em key={key}>{piece.slice(1, -1)}</em>);
-    else out.push(<Fragment key={key}>{piece}</Fragment>);
-  }
-  return out;
+function CodeBlock({ lang, code }: { lang?: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="group/code relative my-1 overflow-hidden rounded-control border border-line bg-surface-2">
+      <div className="flex h-8 items-center justify-between border-b border-line px-3">
+        <span className="font-mono text-[11.5px] text-ink-3">{lang || "text"}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void navigator.clipboard.writeText(code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1200);
+          }}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] text-ink-3 hover:bg-hover hover:text-ink"
+          aria-label="Copy code"
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="overflow-x-auto px-4 py-3 font-mono text-[13px] leading-[1.6] text-ink">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
 }
 
-export function Markdown({ text, cite }: { text: string; cite: CitationRenderer }) {
-  const blocks: ReactNode[] = [];
-  const lines = text.replace(/\r/g, "").split("\n");
-  let list: { ordered: boolean; items: string[] } | null = null;
-  let para: string[] = [];
+function components(cite: CitationRenderer): Components {
   let n = 0;
-
-  const flushPara = () => {
-    if (para.length) {
-      const k = `p${n++}`;
-      blocks.push(<p key={k}>{renderInline(para.join(" "), cite, k)}</p>);
-      para = [];
-    }
-  };
-  const flushList = () => {
-    const l = list;
-    if (l) {
-      const k = `l${n++}`;
-      const Tag = l.ordered ? "ol" : "ul";
-      blocks.push(
-        <Tag key={k} className={l.ordered ? "list-decimal pl-5" : "list-none pl-0"}>
-          {l.items.map((it, j) => (
-            <li key={j} className={l.ordered ? "pl-1" : "relative pl-4 before:absolute before:left-0 before:top-[0.62em] before:size-1.5 before:rounded-[1px] before:bg-ink-3"}>
-              {renderInline(it, cite, `${k}-${j}`)}
-            </li>
-          ))}
-        </Tag>,
+  return {
+    a: ({ href, children }) => {
+      const m = href?.match(/^#cite-(m\d{1,2})$/);
+      if (m) return cite(m[1], `c${n++}`);
+      return (
+        <a href={href} target="_blank" rel="noreferrer noopener" className="text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink">
+          {children}
+        </a>
       );
-      list = null;
-    }
+    },
+    p: ({ children }) => <p>{children}</p>,
+    h1: ({ children }) => <h3 className="mt-2 text-[18px] font-semibold text-ink">{children}</h3>,
+    h2: ({ children }) => <h3 className="mt-2 text-[17px] font-semibold text-ink">{children}</h3>,
+    h3: ({ children }) => <h4 className="mt-1 text-[16px] font-semibold text-ink">{children}</h4>,
+    h4: ({ children }) => <h4 className="text-[15.5px] font-semibold text-ink">{children}</h4>,
+    strong: ({ children }) => <strong className="font-semibold text-ink">{children}</strong>,
+    ul: ({ children }) => <ul className="flex list-disc flex-col gap-1.5 pl-5 marker:text-ink-3">{children}</ul>,
+    ol: ({ children }) => <ol className="flex list-decimal flex-col gap-1.5 pl-5 marker:text-ink-3">{children}</ol>,
+    li: ({ children }) => <li className="pl-1">{children}</li>,
+    blockquote: ({ children }) => <blockquote className="border-l-2 border-line-strong pl-4 text-ink-2">{children}</blockquote>,
+    hr: () => <hr className="border-line" />,
+    pre: ({ children }) => <>{children}</>,
+    code: ({ className, children }) => {
+      const text = String(children ?? "");
+      const lang = className?.match(/language-([\w+-]+)/)?.[1];
+      // Fenced blocks carry a language class or span lines; everything else is inline code.
+      if (lang || text.includes("\n")) return <CodeBlock lang={lang} code={text.replace(/\n$/, "")} />;
+      return <code className="rounded-[4px] bg-hover-2 px-1.5 py-0.5 font-mono text-[0.88em] text-ink">{children}</code>;
+    },
+    table: ({ children }) => (
+      <div className="my-1 overflow-x-auto rounded-control border border-line">
+        <table className="w-full border-collapse text-left text-[14px]">{children}</table>
+      </div>
+    ),
+    thead: ({ children }) => <thead className="bg-surface-2 text-ink">{children}</thead>,
+    th: ({ children }) => <th className="border-b border-line px-3 py-2 font-semibold">{children}</th>,
+    td: ({ children }) => <td className="border-b border-line px-3 py-2 align-top">{children}</td>,
   };
-
-  for (const raw of lines) {
-    const line = raw.trimEnd();
-    const bullet = line.match(/^\s*[-*•]\s+(.*)$/);
-    const num = line.match(/^\s*\d+[.)]\s+(.*)$/);
-    const heading = line.match(/^#{1,4}\s+(.*)$/);
-    if (bullet || num) {
-      flushPara();
-      const ordered = Boolean(num);
-      if (!list || list.ordered !== ordered) {
-        flushList();
-        list = { ordered, items: [] };
-      }
-      list.items.push((bullet ?? num)![1]);
-    } else if (heading) {
-      flushPara();
-      flushList();
-      const k = `h${n++}`;
-      blocks.push(<p key={k} className="font-semibold text-ink">{renderInline(heading[1], cite, k)}</p>);
-    } else if (!line.trim()) {
-      flushPara();
-      flushList();
-    } else {
-      flushList();
-      para.push(line.trim());
-    }
-  }
-  flushPara();
-  flushList();
-  return <div className="flex flex-col gap-3">{blocks}</div>;
 }
+
+export const Markdown = memo(function Markdown({ text, cite }: { text: string; cite: CitationRenderer }) {
+  return (
+    <div className="flex flex-col gap-3 [&_tr:last-child_td]:border-b-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components(cite)} skipHtml>
+        {toLinks(text)}
+      </ReactMarkdown>
+    </div>
+  );
+});

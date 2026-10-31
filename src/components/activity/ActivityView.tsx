@@ -74,10 +74,7 @@ export function ActivityView() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-[34px] leading-none tracking-[-0.01em]">Activity</h1>
-            <p className="mono-label mt-3 flex items-center gap-2 text-[10.5px] text-ink-3">
-              <span className={cn("size-1.5 rounded-full", live.connected ? "bg-green" : "bg-ink-3")} />
-              {live.connected ? "Live · MongoDB change stream" : "Reconnecting…"}
-            </p>
+            <p className="mt-3 text-[14px] text-ink-3">{live.connected ? "Everything Radahn remembers, updates and forgets, as it happens." : "Reconnecting…"}</p>
           </div>
           <Button variant="accent" size="sm" icon={<Sparkles className="size-3.5" />} onClick={reflect} disabled={reflecting}>
             {reflecting ? "Reflecting…" : "Reflect now"}

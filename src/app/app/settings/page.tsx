@@ -2,7 +2,6 @@ import Link from "next/link";
 import { SettingsForm } from "@/components/settings/SettingsForm";
 import { requirePageUser } from "@/server/auth/session";
 import { getSettings } from "@/server/app/workspace";
-import { engineKind } from "@/server/memory";
 
 export const metadata = { title: "Settings" };
 
@@ -21,7 +20,7 @@ export default async function SettingsPage() {
         <section className="mt-12 rounded-card bg-surface p-5 text-[12.5px] leading-relaxed text-ink-2 shadow-card">
           <p className="mono-label mb-2 text-[10px] text-ink-3">Privacy</p>
           Radahn runs on the Gemini API free tier, where Google may use prompts to improve its products. Don&apos;t enter real secrets: Radahn
-          redacts credentials before anything is sent or stored, and holds sensitive details for your approval. Engine: <code className="font-mono">{engineKind()}</code>.{" "}
+          redacts credentials before anything is sent or stored, and holds sensitive details for your approval. 
           <Link href="/how-it-works" className="underline underline-offset-4">How memory works</Link>
         </section>
       </div>

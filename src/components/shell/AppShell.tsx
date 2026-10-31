@@ -55,7 +55,6 @@ export function AppShell({
   // Live review badge: server count + pending events seen since load.
   const pendingLive = live.events.filter((e) => e.kind === "pending").length - live.events.filter((e) => e.kind === "approved" || e.kind === "rejected").length;
   const pending = Math.max(0, pendingCount + pendingLive);
-  const freshActivity = live.events.length > 0 && !pathname.startsWith("/app/activity");
 
   // Refresh the server-rendered sidebar (chat titles) when memory events land.
   useEffect(() => {
@@ -91,18 +90,17 @@ export function AppShell({
     { href: "/app", label: "New chat", icon: MessageSquarePlus, kbd: "N", exact: true },
     { href: "/app/memory", label: "Memory", icon: Brain, kbd: "G M" },
     { href: "/app/review", label: "Review", icon: Inbox, kbd: "G R", badge: pending || undefined },
-    { href: "/app/activity", label: "Activity", icon: Activity, kbd: "G A", dot: freshActivity },
+    { href: "/app/activity", label: "Activity", icon: Activity, kbd: "G A" },
     { href: "/app/settings", label: "Settings", icon: Settings, kbd: "G S" },
   ];
 
   const sidebar = (
-    <nav aria-label="Primary" className="flex h-full w-[248px] flex-col bg-surface">
-      <div className="flex items-center justify-between px-4 pb-2 pt-4">
-        <Link href="/" className="flex items-center gap-2">
-          <Image src="/brand/radahn-mark.png" alt="" width={22} height={22} className="rounded-[3px]" />
-          <span className="mono-label text-ink">Radahn</span>
+    <nav aria-label="Primary" className="flex h-full w-[260px] flex-col bg-surface">
+      <div className="flex items-center px-4 pb-3 pt-4">
+        <Link href="/" className="flex items-center gap-2.5">
+          <Image src="/brand/radahn-mark.png" alt="" width={28} height={28} className="rounded-[6px]" />
+          <span className="text-[18px] font-semibold tracking-[-0.01em] text-ink">Radahn</span>
         </Link>
-        <span className={cn("size-1.5 rounded-full", live.connected ? "bg-green" : "bg-ink-3")} title={live.connected ? "Live" : "Reconnecting"} />
       </div>
 
       <div className="px-2 pb-2">
@@ -118,18 +116,16 @@ export function AppShell({
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "group flex h-9 items-center gap-2.5 rounded-control px-2.5 text-[13px] text-ink-2 transition-colors hover:bg-hover hover:text-ink",
+                  "group flex h-10 items-center gap-3 rounded-control px-3 text-[14.5px] text-ink-2 transition-colors hover:bg-hover hover:text-ink",
                   active && "bg-hover-2 text-ink",
                 )}
               >
-                <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
+                <item.icon className="size-[18px] shrink-0" strokeWidth={1.75} />
                 <span className="flex-1">{item.label}</span>
                 {item.badge ? (
-                  <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-t-preference px-1 font-mono text-[10px] text-[var(--t-ink-dark)] tabular">
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-t-preference px-1.5 text-[11.5px] font-medium text-[var(--t-ink-dark)] tabular" aria-label={`${item.badge} waiting`}>
                     {item.badge}
                   </span>
-                ) : item.dot ? (
-                  <span className="size-1.5 rounded-full bg-t-outcome" aria-label="New activity" />
                 ) : (
                   <Kbd className="opacity-0 transition-opacity group-hover:opacity-100">{item.kbd}</Kbd>
                 )}
@@ -140,7 +136,7 @@ export function AppShell({
       </ul>
 
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
-        <p className="mono-label px-4 pb-1.5 text-ink-3">Chats</p>
+        <p className="px-5 pb-1.5 text-[12.5px] font-medium text-ink-3">Chats</p>
         <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {conversations.length === 0 ? (
             <li className="px-2.5 py-2 text-[12.5px] text-ink-3">No chats in this space yet.</li>
@@ -153,13 +149,13 @@ export function AppShell({
                     href={`/app/chat/${c.id}`}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex h-8 items-center gap-2 rounded-control px-2.5 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink",
+                      "flex h-9 items-center gap-2 rounded-control px-3 text-[14px] text-ink-2 hover:bg-hover hover:text-ink",
                       active && "bg-hover-2 text-ink",
                     )}
                     title={`${c.title} · ${timeAgo(c.lastMessageAt)}`}
                   >
                     <span className="truncate">{c.title}</span>
-                    {c.demo ? <span className="mono-label ml-auto shrink-0 text-[9.5px] text-ink-3">Demo</span> : null}
+                    {c.demo ? <span className="ml-auto shrink-0 text-[11.5px] text-ink-3">Demo</span> : null}
                   </Link>
                 </li>
               );
@@ -170,21 +166,21 @@ export function AppShell({
 
       <div className="border-t border-line p-3">
         <div className="flex items-center gap-2">
-          <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-hover-2 font-mono text-[11px] text-ink-2">
+          <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-hover-2 text-[13px] font-medium text-ink-2">
             {user.isAnonymous ? "G" : user.name.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[12.5px] text-ink">{user.isAnonymous ? "Guest" : user.name}</p>
-            <p className="truncate font-mono text-[10.5px] text-ink-3">{engine === "mock" ? "engine: mock" : user.isAnonymous ? "memories last 7 days" : "signed in"}</p>
+            <p className="truncate text-[14px] text-ink">{user.isAnonymous ? "Guest" : user.name}</p>
+            <p className="truncate text-[12px] text-ink-3">{user.isAnonymous ? "Memories kept for 7 days" : "Signed in with Google"}</p>
           </div>
           <ThemeToggle />
         </div>
         {user.isAnonymous ? (
           <Link
             href="/signin?next=/app"
-            className="mono-label mt-2.5 flex h-8 items-center justify-center rounded-full text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover"
+            className="mt-3 flex h-9 items-center justify-center rounded-full text-[13.5px] font-medium text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-hover"
           >
-            Save with Google
+            Keep my memories — sign in
           </Link>
         ) : null}
       </div>
@@ -193,25 +189,31 @@ export function AppShell({
 
   return (
     <Ctx.Provider value={{ currentSpaceId, spaces, user, demoLoaded, engine }}>
-      <div className="flex h-dvh overflow-hidden bg-canvas">
+      <div className="relative flex h-dvh overflow-hidden bg-canvas">
         <aside className="hidden border-r border-line md:block">{sidebar}</aside>
         {mobileOpen ? (
           <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
             <button className="absolute inset-0 bg-black/50" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
-            <div className="relative h-full w-[248px] animate-fade-in shadow-overlay">
+            <div className="relative h-full w-[280px] animate-fade-in shadow-overlay">
               {sidebar}
-              <button onClick={() => setMobileOpen(false)} className="absolute right-2 top-3 rounded-control p-1.5 text-ink-2 hover:bg-hover" aria-label="Close">
-                <X className="size-4" />
+              <button onClick={() => setMobileOpen(false)} className="absolute right-2 top-3 flex size-10 items-center justify-center rounded-control text-ink-2 hover:bg-hover" aria-label="Close">
+                <X className="size-5" />
               </button>
             </div>
           </div>
         ) : null}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-11 items-center gap-2 border-b border-line px-3 md:hidden">
-            <button onClick={() => setMobileOpen(true)} className="rounded-control p-1.5 text-ink-2 hover:bg-hover" aria-label="Open navigation">
-              <PanelLeft className="size-4" />
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          <div className="flex h-12 items-center gap-2 border-b border-line px-2 md:hidden">
+            <button onClick={() => setMobileOpen(true)} className="flex size-10 items-center justify-center rounded-control text-ink-2 hover:bg-hover" aria-label="Open navigation">
+              <PanelLeft className="size-5" />
             </button>
-            <span className="mono-label text-ink-2">Radahn</span>
+            <Image src="/brand/radahn-mark.png" alt="" width={22} height={22} className="rounded-[5px]" />
+            <span className="text-[16px] font-semibold text-ink">Radahn</span>
+            {pending ? (
+              <Link href="/app/review" className="ml-auto mr-1 inline-flex h-7 items-center rounded-full bg-t-preference px-2.5 text-[12px] font-medium text-[var(--t-ink-dark)]">
+                {pending} to review
+              </Link>
+            ) : null}
           </div>
           {children}
         </div>

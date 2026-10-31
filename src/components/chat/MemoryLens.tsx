@@ -1,6 +1,6 @@
 "use client";
 
-import { Ghost, X } from "lucide-react";
+import { Ghost, PanelRightClose } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ScoreBar, TypeSwatch } from "@/components/atoms";
@@ -43,6 +43,7 @@ export interface GhostState {
  */
 export function MemoryLens({
   recall,
+  notices = [],
   assistantId,
   userMessageId,
   replyText,
@@ -53,6 +54,7 @@ export function MemoryLens({
   className,
 }: {
   recall?: RadahnDataParts["recall"];
+  notices?: Array<RadahnDataParts["notice"]>;
   assistantId?: string;
   userMessageId?: string;
   replyText: string;
@@ -65,26 +67,37 @@ export function MemoryLens({
   const live = useLive();
   const writes = userMessageId ? live.forMessage(userMessageId) : [];
   const tabs: Array<{ id: Tab; label: string; n?: number }> = [
-    { id: "recalled", label: "Recalled", n: recall?.picks?.length },
-    { id: "written", label: "Written", n: writes.length || undefined },
-    { id: "trace", label: "Trace" },
-    { id: "ghost", label: "Without" },
+    { id: "recalled", label: "Used", n: recall?.picks?.length },
+    { id: "written", label: "Saved", n: writes.length || undefined },
+    { id: "trace", label: "Why" },
+    { id: "ghost", label: "Without memory" },
   ];
 
   return (
     <aside className={cn("flex h-full min-h-0 flex-col bg-grove text-grove-ink", className)} aria-label="Memory lens">
-      <header className="flex items-center gap-2 border-b border-grove-line px-4 py-3">
-        <span className="mono-label text-grove-ink">Memory lens</span>
-        {recall?.status === "running" ? <PixelLoader /> : null}
+      <header className="flex h-14 items-center gap-2 border-b border-grove-line pl-5 pr-3">
+        <h2 className="text-[15px] font-semibold text-grove-ink">Memory</h2>
+        {recall?.status === "running" ? (
+          <PixelLoader />
+        ) : recall?.status === "done" ? (
+          <span className="text-[13px] text-grove-ink-2">
+            {recall.picks?.length ? `${recall.picks.length} used` : "none needed"}
+            {recall.strategies?.length ? ` · ${recall.strategies.length} rule${recall.strategies.length > 1 ? "s" : ""}` : ""}
+          </span>
+        ) : null}
         <span className="flex-1" />
         {onClose ? (
-          <button onClick={onClose} className="rounded-control p-1 text-grove-ink-2 hover:text-grove-ink" aria-label="Close memory lens">
-            <X className="size-4" />
+          <button
+            onClick={onClose}
+            className="flex size-9 items-center justify-center rounded-control text-grove-ink-2 hover:bg-grove-2 hover:text-grove-ink"
+            aria-label="Hide memory panel"
+            title="Hide memory panel (Ctrl/Cmd + .)"
+          >
+            <PanelRightClose className="size-[18px]" strokeWidth={1.75} />
           </button>
         ) : null}
       </header>
-      <FieldStrip picks={recall?.picks ?? []} running={recall?.status === "running"} />
-      <div role="tablist" className="flex gap-px border-b border-grove-line px-2">
+      <div role="tablist" className="flex gap-1 border-b border-grove-line px-3">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -92,22 +105,20 @@ export function MemoryLens({
             aria-selected={tab === t.id}
             onClick={() => onTab(t.id)}
             className={cn(
-              "mono-label -mb-px flex h-9 items-center gap-1.5 border-b px-2.5 text-[10.5px] transition-colors",
-              tab === t.id ? "border-grove-ink text-grove-ink" : "border-transparent text-grove-ink-2 hover:text-grove-ink",
+              "-mb-px flex h-11 items-center gap-1.5 border-b-2 px-2.5 text-[13.5px] transition-colors",
+              tab === t.id ? "border-grove-ink font-medium text-grove-ink" : "border-transparent text-grove-ink-2 hover:text-grove-ink",
             )}
           >
             {t.label}
-            {t.n ? <span className="tabular opacity-70">{t.n}</span> : null}
+            {t.n ? <span className="tabular text-[12px] opacity-70">{t.n}</span> : null}
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-5 py-5">
         {!recall && tab !== "ghost" ? (
-          <p className="text-[13px] leading-relaxed text-grove-ink-2">
-            Send a message. Every reply shows which memories shaped it, with the real scores behind each pick.
-          </p>
+          <p className="text-[14.5px] leading-relaxed text-grove-ink-2">Send a message. Each reply shows here which memories shaped it and why.</p>
         ) : tab === "recalled" ? (
-          <Recalled recall={recall!} />
+          <Recalled recall={recall!} notices={notices} />
         ) : tab === "written" ? (
           <Written writes={writes} />
         ) : tab === "trace" ? (
@@ -120,62 +131,47 @@ export function MemoryLens({
   );
 }
 
-/** A 40px glyph strip: recalled memories light up as their type blocks (design.md §5). */
-function FieldStrip({ picks, running }: { picks: NonNullable<RadahnDataParts["recall"]["picks"]>; running: boolean }) {
-  const cells = 36;
-  const glyphs = "·:;/\\|";
-  const lit = new Map(picks.slice(0, cells).map((p, i) => [Math.floor(((i * 7 + 3) % cells)), p]));
-  return (
-    <div className="flex h-10 items-center gap-[3px] overflow-hidden border-b border-grove-line px-4 font-mono text-[11px]" aria-hidden>
-      {Array.from({ length: cells }, (_, i) => {
-        const p = lit.get(i);
-        return p ? (
-          <span key={i} className="inline-flex size-3.5 shrink-0 animate-pop-in items-center justify-center rounded-[2px] text-[8px]" style={{ background: `var(${MEMORY_TYPE_META[p.type].colorVar})`, color: MEMORY_TYPE_META[p.type].onSwatch === "dark" ? "var(--t-ink-dark)" : "var(--t-ink-light)", animationDelay: `${i * 18}ms` }}>
-            {MEMORY_TYPE_META[p.type].glyph}
-          </span>
-        ) : (
-          <span key={i} className={cn("w-3.5 shrink-0 text-center text-grove-ink-2", running ? "animate-pixel-on" : "opacity-30")} style={running ? { animationDelay: `${(i * 97) % 1100}ms` } : undefined}>
-            {glyphs[(i * 5) % glyphs.length]}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function Recalled({ recall }: { recall: RadahnDataParts["recall"] }) {
-  if (recall.status === "running") return <p className="shimmer text-[13px]">Searching memory…</p>;
+function Recalled({ recall, notices }: { recall: RadahnDataParts["recall"]; notices: Array<RadahnDataParts["notice"]> }) {
+  if (recall.status === "running") return <p className="shimmer text-[14px]">Searching memory…</p>;
   const picks = recall.picks ?? [];
+  const changes = notices.filter((n) => n.kind === "changed");
   return (
-    <div className="flex flex-col gap-5">
-      <p className="mono-label text-[10px] text-grove-ink-2">
-        Intent {recall.intent} · {recall.channels?.join(" + ")} · {recall.candidateCount ?? 0} candidates · {Math.round(recall.latencyMs ?? 0)} ms
-      </p>
+    <div className="flex flex-col gap-6">
+      {changes.length ? (
+        <section className="rounded-control bg-grove-2 p-3.5">
+          <p className="mb-1.5 text-[12.5px] font-medium text-grove-ink">Changed recently</p>
+          {changes.map((n, i) => (
+            <p key={i} className="text-[13.5px] leading-snug text-grove-ink-2">
+              {n.text}
+            </p>
+          ))}
+        </section>
+      ) : null}
       {picks.length === 0 ? (
-        <p className="text-[13px] text-grove-ink-2">Nothing in memory was relevant enough (score ≥ 0.35) for this message.</p>
+        <p className="text-[14px] text-grove-ink-2">Nothing in memory was relevant enough for this message.</p>
       ) : (
         <ol className="flex flex-col gap-4">
           {picks.map((p) => (
             <li key={p.ref} className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <TypeSwatch type={p.type} size={14} label />
-                <span className="mono-label ml-auto text-[10px] text-grove-ink-2">{p.ref}</span>
+                <span className="ml-auto font-mono text-[12px] tabular text-grove-ink-2">{Number(p.ref.slice(1))}</span>
               </div>
-              <Link href={`/app/memory/${p.memoryId}`} className="font-serif text-[15.5px] leading-snug text-grove-ink hover:underline">
+              <Link href={`/app/memory/${p.memoryId}`} className="font-serif text-[16.5px] leading-snug text-grove-ink hover:underline">
                 {p.statement}
               </Link>
               <ScoreBar scores={p.scores} />
-              <p className="text-[11.5px] leading-snug text-grove-ink-2">{p.why}</p>
+              <p className="text-[13px] leading-snug text-grove-ink-2">{p.why}</p>
             </li>
           ))}
         </ol>
       )}
       {recall.strategies?.length ? (
         <section>
-          <p className="mono-label mb-2 text-[10px] text-grove-ink-2">Learned behaviours (always applied)</p>
+          <p className="mb-2 text-[12.5px] font-medium text-grove-ink">Learned rules applied</p>
           <ul className="flex flex-col gap-1.5">
             {recall.strategies.map((s) => (
-              <li key={s.id} className="flex gap-2 text-[12.5px] leading-snug">
+              <li key={s.id} className="flex gap-2 text-[14px] leading-snug">
                 <TypeSwatch type="strategy" size={12} className="mt-[3px]" />
                 {s.statement}
               </li>
@@ -185,10 +181,10 @@ function Recalled({ recall }: { recall: RadahnDataParts["recall"] }) {
       ) : null}
       {recall.core?.length ? (
         <section>
-          <p className="mono-label mb-2 text-[10px] text-grove-ink-2">Core (pinned, always in context)</p>
+          <p className="mb-2 text-[12.5px] font-medium text-grove-ink">Pinned, always remembered</p>
           <ul className="flex flex-col gap-1.5">
             {recall.core.map((c) => (
-              <li key={c.id} className="flex gap-2 text-[12.5px] leading-snug text-grove-ink-2">
+              <li key={c.id} className="flex gap-2 text-[14px] leading-snug text-grove-ink-2">
                 <TypeSwatch type={c.type} size={12} className="mt-[3px]" />
                 {c.statement}
               </li>
@@ -196,28 +192,37 @@ function Recalled({ recall }: { recall: RadahnDataParts["recall"] }) {
           </ul>
         </section>
       ) : null}
-      <p className="text-[11px] leading-relaxed text-grove-ink-2">
-        final = 0.55·relevance + 0.15·recency + 0.15·importance + 0.10·confidence + type boost
-      </p>
     </div>
   );
 }
 
+const KIND_LABEL: Record<string, string> = {
+  created: "Remembered",
+  confirmed: "Confirmed",
+  superseded: "Updated",
+  pending: "Waiting for your OK",
+  blocked: "Not saved (looked private)",
+  forgotten: "Forgotten",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
 function Written({ writes }: { writes: ReturnType<ReturnType<typeof useLive>["forMessage"]> }) {
   if (writes.length === 0)
-    return <p className="text-[13px] leading-relaxed text-grove-ink-2">Nothing written for this turn yet. Memory updates arrive a few seconds after the reply.</p>;
+    return <p className="text-[14px] leading-relaxed text-grove-ink-2">Nothing new was saved from this turn.</p>;
   return (
     <ul className="flex flex-col gap-3">
       {writes.map((e) => (
         <li key={e.id} className="flex flex-col gap-1">
-          <span className="mono-label flex items-center gap-2 text-[10px] text-grove-ink-2">
-            {e.type ? <TypeSwatch type={e.type as MemoryTypeName} size={11} /> : null}
-            {e.kind} · {e.actor.name}
+          <span className="flex items-center gap-2 text-[14px] text-grove-ink">
+            {e.type ? <TypeSwatch type={e.type as MemoryTypeName} size={12} /> : null}
+            {KIND_LABEL[e.kind] ?? e.kind}
+            {e.type ? <span className="text-grove-ink-2">· {MEMORY_TYPE_META[e.type as MemoryTypeName]?.label ?? e.type}</span> : null}
           </span>
-          <span className="text-[13px] leading-snug">{e.summary}</span>
-          {e.memoryId && e.kind !== "forgotten" ? (
-            <Link href={`/app/memory/${e.memoryId}`} className="mono-label text-[10px] text-grove-ink-2 hover:text-grove-ink">
-              Open memory →
+          {e.diff?.after ? <span className="text-[13.5px] leading-snug text-grove-ink-2">{e.diff.after}</span> : null}
+          {e.memoryId && e.kind !== "forgotten" && e.kind !== "blocked" ? (
+            <Link href={`/app/memory/${e.memoryId}`} className="text-[13px] text-grove-ink-2 underline-offset-4 hover:text-grove-ink hover:underline">
+              Open memory
             </Link>
           ) : null}
         </li>
@@ -245,6 +250,9 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
   if (!trace) return <p className="shimmer text-[13px]">Loading trace…</p>;
   return (
     <div className="flex flex-col gap-4">
+      <p className="text-[13.5px] leading-relaxed text-grove-ink-2">
+        Radahn searched by meaning, by your words and by time, ranked {trace.candidates.length} candidates and kept the best. Score = 0.55 relevance + 0.15 recency + 0.15 importance + 0.10 confidence.
+      </p>
       <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-control bg-grove-line font-mono text-[11px]">
         {Object.entries(trace.latencyMs).map(([k, v]) => (
           <div key={k} className="bg-grove px-2 py-1.5">
@@ -253,10 +261,7 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
           </div>
         ))}
       </dl>
-      <p className="mono-label text-[10px] text-grove-ink-2">
-        {trace.candidates.length} candidates · {trace.channelsRan.join(" + ")}
-      </p>
-      <table className="w-full table-fixed border-collapse text-[11.5px]">
+      <table className="w-full table-fixed border-collapse text-[12.5px]">
         <thead>
           <tr className="mono-label text-left text-[9.5px] text-grove-ink-2">
             <th className="w-5 pb-1.5" />
@@ -309,10 +314,9 @@ function GhostDiff({ ghost, replyText, recall }: { ghost: GhostState; replyText:
             {m === "diff" ? "Diff" : "Side by side"}
           </button>
         ))}
-        <span className="mono-label ml-auto self-center text-[10px] text-grove-ink-2">{ghost.model}</span>
       </div>
       {mode === "diff" ? (
-        <p className="whitespace-pre-wrap rounded-control bg-grove-2 p-3 text-[13px] leading-relaxed">
+        <p className="whitespace-pre-wrap rounded-control bg-grove-2 p-3 text-[14px] leading-relaxed">
           {ops.map((o, i) =>
             o.op === "same" ? (
               <span key={i}>{o.text}</span>
