@@ -10,6 +10,7 @@ import { buildGhostPrompt, buildSystemPrompt } from "./context";
 import { DEMO_MEMORIES } from "./fixtures/demo";
 import type { MemoryEngine } from "./index";
 import { preScan as gatePreScan } from "./gate";
+import { parseAsOf, isHistoricalMemory } from "./historical";
 import type {
   GraphLink,
   MemoryDTO,
@@ -83,6 +84,10 @@ const ageDays = (m: MemoryDTO, now: number) =>
   (now - Math.max(Date.parse(m.updatedAt), m.stats.lastConfirmedAt ? Date.parse(m.stats.lastConfirmedAt) : 0)) /
   86_400_000;
 
+function historicalMockMetadata(m:MemoryDTO,at:Date):MemoryDTO {
+  const unknown=Date.parse(m.updatedAt)>+at || (m.stats.lastConfirmedAt!==undefined&&Date.parse(m.stats.lastConfirmedAt)>+at);
+  return {...m,updatedAt:Date.parse(m.updatedAt)>+at?m.validFrom:m.updatedAt,stats:{...m.stats,...(unknown?{confirmCount:0,lastConfirmedAt:undefined}:{})}};
+}
 const isLive = (m: MemoryDTO, now: number) =>
   m.status === "active" && (!m.expiresAt || Date.parse(m.expiresAt) > now);
 
@@ -142,15 +147,16 @@ const baseMock: MemoryEngine = {
   async recall(input) {
     const t0 = performance.now();
     const s = state(input.ownerId);
-    const now = Date.now();
+    const asOf = parseAsOf(input.asOf);
+    const now = asOf ? +asOf : Date.now();
     const intent = input.intent ?? detectIntent(input.query);
     const q = new Set(tokens(`${input.query} ${input.previousUserMessage ?? ""}`));
     const pool = [...s.memories.values()].filter(
       (m) =>
-        isLive(m, now) &&
+        (asOf ? isHistoricalMemory(m, asOf) : isLive(m, now)) &&
         (m.spaceKey === "global" || m.spaceKey === input.spaceKey) &&
         (!input.types || input.types.includes(m.type)),
-    );
+    ).map(m=>asOf?historicalMockMetadata(m,asOf):m);
 
     const core = pool.filter((m) => m.pinned);
     const strategies = pool
@@ -211,7 +217,7 @@ const baseMock: MemoryEngine = {
         continue;
       }
       c.selected = true;
-      const m = s.memories.get(c.memoryId)!;
+      const m = pool.find(m=>m.id===c.memoryId)!;
       if (c.reasons.length === 0) c.reasons.push("high_importance");
       picks.push({
         ref: `m${picks.length + 1}`,
@@ -228,7 +234,7 @@ const baseMock: MemoryEngine = {
       });
     }
 
-    for (const p of picks) {
+    if (!asOf) for (const p of picks) {
       const m = s.memories.get(p.memoryId)!;
       m.stats.recallCount++;
       m.stats.lastRecalledAt = new Date().toISOString();
@@ -238,6 +244,7 @@ const baseMock: MemoryEngine = {
     const recallId = input.persistTrace === false ? "" : new ObjectId().toHexString();
     const result = {
       recallId,
+      ...(asOf ? {asOf:asOf.toISOString()} : {}),
       intent,
       channelsRan: ["semantic", "lexical"] as Array<"semantic" | "lexical">,
       picks,
@@ -254,6 +261,7 @@ const baseMock: MemoryEngine = {
         conversationId: input.conversationId,
         messageId: input.messageId,
         query: input.query,
+        ...(asOf ? {asOf:asOf.toISOString()} : {}),
         intent,
         channelsRan: result.channelsRan,
         candidates: result.candidates,
@@ -340,7 +348,7 @@ const baseMock: MemoryEngine = {
     }
     if (!target || target.status !== "active") return { status: "not_found" };
     const now = new Date().toISOString();
-    const next = newMemory({ ...target, id: undefined as unknown as string, statement: input.newStatement.slice(0, 240), supersedes: target.id, supersedeReason: input.reason ?? "correction", status: "active" });
+    const next = newMemory({ ...target, id: undefined as unknown as string, validFrom:now,createdAt:now,updatedAt:now,stats:{recallCount:0,confirmCount:0,citedCount:0}, statement: input.newStatement.slice(0, 240), supersedes: target.id, supersedeReason: input.reason ?? "correction", status: "active" });
     next.id = new ObjectId().toHexString();
     target.status = "superseded";
     target.supersededBy = next.id;
@@ -419,11 +427,12 @@ const baseMock: MemoryEngine = {
 
   async listMemories(input) {
     const s = state(input.ownerId);
+    const asOf=parseAsOf(input.asOf);
     const statuses = input.statuses ?? ["active", "pending_review", "superseded"];
     const q = input.q?.toLowerCase();
     const list = [...s.memories.values()].filter(
       (m) =>
-        statuses.includes(m.status) &&
+        statuses.includes(m.status) && (!asOf || isHistoricalMemory(m,asOf)) &&
         (!input.types?.length || input.types.includes(m.type)) &&
         (input.spaceKey === "all" || !input.spaceKey || m.spaceKey === input.spaceKey || m.spaceKey === "global") &&
         (!q || m.statement.toLowerCase().includes(q)),
@@ -436,7 +445,7 @@ const baseMock: MemoryEngine = {
           ? b.stats.recallCount - a.stats.recallCount
           : Date.parse(key === "created" ? b.createdAt : b.updatedAt) - Date.parse(key === "created" ? a.createdAt : a.updatedAt),
     );
-    return list.slice(0, input.limit ?? 200);
+    return list.slice(0, input.limit ?? 200).map(m=>asOf?historicalMockMetadata(m,asOf):m);
   },
 
   async getMemory(ownerId, memoryId) {

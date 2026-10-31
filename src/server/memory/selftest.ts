@@ -7,7 +7,7 @@ import { embed } from "@/server/llm/registry";
 import { recall } from "./recall";
 import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
-import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
+import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories } from "./tools";
 import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
@@ -21,7 +21,7 @@ class SelfTestAssertion extends Error {}
 export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
   const ownerId=`eval:selftest:${Date.now()}:${randomUUID()}`;
-  const isolatedOwners=[ownerId,`${ownerId}:conflicts`];
+  const isolatedOwners=[ownerId,`${ownerId}:conflicts`,`${ownerId}:history`];
   const spaceKey=new ObjectId().toHexString(), c=collections(), checks:SelfTestCheck[]=[];
   const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
   try {
@@ -144,6 +144,21 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       const resolved=await resolveConflict({ownerId:conflictOwner,keepId:rows[1]._id.toHexString(),dropIds:[rows[0]._id.toHexString()]});
       const old=await c.memories.findOne({ownerId:conflictOwner,_id:rows[0]._id});
       if(resolved.status!=="resolved" || old?.status!=="superseded" || old.supersedeReason!=="conflict_resolution" || !old.validTo || !await c.events.findOne({ownerId:conflictOwner,memoryId:rows[0]._id,kind:"superseded"}))throw new SelfTestAssertion("Conflict resolution history failed");
+    });
+    await check("historical-validity-and-supersession-boundary",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No history fixture");
+      const historyOwner=isolatedOwners[2],now=new Date(),boundary=new Date(+now-3600000),past=new Date(+boundary-1000),scope=new ObjectId().toHexString(),oldId=new ObjectId(),newId=new ObjectId();
+      const base={...sample,ownerId:historyOwner,spaceKey:scope,type:"constraint" as const,subject:"selftest",attribute:"historical_deadline",slotKey:"selftest.historical_deadline",pinned:false,entities:["synthetic-history"],evidenceIds:[],relatedIds:[],source:{kind:"seed" as const,actor:{kind:"system" as const,name:"selftest"}},stats:{recallCount:0,confirmCount:0,citedCount:0}};
+      delete base.expiresAt;delete base.purgeAt;delete base.contentHash;delete base.validTo;delete base.supersedes;delete base.supersededBy;
+      await c.memories.insertMany([
+        {...base,_id:oldId,statement:"The historical deadline was 9 PM.",value:"9 PM",status:"superseded",validFrom:new Date(+boundary-3600000),validTo:boundary,supersededBy:newId,createdAt:new Date(+boundary-3600000),updatedAt:boundary},
+        {...base,_id:newId,statement:"The historical deadline is 10 PM.",value:"10 PM",status:"active",validFrom:boundary,supersedes:oldId,createdAt:boundary,updatedAt:boundary},
+      ]);
+      const before=await listMemories({ownerId:historyOwner,spaceKey:scope,asOf:past.toISOString()});
+      const at=await listMemories({ownerId:historyOwner,spaceKey:scope,asOf:boundary.toISOString()});
+      if(before.length!==1||before[0].id!==oldId.toHexString()||at.length!==1||at[0].id!==newId.toHexString())throw new SelfTestAssertion("Historical list boundary failed");
+      const result=await recall({ownerId:historyOwner,spaceKey:scope,query:"Plan around my deadline",asOf:past.toISOString(),persistTrace:false});
+      if(!result.picks.some(p=>p.memoryId===oldId.toHexString())||result.picks.some(p=>p.memoryId===newId.toHexString())||result.notices.some(n=>n.kind==="changed"))throw new SelfTestAssertion("Historical recall leaked a future version");
     });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});

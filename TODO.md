@@ -67,3 +67,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C11 engine implemented 06:34: owner-scoped cached conflict pairs and transactional resolution; additive conflict cache fields and two facade methods pre-approved overnight. Claude owns Review inbox routing/UI.
 
 - [ ] [codex] C11 lead UI handoff: listConflicts(ownerId) returns pairs and resolveConflict({ownerId,keepId,dropIds,actor?}) writes superseded history. Review is explicitly bounded to the most recent60 live units, top40 cosine pairs, at most12 model judgments; pagination/exhaustive review remains future work.
+
+- [x] [codex] C12 engine implemented 06:43: historical asOf list/recall filters, validity boundaries, historical prompt labeling and mock parity. TTL-deleted/forgotten history remains unavailable.
+
+- [ ] [codex] C12 lead handoff: pass optional validated absolute ISO asOf from GET /api/memories into listMemories; add asOf to src/server/chat/tools.ts recall_memory schema/execution and include snapshot time in historical tool results. Natural-language past-state questions need that explicit tool argument. Historical content follows validFrom/validTo, not a full transaction-time metadata audit.

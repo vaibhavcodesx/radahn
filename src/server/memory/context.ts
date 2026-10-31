@@ -50,6 +50,9 @@ export function buildSystemPrompt(input: BuildContextInput): BuiltContext {
 
   sections.push(`## Now\n${fmtNow(now, timeZone)} · space: ${spaceName}`);
 
+  if (recall.asOf) {
+    sections.push(`## Historical snapshot\nMemories below were valid as of ${recall.asOf}; do not present them as current facts. This is retained valid-time content, not a complete transaction-time audit.`);
+  }
   if (recall.strategies.length) {
     sections.push(
       `## Learned behaviours\n${recall.strategies.map((s: MemoryDTO) => `- ${s.statement}`).join("\n")}`,
