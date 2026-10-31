@@ -5,6 +5,9 @@ import { engine } from "@/server/memory";
 import { DEMO_CONVERSATIONS, DEMO_SPACES } from "@/server/memory/fixtures/demo";
 import { updateSettings } from "./workspace";
 
+/** The demo persona's name; cleared again when the demo is removed. */
+export const DEMO_DISPLAY_NAME = "Aarav";
+
 /**
  * Demo world (PRD F-03, TRD §15). The app owns spaces + conversations + messages; the engine
  * owns memories + events. Re-seeding replaces everything flagged `demo: true` for this owner.
@@ -67,7 +70,7 @@ export async function seedDemoWorld(ownerId: string): Promise<{ spaceId: string;
 
   const eng = await engine();
   const result = await eng.seedDemo({ ownerId, spaceIds, conversations: convs });
-  await updateSettings(ownerId, { demoLoadedAt: new Date(), currentSpaceId: spaceIds.project, displayName: "Aarav" });
+  await updateSettings(ownerId, { demoLoadedAt: new Date(), currentSpaceId: spaceIds.project, displayName: DEMO_DISPLAY_NAME });
   return { spaceId: spaceIds.project, memories: result.memories };
 }
 
@@ -75,6 +78,10 @@ export async function removeDemoWorld(ownerId: string, opts: { keepSpaces?: bool
   const { spaces, conversations, messages } = collections();
   await messages.deleteMany({ ownerId, demo: true });
   await conversations.deleteMany({ ownerId, demo: true });
-  if (!opts.keepSpaces) await spaces.deleteMany({ ownerId, demo: true });
+  if (!opts.keepSpaces) {
+    await spaces.deleteMany({ ownerId, demo: true });
+    // Without the demo, memories should be about the real user, not the persona.
+    await collections().settings.updateOne({ _id: ownerId, displayName: DEMO_DISPLAY_NAME }, { $unset: { displayName: "", demoLoadedAt: "" } });
+  }
   await (await engine()).removeDemo(ownerId);
 }
