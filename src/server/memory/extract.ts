@@ -9,7 +9,7 @@ import { writeCandidates } from "./write";
 export const candidateSchema=z.object({statement:z.string().max(2000),type:z.enum(MEMORY_TYPES),subject:z.string().optional(),attribute:z.string().optional(),value:z.string().optional(),entities:z.array(z.string()).max(30),importance:z.number().min(1).max(10),confidence:z.number().min(0).max(1),sensitivity:z.enum(SENSITIVITIES),scope:z.enum(["global","space"]),expiresAt:z.iso.datetime({offset:true}).optional(),validFrom:z.iso.datetime({offset:true}).optional(),explicit:z.boolean(),hint:z.enum(["new","update","confirm"]),targetRef:z.string().optional()});
 export const extractionSchema=z.object({memories:z.array(candidateSchema).max(5)});
 export async function extractAndWrite(input:ExtractInput):Promise<WriteSummary> {
-  const {object}=await generateStructured("fast",{prompt:extractionPrompt(input),schema:extractionSchema,timeoutMs:20000});
+  const {object}=await generateStructured("fast",{prompt:extractionPrompt(input),schema:extractionSchema,thinking:"low",totalTimeoutMs:8_000});
   const parsed=extractionSchema.safeParse(object);
   if(!parsed.success)throw new Error("Extraction response failed validation");
   const memories=parsed.data.memories;

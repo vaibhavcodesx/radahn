@@ -125,3 +125,20 @@ it("validates the effective explicit destination before embedding or writing",as
  await expect(rememberExplicit({ownerId:"alice",spaceKey,scope:"global",allowedSpaceKeys:[spaceKey],statement:"Aarav likes tea.",type:"preference",source:{kind:"agent_api",actor:{kind:"external_agent",name:"codex"}}})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
  expect(mock.embed).not.toHaveBeenCalled();expect(mock.mem.insertOne).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
 });
+
+it("caps extraction inference at eight seconds with explicit low thinking",async()=>{
+ await extractAndWrite(input);
+ expect(mock.generateStructured.mock.calls[0][1]).toMatchObject({thinking:"low",totalTimeoutMs:8_000});
+});
+
+it("returns an empty message summary without embedding or fabricated events",async()=>{
+ mock.generateStructured.mockResolvedValue({object:{memories:[]}});
+ expect(await extractAndWrite(input)).toEqual({messageId:"message",added:0,confirmed:0,superseded:0,pending:0,blocked:0,ops:[],notices:[]});
+ expect(mock.embed).not.toHaveBeenCalled();expect(mock.events.insertOne).not.toHaveBeenCalled();
+});
+it("embeds unambiguous candidates together without invoking reconciliation",async()=>{
+ mock.generateStructured.mockResolvedValue({object:{memories:[candidate({subject:undefined,attribute:undefined}),candidate({statement:"Aarav prefers short plans.",type:"preference",subject:undefined,attribute:undefined})]}});
+ expect((await extractAndWrite(input)).added).toBe(2);
+ expect(mock.embed).toHaveBeenCalledTimes(1);expect(mock.embed.mock.calls[0][0]).toHaveLength(2);
+ expect(mock.generateStructured).toHaveBeenCalledTimes(1);
+});
