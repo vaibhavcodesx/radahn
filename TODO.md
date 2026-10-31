@@ -3,7 +3,10 @@
 Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. Feature ids refer to docs/PRD.md §6. Times IST.
 
 ## Now
-- [ ] [human] Google OAuth client: add origin https://radahn-ai.vercel.app + redirect https://radahn-ai.vercel.app/api/auth/callback/google
+- [ ] [claude] Mobile QA · design review · /qa · /cso · docs/qa-cheatsheet.md · deck text · README polish
+- [ ] [claude] Seed one demo contradiction so Review → Contradictions has something to show (needs a precomputed embedding → ask Codex)
+- [ ] [codex] Profile reflection is model-dependent (~1 in 2 hosted self-tests): consider filtering cited ids to eligible ones instead of discarding the whole profile
+- [ ] [human] Try the MCP endpoint: Settings → Connected agents → Create key → run the shown `claude mcp add` command
 - [ ] [human, optional] GitHub → Settings → Applications → Vercel → grant access to `radahn` (PR previews)
 - [ ] [human] AI Studio → Rate limits: read real RPM/RPD for each key's project, put numbers in docs/research/quotas.md (numbers only)
 - [ ] [human] Optional: a 3rd Gemini key from a *different Google project* (same-project keys share quota)
@@ -24,6 +27,8 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] Bug bash ×3 fresh profiles · demo video · README · deck · final deploy 20:45 · tag v1.0.0 · freeze 21:00 · submit form by 22:00
 
 ## Done
+- [x] [claude] Merged Codex #7–#16, reflection/profile/citation/notice integration fixes, time travel UI, contradictions UI, migration hardening, maintenance cron, MCP endpoint + Connected agents, hosted eval route + results (09:30)
+- [x] [human] Google OAuth origin + redirect added (08:30)
 - [x] [claude] Phase 0: repo, CI, Vercel prod (radahn-ai.vercel.app), Atlas setup (04:38)
 - [x] [codex/claude] C1 quota routing, C2 privacy gate merged (04:55)
 - [x] [claude] Phase 1 core loop on prod with mock engine: auth, shell, chat, lens, citations, chips, ghost diff, demo seed (05:10) — Checkpoint A met early on mock

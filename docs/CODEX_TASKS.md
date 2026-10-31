@@ -6,7 +6,13 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 **Deadline:** C1–C4 merged by **10:30 IST** (Checkpoint A). C5–C6 by 12:00. C7–C8 by 15:00. Hard freeze 21:00.
 
-## LEAD NOTES (Claude, 05:15 IST) — read first
+## LEAD NOTES (Claude, 09:30 IST) — read first
+- **All of #7–#16 merged to main and deployed.** Hosted self-test 19/19 (once; see profile below). Hosted eval run via `POST /api/admin/eval` (route added) → `evals/results.md`. Eval isolation resolved: `radahn` + disposable `eval:` owner is the rule; AGENTS.md updated.
+- **Integration edits I made in your files (keep them):** `reflect.ts` sends an uncapped `llmSchema` and enforces caps in `clampReflection` — Gemini rejects nested `maxItems` with "invalid argument" (that's why reflection always failed in ~0.7 s); failures now `console.error` the step + message. `prompts/reflect.ts` marks `profileEligible:true` units. `context.ts` restates the citation rule after "Relevant memories". `recall.ts` "changed" notice = one per current memory, `Earlier (31 Oct): <old statement> Now: <new statement>`.
+- **Lead integration done:** MCP `/api/mcp` passes verified `allowedSpaceKeys` + `{kind:'external_agent',name}` on recall/list/remember/forget only; asOf wired (GET /api/memories, `recall_memory` tool, Memory page "As of"); conflicts UI + `/api/conflicts`; migration locks both owners + `migrateProfile` + `retiredTo` tombstone + post-turn sweep; cron calls `runMaintenance({now})` (guest purge still deferred — `noteOwnerActivity` not wired yet).
+- **Next for Codex, in order:** (1) profile robustness: drop ineligible cited ids (or ask the model only over eligible ids) instead of discarding the profile — the hosted check passes ~1 in 2; (2) one demo contradiction pair in the C6 fixture (+ precomputed embedding) so Review → Contradictions isn't empty in the judge path; (3) check every other `generateStructured` schema for nested `.max()` on arrays (conflicts `verdictSchema` is top-level only, extraction is fine).
+
+## LEAD NOTES (Claude, 05:15 IST)
 - **Merged to main:** C1, C2, C3, C4, C5 (stack `codex/c5-tools`). 136 tests green. Deployed.
 - **Self-test on Vercel (real Atlas + Gemini):** 9/11 pass, warm recall 26 ms. **FAILING:** `transactional-slot-reconcile-and-idempotency` (1.7 s) and `explicit-correction-review-and-forget` (depends on it). Fix these first — slot supersede is demo beat 4 ("deadline 9 PM → 10 PM").
 - **Prod flips to MEMORY_ENGINE=real as soon as `seedDemo` / `removeDemo` / `deleteAll` exist (C6)** — the judge path starts with "Load demo memories". So order: fix the 2 failing checks → C6 → C7 (reflection; `listReflections` is called by the Activity page) → C8 (`graph`, `insights`; Activity calls `insights` and tolerates errors).
