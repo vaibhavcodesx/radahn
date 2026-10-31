@@ -1,6 +1,6 @@
 # Recording guide (OBS) — Radahn demo, final cut ≈ 2:40
 
-You record **11 short silent clips**. Record each one a bit longer than its final length (2 s still at the start and end, natural speed in between); the editor trims and speeds up the waiting parts. Do them **in order**, in one sitting, without reloading the demo in between (later clips depend on earlier ones).
+You record **12 short silent clips**. Record each one a bit longer than its final length (2 s still at the start and end, natural speed in between); the editor trims and speeds up the waiting parts. Do them **in order**, in one sitting, without reloading the demo in between (later clips depend on earlier ones).
 
 Voice-over lines are in [`voiceover.md`](voiceover.md); the editor matches clip ↔ audio by number using [`manifest.json`](manifest.json).
 
