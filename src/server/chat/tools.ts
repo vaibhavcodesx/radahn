@@ -57,15 +57,19 @@ export function memoryTools(ctx: {
     }),
 
     recall_memory: tool({
-      description: "Search long-term memory for something specific, e.g. 'what do you know about my internships?'.",
+      description:
+        "Search long-term memory for something specific, e.g. 'what do you know about my internships?'. For questions about the past ('what did I believe last week?', 'what was my deadline on Monday?') pass asOf: the absolute ISO time to look back to.",
       inputSchema: z.object({
         query: z.string().min(2),
         types: z.array(z.enum(MEMORY_TYPES)).optional(),
+        asOf: z.string().datetime({ offset: true }).optional().describe("Absolute ISO timestamp for a past snapshot"),
       }),
-      execute: async ({ query, types }) => {
-        const r: RecallResult = await engine.recall({ ownerId, spaceKey, query, types, limit: 8, persistTrace: false });
-        writer.write({ type: "data-memory-op", data: { op: "recall", status: "done", statement: `${r.picks.length} found for “${query.slice(0, 60)}”` } });
-        return r.picks.map((p) => ({ type: p.type, statement: p.statement, ageDays: Math.round(p.ageDays) }));
+      execute: async ({ query, types, asOf }) => {
+        const r: RecallResult = await engine.recall({ ownerId, spaceKey, query, types, asOf, limit: 8, persistTrace: false });
+        const when = asOf ? ` as of ${asOf.slice(0, 10)}` : "";
+        writer.write({ type: "data-memory-op", data: { op: "recall", status: "done", statement: `${r.picks.length} found for “${query.slice(0, 60)}”${when}` } });
+        const picks = r.picks.map((p) => ({ type: p.type, statement: p.statement, ageDays: Math.round(p.ageDays) }));
+        return asOf ? { snapshotAsOf: asOf, note: "These were valid then; they may have changed since.", memories: picks } : picks;
       },
     }),
 

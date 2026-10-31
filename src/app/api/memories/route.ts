@@ -17,6 +17,8 @@ export const GET = handle(async (req: Request) => {
   const statuses = z.array(z.enum(MEMORY_STATUSES)).optional().parse(list(url.searchParams.get("status")));
   const sort = z.enum(["updated", "importance", "recalled", "created"]).optional().parse(url.searchParams.get("sort") ?? undefined);
   const spaceKey = url.searchParams.get("spaceKey") ?? "all";
+  // Time travel (C12): the list as it was valid at an absolute instant.
+  const asOf = z.string().datetime({ offset: true }).optional().parse(url.searchParams.get("asOf") ?? undefined);
   const memories = await (await engine()).listMemories({
     ownerId: user.id,
     spaceKey,
@@ -24,9 +26,10 @@ export const GET = handle(async (req: Request) => {
     statuses,
     q: url.searchParams.get("q")?.slice(0, 100) || undefined,
     sort,
+    asOf,
     limit: 300,
   });
-  return json({ memories });
+  return json({ memories, ...(asOf ? { asOf } : {}) });
 });
 
 const Create = z.object({

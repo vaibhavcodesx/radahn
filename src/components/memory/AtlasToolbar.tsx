@@ -11,6 +11,13 @@ const STATUS_OPTS = [
   { v: "superseded", label: "Outdated" },
   { v: "expired", label: "Expired" },
 ];
+const ASOF_OPTS = [
+  { v: "", label: "Now" },
+  { v: "1h", label: "1 hour ago" },
+  { v: "1d", label: "Yesterday" },
+  { v: "3d", label: "3 days ago" },
+  { v: "7d", label: "A week ago" },
+];
 const SORT_OPTS = [
   { v: "updated", label: "Recently updated" },
   { v: "importance", label: "Importance" },
@@ -24,7 +31,9 @@ export function AtlasToolbar({
   sort,
   space,
   spaces,
+  asof,
 }: {
+  asof?: string;
   q: string;
   type?: string;
   status?: string;
@@ -64,6 +73,7 @@ export function AtlasToolbar({
           className="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
         />
       </form>
+      <Select label="As of" value={asof ?? ""} options={ASOF_OPTS} onChange={(v) => set("asof", v || undefined)} />
       <Select label="Status" value={status ?? ""} options={STATUS_OPTS} onChange={(v) => set("status", v || undefined)} />
       <Select label="Space" value={space} options={spaces.map((s) => ({ v: s.id, label: s.name }))} onChange={(v) => set("space", v === "all" ? undefined : v)} />
       <Select label="Sort" value={sort} options={SORT_OPTS} onChange={(v) => set("sort", v === "updated" ? undefined : v)} />

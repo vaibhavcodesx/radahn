@@ -12,6 +12,10 @@ import type { MemoryStatus } from "@/server/memory/types";
 export const metadata = { title: "Memory" };
 
 const STATUSES: MemoryStatus[] = ["active", "pending_review", "superseded", "expired"];
+const ASOF_MS: Record<string, number> = { "1h": 3_600_000, "1d": 86_400_000, "3d": 3 * 86_400_000, "7d": 7 * 86_400_000 };
+/** Request-time clock read lives outside the component (react-hooks/purity). */
+const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
+const ASOF_LABEL: Record<string, string> = { "1h": "1 hour ago", "1d": "yesterday", "3d": "3 days ago", "7d": "a week ago" };
 
 export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memory">) {
   const sp = await searchParams;
@@ -23,16 +27,21 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
   const sort = (["updated", "importance", "recalled", "created"] as const).find((s) => s === one("sort")) ?? "updated";
   const space = one("space") ?? "all";
   const view = one("view") === "field" ? "field" : "table";
+  // Time travel (C12): rebuild the table from what was valid at that instant.
+  const asof = Object.keys(ASOF_MS).find((k) => k === one("asof"));
+  const asOfIso = asof ? isoAgo(ASOF_MS[asof]) : undefined;
 
   const eng = await engine();
   const [all, spaces] = await Promise.all([
-    eng.listMemories({ ownerId: user.id, spaceKey: "all", statuses: STATUSES, limit: 400 }),
+    asOfIso
+      ? eng.listMemories({ ownerId: user.id, spaceKey: "all", asOf: asOfIso, limit: 400 })
+      : eng.listMemories({ ownerId: user.id, spaceKey: "all", statuses: STATUSES, limit: 400 }),
     listSpaces(user.id),
   ]);
   const spaceName = new Map<string, string>([["global", "Global"], ...spaces.map((s) => [s._id.toHexString(), s.name] as [string, string])]);
 
   const rows = all
-    .filter((m) => (!type || m.type === type) && (status ? m.status === status : m.status !== "expired" || one("status") === "expired"))
+    .filter((m) => (!type || m.type === type) && (asOfIso || (status ? m.status === status : m.status !== "expired" || one("status") === "expired")))
     .filter((m) => space === "all" || m.spaceKey === space || (space !== "global" && m.spaceKey === "global"))
     .filter((m) => !q || m.statement.toLowerCase().includes(q.toLowerCase()) || m.entities.some((e) => e.includes(q.toLowerCase())))
     .sort((a, b) =>
@@ -43,7 +52,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
   const counts = MEMORY_TYPE_LIST.map((t) => ({ t, n: active.filter((m) => m.type === t).length })).filter((c) => c.n > 0);
   const href = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { view: view === "field" ? "field" : undefined, type, status, q, sort: sort === "updated" ? undefined : sort, space: space === "all" ? undefined : space, ...patch };
+    const merged = { view: view === "field" ? "field" : undefined, asof, type, status, q, sort: sort === "updated" ? undefined : sort, space: space === "all" ? undefined : space, ...patch };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return `/app/memory${s ? `?${s}` : ""}`;
@@ -97,8 +106,19 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
           status={status}
           sort={sort}
           space={space}
+          asof={asof}
           spaces={[{ id: "all", name: "All spaces" }, { id: "global", name: "Global" }, ...spaces.map((s) => ({ id: s._id.toHexString(), name: s.name }))]}
         />
+
+        {asOfIso ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-4 py-3 shadow-card">
+            <p className="text-[13px] text-ink-2">
+              <span className="mono-label mr-2 text-[10px] text-orange">TIME TRAVEL</span>
+              What Radahn believed {ASOF_LABEL[asof!]} · {new Date(asOfIso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })}. Later corrections are hidden.
+            </p>
+            <Link href={href({ asof: undefined })} className="mono-label text-[10px] text-ink underline underline-offset-4">Back to now</Link>
+          </div>
+        ) : null}
 
         {view === "field" ? (
           <AtlasField spaceNames={Object.fromEntries(spaceName)} />
@@ -134,7 +154,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                     <td className="max-w-[460px] px-4 py-2.5">
                       <Link href={`/app/memory/${m.id}`} className="flex items-start gap-2.5 focus-visible:outline-2">
                         <TypeSwatch type={m.type as MemoryTypeName} status={m.status} size={14} className="mt-[2px]" />
-                        <span className={cn("text-ink", m.status === "superseded" && "text-ink-3 line-through")}>{m.statement}</span>
+                        <span className={cn("text-ink", m.status === "superseded" && !asOfIso && "text-ink-3 line-through")}>{m.statement}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-2.5 text-ink-2">{MEMORY_TYPE_META[m.type as MemoryTypeName].label}</td>
@@ -145,7 +165,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                     <td className="px-3 py-2.5 font-mono text-[11px] text-ink-3">{timeAgo(m.updatedAt)}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn("mono-label text-[9.5px]", m.status === "active" ? "text-ink-3" : m.status === "pending_review" ? "text-orange" : "text-ink-3")}>
-                        {m.expiresAt && m.status === "active" ? `EXPIRES ${timeAgo(m.expiresAt).replace(" ago", "")}`.replace("EXPIRES just now", "EXPIRING") : STATUS_LABEL[m.status]}
+                        {asOfIso ? "VALID THEN" : m.expiresAt && m.status === "active" ? `EXPIRES ${timeAgo(m.expiresAt).replace(" ago", "")}`.replace("EXPIRES just now", "EXPIRING") : STATUS_LABEL[m.status]}
                       </span>
                       {m.demo ? <span className="mono-label ml-2 text-[9.5px] text-ink-3">DEMO</span> : null}
                     </td>
