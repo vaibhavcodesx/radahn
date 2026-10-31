@@ -88,3 +88,11 @@ describe("clampReflection", () => {
     expect(out.strategies.map((s) => s.trigger)).toEqual(["planning"]);
   });
 });
+
+it('holds personal consolidation for consent without retiring the active evidence',async()=>{
+ rows=[unit({sensitivity:'personal'}),unit({sensitivity:'personal'})];
+ mock.settings.findOne.mockResolvedValue({writePolicy:'auto'});
+ mock.generate.mockResolvedValue({object:output({merges:[{statement:'Aarav prefers concise bullet answers.',evidenceIds:rows.map(m=>m._id.toHexString())}]})});
+ await runReflection({ownerId,spaceKey,trigger:'manual'});
+ expect(mock.mem.insertOne.mock.calls[0][0].status).toBe('pending_review');expect(mock.mem.updateOne).not.toHaveBeenCalled();
+});

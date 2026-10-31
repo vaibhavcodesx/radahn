@@ -96,3 +96,5 @@ Append-only. Newest first. Prefix entries with `[claude]`, `[codex]`, or `[human
 - [codex] K1: bound extraction inference to one eight-second budget across fallback and quota I/O; explicit low thinking, existing batched embeddings/clear-neighbour fast paths preserved. Zero-candidate summary is eventless; lead UI completion wiring and deployed finish-to-first-event measurements remain pending.
 
 - [codex] K2: announce only strong query-relevant slot value changes; suppress refinements, preserve negations/deadline changes, and atomically consume each announcement with monotonic recall timestamps. Read-only/historical recalls emit no changed notice; newest history is considered separately for every pick.
+
+- [codex] K4: preserve implicit low-confidence and personal memories as pending_review under automatic policies, including source.messageId. Explicit consent and sensitive/secret rules remain enforced. Ambiguous scope uses current space plus low confidence for review; extraction uses the known display name. Personal reflection consolidations stay pending without retiring active parents.

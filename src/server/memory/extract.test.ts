@@ -142,3 +142,10 @@ it("embeds unambiguous candidates together without invoking reconciliation",asyn
  expect(mock.embed).toHaveBeenCalledTimes(1);expect(mock.embed.mock.calls[0][0]).toHaveLength(2);
  expect(mock.generateStructured).toHaveBeenCalledTimes(1);
 });
+
+it('retains uncertain automatic candidates with the originating message for review',async()=>{
+ mock.generateStructured.mockResolvedValue({object:{memories:[candidate({confidence:.5,sensitivity:'personal'})]}});
+ const result=await extractAndWrite(input);expect(result.pending).toBe(1);expect(result.added).toBe(0);
+ const saved=mock.mem.insertOne.mock.calls[0][0];expect(saved.status).toBe('pending_review');expect(saved.source.messageId).toBe('message');
+ expect(mock.events.insertOne.mock.calls.some(([event])=>event.kind==='pending'&&event.messageId==='message')).toBe(true);
+});

@@ -149,7 +149,8 @@
     "id": "low-confidence",
     "statement": "Aarav likes tea.",
     "patch": {
-      "confidence": 0.54
+      "confidence": 0.54,
+      "explicit": false
     },
     "policy": "auto",
     "expected": "pending",
@@ -472,3 +473,4 @@
     }
   }
 ]
+

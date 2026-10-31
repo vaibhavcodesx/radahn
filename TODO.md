@@ -96,3 +96,6 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 
 - [x] [codex] K2 implemented 14:33 IST: strong relevance and real slot changes only; atomic announcement claim, monotonic stats, per-pick history, historical/read-only exclusion. Independent review passed; hosted acceptance follows deployment.
+
+- [x] [codex] K4 implemented 14:38 IST: uncertain/personal automatic extraction enters pending_review with message provenance; explicit sensitive consent and privacy ordering preserved. Review passed; full suite346 passed with concurrent K3 scenarios. Golden low-confidence fixture now explicitly models implicit extraction.
+- [ ] [lead] K4 composer: show pending items for the user messageId with Yes/No actions; engine pending events already carry that provenance.

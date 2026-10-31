@@ -157,3 +157,5 @@ K1 follow-up [status: implemented 14:31 IST, codex/k1-extraction-latency; shared
 
 
 K2 follow-up [status: implemented 14:33 IST, codex/k2-change-notices; relevance/refinement gate, atomic one-time notice claims, reviewed; hosted scenario acceptance pending].
+
+K4 follow-up [status: implemented 14:38 IST, codex/k4-review-uncertainty; pending provenance and consent regressions pass; lead composer Yes/No presentation remains UI-owned].
