@@ -1,9 +1,10 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),embed:vi.fn()}));
+const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),embed:vi.fn(),profile:vi.fn()}));
 vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock,events:mock,recalls:mock,settings:{findOne:async()=>({timeZone:"Asia/Kolkata"})}})}));
 vi.mock("@/server/llm/registry",()=>({embed:mock.embed}));
+vi.mock("./profile",()=>({readProfile:mock.profile}));
 const {recall,temporalWindow}=await import("./recall");
 import type {MemoryUnit} from "./types";
 const now=new Date("2026-10-31T00:00:00Z");
@@ -51,5 +52,92 @@ describe("hybrid recall",()=>{
   expect(window?.start.toISOString()).toBe("2026-10-29T18:30:00.000Z");
   expect(window?.end.toISOString()).toBe("2026-10-30T18:30:00.000Z");
   expect(temporalWindow("hello",now,"Asia/Kolkata")).toBeNull();
+ });
+});
+
+describe("planning before search index visibility",()=>{
+ it("recalls planning context immediately while both search channels are empty",async()=>{
+  const pin=memory({pinned:true,type:"profile",statement:"Aarav is a student."});
+  const rows=[memory({statement:"The build closes at 9 PM."}),memory({type:"goal",statement:"Aarav wants a top-16 finish."}),memory({type:"preference",statement:"Aarav prefers 30-minute time boxes."})];
+  mock.find.mockImplementation((filter)=>({sort:()=>({limit:()=>({toArray:async()=>filter.$or?.some((v:Record<string,unknown>)=>v.pinned)?[pin]:filter.type?rows:[]})}),limit:()=>({toArray:async()=>[]})}));
+  const result=await recall({ownerId:"alice",spaceKey:"s",query:"Plan my next 4 hours.",persistTrace:false});
+  expect(new Set(result.picks.map(p=>p.memoryId))).toEqual(new Set(rows.map(m=>m._id.toHexString())));
+  expect(result.channelsRan).toContain("graph");
+  expect(result.picks.every(p=>p.reasons.includes("plan_relevant_constraint")&&!p.reasons.includes("linked_entity"))).toBe(true);
+  const filter=mock.find.mock.calls.find(([f])=>f.type?.$in)?.[0];
+  expect(filter).toMatchObject({ownerId:"alice",spaceKey:{$in:["s","global"]},status:"active",type:{$in:["constraint","goal","decision","preference"]}});
+ });
+ it("does not widen unrelated general queries or an explicit incompatible type filter",async()=>{
+  await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false});
+  expect(mock.find.mock.calls.some(([filter])=>filter.type?.$in?.includes("constraint"))).toBe(false);
+  mock.find.mockClear();
+  await recall({ownerId:"alice",spaceKey:"s",query:"Plan my day",types:["fact"],persistTrace:false});
+  expect(mock.find.mock.calls.some(([filter])=>filter.type?.$in?.includes("constraint"))).toBe(false);
+ });
+});
+
+describe("historical recall",()=>{
+ it("uses the valid version across all channels and omits future updates and notices",async()=>{
+  const asOf="2026-10-01T00:00:00.000Z",at=new Date(asOf),start=new Date("2026-09-01T00:00:00Z");
+  const old=memory({validFrom:start,createdAt:start,updatedAt:now,status:"superseded",validTo:new Date("2026-10-15T00:00:00Z"),stats:{confirmCount:7,recallCount:2,citedCount:0,lastConfirmedAt:now}});
+  const future=memory({pinned:true,type:"profile"});
+  mock.aggregate.mockReturnValue({toArray:async()=>[old,future]});
+  mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>[old,future]})}),limit:()=>({toArray:async()=>[future]})});
+  const result=await recall({ownerId:"alice",spaceKey:"s",query:"plan yesterday",asOf});
+  expect(result.asOf).toBe(asOf);expect(result.picks.map(p=>p.memoryId)).toEqual([old._id.toHexString()]);
+  expect(result.core).toEqual([]);expect(result.strategies).toEqual([]);expect(result.notices).toEqual([]);
+  expect(result.picks[0].scores.recency).toBeCloseTo(Math.pow(0.5,30/14));
+  expect(result.picks[0].confirmCount).toBe(0);expect(result.picks[0].ageDays).toBe((+at-+start)/86400000);
+  expect(mock.bulkWrite).not.toHaveBeenCalled();expect(mock.insertOne.mock.calls[0][0].asOf).toBe(asOf);
+ });
+ it("rejects invalid ISO dates before retrieval",async()=>{
+  await expect(recall({ownerId:"alice",spaceKey:"s",query:"plan",asOf:"2026-02-30T00:00:00Z"})).rejects.toThrow(/asOf/);
+  expect(mock.aggregate).not.toHaveBeenCalled();expect(mock.embed).not.toHaveBeenCalled();
+ });
+});
+
+it("returns historical core and strategies while keeping every temporal predicate composed",async()=>{
+ const asOf="2026-10-01T00:00:00Z",start=new Date("2026-09-01T00:00:00Z"),end=new Date("2026-10-15T00:00:00Z");
+ const pin=memory({type:"profile",pinned:true,status:"superseded",validFrom:start,validTo:end});
+ const strategy=memory({type:"strategy",statement:"When planning use time boxes.",status:"superseded",validFrom:start,validTo:end});
+ mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>[pin,strategy,memory({pinned:true})]})}),limit:()=>({toArray:async()=>[]})});
+ const result=await recall({ownerId:"alice",spaceKey:"s",query:"plan yesterday",asOf,persistTrace:false});
+ expect(result.core.map(m=>m.id)).toEqual([pin._id.toHexString()]);expect(result.strategies.map(m=>m.id)).toEqual([strategy._id.toHexString()]);
+ const filters=mock.find.mock.calls.map(([filter])=>filter);
+ const core=filters.find(f=>JSON.stringify(f).includes('"pinned":true'));
+ expect(core.$and).toEqual(expect.arrayContaining([{$or:[{validTo:{$exists:false}},{validTo:{$gt:new Date(asOf)}}]},{$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:new Date(asOf)}}]},{$or:[{pinned:true},{type:"strategy"}]}]));
+ const temporal=filters.find(f=>JSON.stringify(f).includes('"createdAt"'));
+ expect(temporal.$and.length).toBe(3);
+ const pipelines=mock.aggregate.mock.calls.map(([p])=>p);
+ expect(pipelines.find(p=>p[0].$vectorSearch)[0].$vectorSearch.filter).not.toHaveProperty("validFrom");
+ expect(pipelines.find(p=>p[0].$vectorSearch)[1].$match.validFrom).toEqual({$lte:new Date(asOf)});
+});
+
+it("includes a validated profile only for current recall and never reads it for asOf",async()=>{mock.profile.mockResolvedValue("Alice studies computer science.");expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false})).profile).toBe("Alice studies computer science.");mock.profile.mockClear();expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",asOf:now.toISOString(),persistTrace:false})).profile).toBeUndefined();expect(mock.profile).not.toHaveBeenCalled();});
+
+it("includes validated profile loading in reported recall latency",async()=>{mock.profile.mockImplementation(async()=>{await new Promise(resolve=>setTimeout(resolve,25));return "Alice likes programming.";});const result=await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false});expect(result.latencyMs.total).toBeGreaterThanOrEqual(20);});
+
+
+describe("trusted credential space restrictions",()=>{
+ it.each([{allowedSpaceKeys:["s"]},{allowedSpaceKeys:["global","s"]}])("restricts every recall surface before retrieval to $allowedSpaceKeys",async({allowedSpaceKeys})=>{
+  const local=memory({pinned:true}),global=memory({spaceKey:"global",pinned:true,type:"strategy",statement:"When planning use global rules."}),other=memory({spaceKey:"other",pinned:true});
+  const rows=[local,global,other];
+  mock.profile.mockResolvedValue("Private global profile");
+  mock.aggregate.mockReturnValue({toArray:async()=>rows});
+  mock.find.mockReturnValue({sort:()=>({limit:()=>({toArray:async()=>rows})}),limit:()=>({toArray:async()=>rows})});
+  const result=await recall({ownerId:"alice",spaceKey:"s",allowedSpaceKeys,query:"plan yesterday"});
+  const permitted=rows.filter(m=>allowedSpaceKeys.includes(m.spaceKey)).map(m=>m._id.toHexString());
+  for(const list of [result.picks,result.candidates])expect(list.every(m=>permitted.includes(m.memoryId))).toBe(true);
+  for(const list of [result.core,result.strategies])expect(list.every(m=>permitted.includes(m.id))).toBe(true);
+  expect(result.notices.flatMap(n=>n.memoryIds).every(id=>permitted.includes(id))).toBe(true);
+  expect(result.profile).toBe(allowedSpaceKeys.includes("global")?"Private global profile":undefined);
+  if(!allowedSpaceKeys.includes("global"))expect(mock.profile).not.toHaveBeenCalled();
+  for(const [pipeline] of mock.aggregate.mock.calls){const first=pipeline[0];if(first.$vectorSearch)expect(first.$vectorSearch.filter.spaceKey.$in).toEqual(allowedSpaceKeys.includes("global")?["s","global"]:["s"]);else expect(first.$search.compound.filter.find((f:{in?:{path:string}})=>f.in?.path==="spaceKey").in.value).toEqual(allowedSpaceKeys.includes("global")?["s","global"]:["s"]);}
+  for(const [filter] of mock.find.mock.calls)expect(filter.spaceKey.$in.every((s:string)=>allowedSpaceKeys.includes(s))).toBe(true);
+  expect(mock.insertOne.mock.calls[0][0].candidates.every((m:{memoryId:string})=>permitted.includes(m.memoryId))).toBe(true);
+ });
+ it.each([{allowed:[]},{allowed:["other"]},{allowed:null},{allowed:[""]}])("fails closed before retrieval for invalid/effectively empty grants $allowed",async({allowed})=>{
+  await expect(recall({ownerId:"alice",spaceKey:"s",query:"plan",allowedSpaceKeys:allowed as unknown as string[]})).rejects.toMatchObject({code:"SPACE_ACCESS_DENIED"});
+  expect(mock.embed).not.toHaveBeenCalled();expect(mock.aggregate).not.toHaveBeenCalled();expect(mock.profile).not.toHaveBeenCalled();
  });
 });

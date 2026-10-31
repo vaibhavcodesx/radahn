@@ -9,3 +9,6 @@ Planning strategies receive priority among eligible strategies after pinned rule
 Trace persistence fails open during an outage: retain available recall results and use an empty recallId if persistence fails. This keeps a telemetry failure from aborting the chat. No content or provider error is logged.
 
 Hosted verification uses isolated eval:selftest owners and finally cleanup, per the overnight task update. A second identical query measures warm latency after search readiness succeeds.
+
+### Cold search-index visibility (31 Oct 05:54 IST)
+Hosted selftest observed roughly 4 seconds until the seeded planning fixtures appeared in both search channels. MongoDB documents search replication lag via its [Search alert conditions](https://www.mongodb.com/docs/atlas/reference/alert-conditions/). When planning intent has no semantic or lexical hits, use one bounded classic owner/space/active/unexpired query for constraints, goals, decisions and preferences (max15), then run the existing scoring/MMR/budget path. Preserve explicit type filters. Record this in the graph channel with planning reasons; do not claim an entity match. General questions retain the existing empty result behavior. This improves the first plan immediately after seed without waiting for search synchronization. Actual hosted before/after measurements remain for C14.

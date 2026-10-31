@@ -8,10 +8,12 @@ import { embed, generateStructured } from "@/server/llm/registry";
 import { preScan, gateCandidate } from "./gate";
 import { contentHash, normalise, confirmConfidence, slotDecision, neighbourDecision } from "./reconcile";
 import { PinBudgetError } from "./errors";
+import {invalidateProfile} from "./profile";
+import {assertSpaceAllowed} from "./scope";
 import { lockOwner } from "./mutation";
 import { purgeAt } from "./lifecycle";
 import type { CandidateMemory, MemoryUnit, MemoryEvent, MemoryEventKind, RecallPick, WritePolicy, WriteSummary, WriteOpResult, SupersedeReason } from "./types";
-export interface WriteContext { ownerId:string;spaceKey:string;now:Date;policy:WritePolicy;source:MemoryUnit["source"];recalled:RecallPick[];pinned?:boolean;reason?:SupersedeReason }
+export interface WriteContext { allowedSpaceKeys?:string[];ownerId:string;spaceKey:string;now:Date;policy:WritePolicy;source:MemoryUnit["source"];recalled:RecallPick[];pinned?:boolean;reason?:SupersedeReason }
 interface Plan {candidate:CandidateMemory;spaceKey:string;hash:string;slotKey?:string;op:"add"|"confirm"|"supersede"|"history"|"pending"|"skip"|"blocked"|"ambiguous";target?:MemoryUnit;neighbours?:MemoryUnit[];embedding?:number[];needsEmbedding?:boolean;reason?:string}
 const zero=()=>Array(768).fill(0) as number[];
 const reconcileSchema=z.object({decisions:z.array(z.object({index:z.number().int(),op:z.enum(["add","confirm","supersede","skip"]),targetId:z.string().optional()}))});
@@ -26,6 +28,7 @@ export async function writeCandidates(candidates:CandidateMemory[],ctx:WriteCont
     if(metadata.kinds.length || metadata.injection) {gate.op="blocked";gate.reason=metadata.injection?"injection":`secret:${metadata.kinds[0]}`;}
     const candidate=gate.candidate ?? raw;
     const spaceKey=candidate.scope==="global"?"global":ctx.spaceKey;
+    assertSpaceAllowed(spaceKey,ctx.allowedSpaceKeys);
     const hash=gate.op==="blocked"?`blocked:${index}:${gate.reason}`:contentHash(candidate.statement);
     const plan:Plan={candidate,spaceKey,hash,op:gate.op,reason:gate.reason};
     if(ctx.source.messageId && await c.events.findOne({ownerId:ctx.ownerId,messageId:ctx.source.messageId,candidateHash:hash})) {plan.op="skip";plan.reason="already_applied";plans.push(plan);continue;}
@@ -112,6 +115,7 @@ async function persist(plan:Plan,ctx:WriteContext,session:ClientSession):Promise
   if(plan.op==="skip")return {op:"skip",reason:plan.reason};
   if(messageId && await c.events.findOne({ownerId:ctx.ownerId,messageId,candidateHash:plan.hash},opts))return {op:"skip",reason:"already_applied"};
   await lockOwner(ctx.ownerId,session);
+  assertSpaceAllowed(plan.spaceKey,ctx.allowedSpaceKeys);
   if(plan.op==="blocked") {await event("blocked");return {op:"blocked",reason:plan.reason};}
   if(plan.target) {
     const current=await c.memories.findOne({ownerId:ctx.ownerId,_id:plan.target._id,status:"active",spaceKey:plan.spaceKey},opts);
@@ -133,6 +137,7 @@ async function persist(plan:Plan,ctx:WriteContext,session:ClientSession):Promise
     unit.supersedes=plan.target._id;unit.supersedeReason=ctx.reason??"update";
     const changed=await c.memories.updateOne({ownerId:ctx.ownerId,_id:plan.target._id,status:"active"},{$set:{status:"superseded",validTo:unit.validFrom,supersededBy:_id,supersedeReason:ctx.reason??"update",updatedAt:ctx.now}},opts);
     if(!changed.matchedCount)throw new WriteRace();
+    await invalidateProfile(ctx.ownerId,session,[plan.target._id],false);
     await event("superseded",plan.target,false);
   }
   if(plan.op==="history" && plan.target) {unit.validTo=plan.target.validFrom;unit.supersededBy=plan.target._id;unit.supersedeReason="update";}

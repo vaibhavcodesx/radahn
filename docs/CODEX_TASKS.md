@@ -29,12 +29,12 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 - Prod runs `MEMORY_ENGINE=mock` until C2+C3+C4 are merged and the self-test passes; then Claude flips it to `real`. Make that moment come early: C1→C4 first, smallest viable versions, then deepen.
 
 ### Extra tasks after C8 (in this order)
-- **C9 Maintenance**: `lifecycle.ts` exports `runMaintenance({ now })`: flip expired units (+events), backfill `needsEmbedding` units, purge guest owners inactive > 7 days (all collections in `OWNED_COLLECTIONS` + `user_settings`; Better Auth `user` docs with `isAnonymous: true` and no session in 7 days). Claude wires `/api/cron/maintenance`.
-- **C10 Agent keys + MCP engine side**: `agentKeys.ts`: `createAgentKey(ownerId, name, spaceKeys) → { id, key (shown once), prefix }` (store sha256 only), `verifyAgentKey(rawKey) → { ownerId, spaceKeys, name } | null`, `listAgentKeys`, `revokeAgentKey`. Writes from agents use actor `{kind:'external_agent', name}`. Claude builds `/api/mcp`.
-- **C11 Conflicts for the Review inbox**: `listConflicts(ownerId)` = pairs of active units in the same space with cosine ≥ 0.85, different slot values or an LLM-judged contradiction (batch, `fast` chain, cached on the units as `conflictWith`), and `resolveConflict({ownerId, keepId, dropIds})` → supersede with reason `conflict_resolution`.
-- **C12 Time travel**: `asOf?: string` on `ListMemoriesInput` and `RecallInput` (§bi-temporal: `validFrom <= t` and (`validTo` absent or `> t`), statuses active+superseded). Demo line: "What did you think my deadline was this morning?"
-- **C13 Profile block** (Letta rethink): reflection also writes a ≤ 1,200-char "what I know about {name}" summary per owner in a new `profiles` collection (`{_id: ownerId, text, version, updatedAt, evidenceIds}`), returned in `RecallResult` as `profile?: string` and used as the "About" section when present. Keep the previous version for a diff.
-- **C14 Tuning**: run the evals, tune weights/thresholds, record before/after numbers in `evals/results.md` and `CHANGELOG.md`.
+- **C9 Maintenance** [status: implemented 06:18; guest purge awaits lead auth guard]: `lifecycle.ts` exports `runMaintenance({ now })`: flip expired units (+events), backfill `needsEmbedding` units, purge guest owners inactive > 7 days (all collections in `OWNED_COLLECTIONS` + `user_settings`; Better Auth `user` docs with `isAnonymous: true` and no session in 7 days). Claude wires `/api/cron/maintenance`.
+- **C10 Agent keys + MCP engine side** [status: implemented 06:25, lead MCP wiring pending]: `agentKeys.ts`: `createAgentKey(ownerId, name, spaceKeys) → { id, key (shown once), prefix }` (store sha256 only), `verifyAgentKey(rawKey) → { ownerId, spaceKeys, name } | null`, `listAgentKeys`, `revokeAgentKey`. Writes from agents use actor `{kind:'external_agent', name}`. Claude builds `/api/mcp`.
+- **C11 Conflicts for the Review inbox** [status: implemented 06:34, lead inbox wiring pending]: `listConflicts(ownerId)` = pairs of active units in the same space with cosine ≥ 0.85, different slot values or an LLM-judged contradiction (batch, `fast` chain, cached on the units as `conflictWith`), and `resolveConflict({ownerId, keepId, dropIds})` → supersede with reason `conflict_resolution`.
+- **C12 Time travel** [status: implemented 06:43, lead route/tool wiring pending]: `asOf?: string` on `ListMemoriesInput` and `RecallInput` (§bi-temporal: `validFrom <= t` and (`validTo` absent or `> t`), statuses active+superseded). Demo line: "What did you think my deadline was this morning?"
+- **C13 Profile block** (Letta rethink) [status: implemented 06:54, lead migration/TTL setup pending]: reflection also writes a ≤ 1,200-char "what I know about {name}" summary per owner in a new `profiles` collection (`{_id: ownerId, text, version, updatedAt, evidenceIds}`), returned in `RecallResult` as `profile?: string` and used as the "About" section when present. Keep the previous version for a diff.
+- **C14 Tuning** [status: controlled comparison complete; hosted metrics blocked]: run the evals, tune weights/thresholds, record before/after numbers in `evals/results.md` and `CHANGELOG.md`.
 
 ## How the engine plugs in
 
@@ -107,12 +107,12 @@ Wire `correctMemory`, `forgetMemory`, `reviewMemory`, `updateMemory`, `listMemor
 - `getMemory` returns versions chain, evidence, related, recall history (from `recalls`), events, and `raw` (the Mongo doc with `embedding` replaced by `"[768 floats]"`).
 - A maintenance helper `flipExpired(ownerId?)` (exported from `lifecycle.ts`) sets `status:'expired'` + event for units past `expiresAt` (Claude calls it from cron and opportunistically).
 
-## Task C6 — Demo seed with precomputed embeddings      [status: implemented 05:17, awaiting hosted verification]
+## Task C6 — Demo seed with precomputed embeddings      [status: merged 05:26, PR #6; hosted 12/12 pass 05:29]
 Files: `seed.ts`, `scripts/seed-demo.ts`, `scripts/fixtures/demo-embeddings.json` (generated once, committed), `fixtures/demo.ts` (extend if needed). Wire `seedDemo`, `removeDemo`, `deleteAll`.
 - `seedDemo({ownerId, spaceIds, conversations})`: remove existing `demo:true` units for the owner, insert all `DEMO_MEMORIES` with embeddings from the JSON fixture (zero LLM calls at seed time), resolve keys → ids (supersede chain, evidence, related, provenance via `conversations`), set `expiresAt`/`purgeAt` relative to now, write one `created` event summarising the load. `insertMany` in one batch (M0: 100 ops/s).
 - `scripts/seed-demo.ts --gen-embeddings` regenerates the JSON.
 
-## Task C7 — Reflection + ghost      [status: todo]
+## Task C7 — Reflection + ghost      [status: PR #8 CI green 05:53, hosted reflection check after deploy]
 Files: `reflect.ts`, `prompts/reflect.ts`. Wire `runReflection`, `listReflections`.
 - §7 steps written to the `reflections` doc as they progress (Claude's UI renders `steps[]` live via change stream): gather → cluster (cosine ≥ 0.90 same type) → consolidate (one structured call on `reflect` chain) → write (one transaction).
 - Validate evidence ids (drop unknown), strategies need ≥ 2 feedback/outcome evidence or 1 explicit instruction; existing strategy covering the same trigger → supersede it.
@@ -120,7 +120,7 @@ Files: `reflect.ts`, `prompts/reflect.ts`. Wire `runReflection`, `listReflection
 - Must produce the bullet-list strategy from the demo's three `feedback` units (eval case).
 - Stretch (only if C1–C8 are green): reflection also rewrites a ≤ 1,200-char "profile" summary (Letta rethink).
 
-## Task C8 — Insights + graph + eval harness      [status: todo]
+## Task C8 — Insights + graph + eval harness      [status: implemented 06:05, hosted eval route pending]
 Wire `insights`, `graph`. Files: `insights.ts`, `evals/golden/*.json`, `evals/run.ts`.
 - Aggregation pipelines per types.ts `Insights` (byType, byStatus, recall hit rate = cited/recalled over 7 d, corrections this week, `storageBytes` via `$collStats` or `dbStats`, eventsPerDay).
 - `graph`: nodes without embeddings, links for supersede/evidence/related.
@@ -129,3 +129,5 @@ Wire `insights`, `graph`. Files: `insights.ts`, `evals/golden/*.json`, `evals/ru
 ---
 
 Status lines: change `[status: todo]` → `[status: in progress HH:MM]` → `[status: merged HH:MM, PR #n]`. Add a `[codex]` line to `CHANGELOG.md` and update `TODO.md` per task. Contract change needed? Put it in the PR description and `TODO.md`; Claude merges contract PRs.
+
+Final review follow-up [07:24]: scoped-agent allowlists and reflection generation checks implemented; unknown eval flags reject before env/network. 309 tests, lint/typecheck pass; engine build passed, final CLI-only guard separately covered. Hosted acceptance and lead route/auth/merge integrations remain pending.

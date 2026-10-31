@@ -7,9 +7,14 @@ import { embed } from "@/server/llm/registry";
 import { recall } from "./recall";
 import { writeCandidates } from "./write";
 import { extractAndWrite, rememberExplicit } from "./extract";
-import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools";
+import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories } from "./tools";
+import { runReflection, listReflections } from "./reflect";
+import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
-import { flipExpired } from "./lifecycle";
+import { flipExpired, runMaintenance } from "./lifecycle";
+import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
+import { listConflicts, resolveConflict } from "./conflicts";
+import { buildSystemPrompt } from "./context";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -17,6 +22,7 @@ class SelfTestAssertion extends Error {}
 export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
   const ownerId=`eval:selftest:${Date.now()}:${randomUUID()}`;
+  const isolatedOwners=[ownerId,`${ownerId}:conflicts`,`${ownerId}:history`];
   const spaceKey=new ObjectId().toHexString(), c=collections(), checks:SelfTestCheck[]=[];
   const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
   try {
@@ -109,6 +115,52 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       await c.memories.insertOne(row);await flipExpired(ownerId,now);
       if((await c.memories.findOne({ownerId,_id:row._id}))?.status!=="expired" || !await c.events.findOne({ownerId,memoryId:row._id,kind:"expired"}))throw new SelfTestAssertion("Expiry event failed");
     });
+    await check("owner-only-embedding-maintenance",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No maintenance fixture");
+      const now=new Date(),row={...sample,_id:new ObjectId(),statement:"An eval memory needs a replacement document embedding.",pinned:false,embedding:Array(768).fill(0),needsEmbedding:true,createdAt:now,updatedAt:now};delete row.slotKey;delete row.contentHash;
+      await c.memories.insertOne(row);
+      await runMaintenance({ownerId,now});
+      const repaired=await c.memories.findOne({ownerId,_id:row._id});
+      if(!repaired || repaired.needsEmbedding || repaired.embedding.length!==768 || repaired.embedding.some(n=>!Number.isFinite(n)) || !repaired.embedding.some(n=>n!==0))throw new SelfTestAssertion("Embedding backfill failed");
+    });
+    await check("agent-key-scope-list-and-revocation",async()=>{
+      const created=await createAgentKey(ownerId,"Synthetic selftest",["global"]);
+      const access=await verifyAgentKey(created.key);
+      if(access?.ownerId!==ownerId || access.spaceKeys.length!==1 || access.spaceKeys[0]!=="global")throw new SelfTestAssertion("Agent key scope verification failed");
+      const listed=await listAgentKeys(ownerId);
+      if(!listed.some(item=>item.id===created.id) || listed.some(item=>"key" in item || "keyHash" in item))throw new SelfTestAssertion("Agent key metadata failed");
+      if(await revokeAgentKey(ownerId+":other",created.id))throw new SelfTestAssertion("Foreign owner revoked agent key");
+      if(!await revokeAgentKey(ownerId,created.id) || await verifyAgentKey(created.key))throw new SelfTestAssertion("Agent key revocation failed");
+    });
+    await check("conflict-detection-and-versioned-resolution",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No conflict fixture");
+      const conflictOwner=isolatedOwners[1],now=new Date(),scope=new ObjectId().toHexString();
+      const rows=["9 PM","10 PM"].map(value=>{
+        const row={...sample,_id:new ObjectId(),ownerId:conflictOwner,spaceKey:scope,type:"constraint" as const,statement:`The synthetic demo deadline is ${value}.`,subject:"synthetic-demo",attribute:"deadline",value,pinned:false,entities:["synthetic-demo"],evidenceIds:[],relatedIds:[],stats:{recallCount:0,confirmCount:0,citedCount:0},validFrom:now,createdAt:now,updatedAt:now};
+        delete row.slotKey;delete row.expiresAt;delete row.purgeAt;delete row.contentHash;delete row.validTo;delete row.supersedes;delete row.supersededBy;return row;
+      });
+      await c.memories.insertMany(rows);
+      const pairs=await listConflicts(conflictOwner);
+      if(!pairs.some(pair=>[pair.left.id,pair.right.id].includes(rows[0]._id.toHexString())&&[pair.left.id,pair.right.id].includes(rows[1]._id.toHexString())))throw new SelfTestAssertion("Contradiction pair missing");
+      const resolved=await resolveConflict({ownerId:conflictOwner,keepId:rows[1]._id.toHexString(),dropIds:[rows[0]._id.toHexString()]});
+      const old=await c.memories.findOne({ownerId:conflictOwner,_id:rows[0]._id});
+      if(resolved.status!=="resolved" || old?.status!=="superseded" || old.supersedeReason!=="conflict_resolution" || !old.validTo || !await c.events.findOne({ownerId:conflictOwner,memoryId:rows[0]._id,kind:"superseded"}))throw new SelfTestAssertion("Conflict resolution history failed");
+    });
+    await check("historical-validity-and-supersession-boundary",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No history fixture");
+      const historyOwner=isolatedOwners[2],now=new Date(),boundary=new Date(+now-3600000),past=new Date(+boundary-1000),scope=new ObjectId().toHexString(),oldId=new ObjectId(),newId=new ObjectId();
+      const base={...sample,ownerId:historyOwner,spaceKey:scope,type:"constraint" as const,subject:"selftest",attribute:"historical_deadline",slotKey:"selftest.historical_deadline",pinned:false,entities:["synthetic-history"],evidenceIds:[],relatedIds:[],source:{kind:"seed" as const,actor:{kind:"system" as const,name:"selftest"}},stats:{recallCount:0,confirmCount:0,citedCount:0}};
+      delete base.expiresAt;delete base.purgeAt;delete base.contentHash;delete base.validTo;delete base.supersedes;delete base.supersededBy;
+      await c.memories.insertMany([
+        {...base,_id:oldId,statement:"The historical deadline was 9 PM.",value:"9 PM",status:"superseded",validFrom:new Date(+boundary-3600000),validTo:boundary,supersededBy:newId,createdAt:new Date(+boundary-3600000),updatedAt:boundary},
+        {...base,_id:newId,statement:"The historical deadline is 10 PM.",value:"10 PM",status:"active",validFrom:boundary,supersedes:oldId,createdAt:boundary,updatedAt:boundary},
+      ]);
+      const before=await listMemories({ownerId:historyOwner,spaceKey:scope,asOf:past.toISOString()});
+      const at=await listMemories({ownerId:historyOwner,spaceKey:scope,asOf:boundary.toISOString()});
+      if(before.length!==1||before[0].id!==oldId.toHexString()||at.length!==1||at[0].id!==newId.toHexString())throw new SelfTestAssertion("Historical list boundary failed");
+      const result=await recall({ownerId:historyOwner,spaceKey:scope,query:"Plan around my deadline",asOf:past.toISOString(),persistTrace:false});
+      if(!result.picks.some(p=>p.memoryId===oldId.toHexString())||result.picks.some(p=>p.memoryId===newId.toHexString())||result.notices.some(n=>n.kind==="changed"))throw new SelfTestAssertion("Historical recall leaked a future version");
+    });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
       if(result.added+result.confirmed+result.pending<1)throw new SelfTestAssertion("Extraction produced no useful memory");
@@ -122,9 +174,56 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(await c.memories.countDocuments({ownerId,demo:true})!==0 || await c.memories.countDocuments({ownerId,demo:{$ne:true}})!==before)throw new SelfTestAssertion("Demo removal isolation failed");
       await seedDemo(input);
     });
+    await check("owner-scoped-insights-and-graph",async()=>{
+      const [metrics,field]=await Promise.all([insights(ownerId),graph(ownerId)]);
+      if(metrics.storageBytes<=0 || !metrics.byType.length || !metrics.byStatus.length || metrics.recallHitRate<0 || metrics.recallHitRate>1)throw new SelfTestAssertion("Insights aggregate failed");
+      const ids=new Set(field.nodes.map(node=>node.id));
+      if(field.nodes.length<38 || !field.links.length || field.links.some(link=>!ids.has(link.source)||!ids.has(link.target)) || field.nodes.some(node=>"embedding" in node))throw new SelfTestAssertion("Graph payload failed");
+    });
+    await check("feedback-reflection-and-strategy-history",async()=>{
+      const now=new Date();
+      await c.spaces.insertOne({_id:new ObjectId(spaceKey),ownerId,name:"Synthetic reflection",color:"--t-feedback",isDefault:false,unitsSinceReflection:8,createdAt:now});
+      const run=await runReflection({ownerId,spaceKey,trigger:"manual"});
+      if(run.status!=="done" || run.steps.some(step=>step.status!=="done"))throw new SelfTestAssertion("Reflection did not complete all steps");
+      const generated=await c.memories.find({ownerId,_id:{$in:run.outputs.strategies.map(id=>new ObjectId(id))},type:"strategy",status:"active"}).toArray();
+      if(!generated.some(m=>/bullet/i.test(m.statement)&&/(?:5|five|short|concise)/i.test(m.statement)&&m.evidenceIds.length>=2))throw new SelfTestAssertion("Reflection did not produce an evidence-backed bullet strategy");
+      const space=await c.spaces.findOne({ownerId,_id:new ObjectId(spaceKey)});
+      if(space?.unitsSinceReflection!==0 || !space.lastReflectionAt)throw new SelfTestAssertion("Reflection counter reset failed");
+      if(((await c.settings.findOne({_id:ownerId}))?.reflectionRevision??0)<1)throw new SelfTestAssertion("Reflection generation was not committed");
+      if(!(await listReflections(ownerId)).some(r=>r._id.equals(run._id)))throw new SelfTestAssertion("Reflection history missing");
+    });
+    await check("profile-summary-context-and-erasure",async()=>{
+      const profile=await c.profiles.findOne({_id:ownerId,ownerId});
+      if(!profile || !profile.text || profile.text.length>1200 || profile.version<1 || !profile.evidenceIds.length)throw new SelfTestAssertion("Reflection profile missing or invalid");
+      const evidence=await c.memories.find({ownerId,_id:{$in:profile.evidenceIds}}).toArray();
+      if(evidence.length!==profile.evidenceIds.length || evidence.some(unit=>unit.spaceKey!=="global"||unit.sensitivity!=="none"||unit.status!=="active"))throw new SelfTestAssertion("Profile evidence scope failed");
+      const input={ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false};
+      const current=await recall(input);
+      if(current.profile!==profile.text || !buildSystemPrompt({recall:current,userName:"Aarav",timeZone:"Asia/Kolkata",spaceName:"selftest",now:new Date()}).system.includes(profile.text))throw new SelfTestAssertion("Profile context missing");
+      const key=await createAgentKey(ownerId,"Scoped synthetic selftest",[spaceKey]);
+      const access=await verifyAgentKey(key.key);
+      if(!access || access.spaceKeys.includes("global"))throw new SelfTestAssertion("Project key grant invalid");
+      const scoped=await recall({...input,allowedSpaceKeys:access.spaceKeys});
+      const ids=[...new Set([...scoped.picks.map(p=>p.memoryId),...scoped.candidates.map(p=>p.memoryId),...scoped.notices.flatMap(n=>n.memoryIds)])].map(id=>new ObjectId(id));
+      const scopedRows=await c.memories.find({ownerId,_id:{$in:ids}}).toArray();
+      const listed=await listMemories({ownerId,spaceKey:"all",allowedSpaceKeys:access.spaceKeys});
+      if(!scoped.picks.length || scoped.profile || scopedRows.length!==ids.length || scopedRows.some(unit=>unit.spaceKey!==spaceKey) || [...scoped.core,...scoped.strategies,...listed].some(unit=>unit.spaceKey!==spaceKey))throw new SelfTestAssertion("Project key widened into private spaces");
+      const unauthorized=await forgetMemory({ownerId,memoryId:profile.evidenceIds[0].toHexString(),allowedSpaceKeys:access.spaceKeys,actor:{kind:"external_agent",name:access.name}});
+      if(unauthorized.status!=="not_found" || !await c.memories.findOne({ownerId,_id:profile.evidenceIds[0]}))throw new SelfTestAssertion("Project key erased a global memory");
+      let denied=false;
+      try{await rememberExplicit({ownerId,spaceKey,scope:"global",allowedSpaceKeys:access.spaceKeys,statement:"A scoped synthetic agent must not save this global fact.",type:"fact",source:{kind:"agent_api",actor:{kind:"external_agent",name:access.name}}});}
+      catch(error){denied=!!error&&typeof error==="object"&&"code" in error&&error.code==="SPACE_ACCESS_DENIED";}
+      if(!denied || await c.memories.countDocuments({ownerId,statement:"A scoped synthetic agent must not save this global fact."}))throw new SelfTestAssertion("Project key wrote outside its grant");
+      await revokeAgentKey(ownerId,key.id);
+      const historical=await recall({...input,asOf:new Date().toISOString()});
+      if(historical.profile)throw new SelfTestAssertion("Historical recall included current profile");
+      const result=await forgetMemory({ownerId,memoryId:profile.evidenceIds[0].toHexString(),actor:{kind:"system",name:"selftest"}});
+      if(result.status!=="forgotten" || await c.profiles.findOne({_id:ownerId,ownerId}))throw new SelfTestAssertion("Forgotten profile evidence retained derived text");
+    });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId})]);
+      const cleanup=await Promise.allSettled(isolatedOwners.flatMap(ownerId=>[c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId}),c.profiles.deleteOne({_id:ownerId,ownerId})]));
+      if(cleanup.some(result=>result.status==="rejected"))throw new SelfTestAssertion("Isolated owner cleanup incomplete");
     });
   }
   return {ok:checks.every(check=>check.ok),checks};

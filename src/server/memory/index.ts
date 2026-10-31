@@ -1,5 +1,7 @@
 import "server-only";
 import { env } from "@/server/env";
+import type { CreatedAgentKey, VerifiedAgentKey, AgentKeyMetadata } from "./agentKeys";
+import type { ConflictPairDTO, ResolveConflictInput, ResolveConflictResult } from "./conflicts";
 import type {
   BuildContextInput,
   BuiltContext,
@@ -40,8 +42,8 @@ import type {
  *   - `real.ts`  (Codex): MongoDB + Gemini, per docs/memory-engine.md.
  * Selected by MEMORY_ENGINE=mock|real. Keep this interface stable; changes go through a PR.
  *
- * Every function takes `ownerId` from the session (never from the client) and must scope
- * every query by it.
+ * Content methods take `ownerId` from the session or a verified agent key and scope all queries by it.
+ * verifyAgentKey is the hash-only authentication boundary that establishes an owner.
  */
 export interface MemoryEngine {
   /** §4.1 — redact secrets before the LLM or DB sees the text. Pure and synchronous. */
@@ -86,6 +88,15 @@ export interface MemoryEngine {
    */
   seedDemo(input: SeedDemoInput): Promise<SeedResult>;
   removeDemo(ownerId: string): Promise<void>;
+  /** C11 — current contradictions and explicit owner-scoped resolution. */
+  listConflicts(ownerId: string): Promise<ConflictPairDTO[]>;
+  resolveConflict(input: ResolveConflictInput): Promise<ResolveConflictResult>;
+  /** Agent-key control plane (C10). Raw key is returned only at creation. */
+  createAgentKey(ownerId: string, name: string, spaceKeys: SpaceKey[]): Promise<CreatedAgentKey>;
+  /** Authentication boundary: hash-only lookup establishes owner before any content access. */
+  verifyAgentKey(rawKey: string): Promise<VerifiedAgentKey | null>;
+  listAgentKeys(ownerId: string): Promise<AgentKeyMetadata[]>;
+  revokeAgentKey(ownerId: string, keyId: string): Promise<boolean>;
   /** Hard-delete all memory data for this owner (Settings → Data). */
   deleteAll(ownerId: string): Promise<void>;
 }

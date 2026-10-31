@@ -17,3 +17,11 @@ describe("expiry maintenance",()=>{
   expect(await flipExpired("alice",now)).toBe(0);expect(mock.insertOne).not.toHaveBeenCalled();
  });
 });
+
+describe("bounded global expiry",()=>{
+ it("discovers IDs only and scopes each content lookup",async()=>{
+  mock.find.mockReturnValueOnce({limit:(n:number)=>{expect(n).toBe(25);return {toArray:async()=>[{ownerId:"alice"}]};}}).mockReturnValueOnce({limit:(n:number)=>{expect(n).toBe(20);return {toArray:async()=>[]};}});
+  expect(await flipExpired(undefined,new Date())).toBe(0);
+  expect(mock.find.mock.calls[0][1]).toEqual({projection:{ownerId:1}});expect(mock.find.mock.calls[1][0].ownerId).toBe("alice");
+ });
+});

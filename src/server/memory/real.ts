@@ -5,15 +5,17 @@ import { buildSystemPrompt, buildGhostPrompt } from "./context";
 import { extractAndWrite, rememberExplicit } from "./extract";
 import { correctMemory, forgetMemory, reviewMemory, updateMemory, listMemories, getMemory, listEvents, pendingCount } from "./tools";
 import { seedDemo, removeDemo, deleteAll } from "./seed";
+import { runReflection, listReflections } from "./reflect";
+import { graph, insights } from "./insights";
 import type { MemoryEngine } from "./index";
+import { listConflicts, resolveConflict } from "./conflicts";
+import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 
 /**
  * Real engine — OWNED BY CODEX (docs/CODEX_TASKS.md C2–C8).
- * Each method is replaced task by task. Until then it throws, and MEMORY_ENGINE=mock serves.
+ * MongoDB-backed implementation of the shared facade.
  */
-function notImplemented(name: string): never {
-  throw new Error(`memory engine: ${name} not implemented yet (MEMORY_ENGINE=real)`);
-}
+
 
 export const realEngine: MemoryEngine = {
   preScan,
@@ -26,16 +28,22 @@ export const realEngine: MemoryEngine = {
   forgetMemory,
   reviewMemory,
   updateMemory,
-  runReflection: async () => notImplemented("runReflection"),
-  listReflections: async () => notImplemented("listReflections"),
+  runReflection,
+  listReflections,
   listMemories,
   getMemory,
   getRecallTrace,
   listEvents,
-  graph: async () => notImplemented("graph"),
-  insights: async () => notImplemented("insights"),
+  graph,
+  insights,
   pendingCount,
   seedDemo,
   removeDemo,
   deleteAll,
+  createAgentKey,
+  verifyAgentKey,
+  listAgentKeys,
+  revokeAgentKey,
+  listConflicts,
+  resolveConflict,
 };

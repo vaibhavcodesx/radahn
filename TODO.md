@@ -47,3 +47,41 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C6 implemented 05:17: 38x768 real synthetic fixture; runtime zero LLM; owner-locked atomic replacement and pending-review conflict handling. Independent spec/quality review passed. Hosted demo seed/removal check added.
 
 - [x] [codex] Lead gate feedback implemented 05:25: ordinary URLs preserved; URL query/fragment/userinfo secrets still redacted; descriptive act-as roles accepted, agent-directed roles blocked. Failing-first regressions cover Markdown and OAuth edge cases.
+
+- [x] [codex] Hosted C6 verification 05:29: production health real/bom1/DB ok; all 12 Atlas/Gemini checks passed, including real seed/remove (462ms) and isolated slot/correction/history. Warm recall 39ms. Owner/settings cleanup passed.
+
+- [x] [codex] C7 implemented 05:39; evidence-backed reflection, strategy refinement, steps/history, atomic outputs/events, preserved concurrent write counter. Hosted bullet-strategy/history check added.
+
+- [x] [codex] C8 implemented 06:05: owner-scoped insights/graph and measured eval harness; Claude to expose runEvals() via authenticated /api/admin/eval. PR #8 C7 CI green, hosted reflection check pending deploy. PR #7 gate follow-up also CI green.
+
+- [x] [codex] C9 engine implemented 06:18: bounded expiry/backfill and conservative guest maintenance; single-owner mode for hosted backfill verification. Claude owns cron scheduling/execution. C8 PR #9 submitted; lead operator eval route pending.
+
+- [ ] [codex] C9 lead integration: cron can call runMaintenance({now}) directly once merged; remove its redundant initial flipExpired() call. Keep broad guest purge as cron/operator execution; Codex hosted probe uses only a disposable ownerId.
+
+- [ ] [codex] C9 blocking lead integration: wire engine noteOwnerActivity(ownerId) before every auth session creation/update and account-link activity, reject session creation if owner was erased; only after hooks are deployed enable runMaintenance({now,guestActivityGuardReady:true}) in cron. Guest purge defaults deferred until that protocol is in place. Engine task includes helper; auth stays lead-owned.
+
+- [x] [codex] C10 engine implemented 06:25: agent key CRUD/authentication, owner-validated space scopes and one-time secret display; MCP transport/routes remain Claude-owned.
+
+- [ ] [codex] C10 lead MCP handoff: verify key first; derive ownerId, allowed spaceKeys and actor {kind:'external_agent',name:verified.name} from verified access, never client fields. Enforce the chosen space against the verified allowlist before any memory call. Raw keys are creation-only; metadata omits hashes/secrets.
+
+- [x] [codex] C11 engine implemented 06:34: owner-scoped cached conflict pairs and transactional resolution; additive conflict cache fields and two facade methods pre-approved overnight. Claude owns Review inbox routing/UI.
+
+- [ ] [codex] C11 lead UI handoff: listConflicts(ownerId) returns pairs and resolveConflict({ownerId,keepId,dropIds,actor?}) writes superseded history. Review is explicitly bounded to the most recent60 live units, top40 cosine pairs, at most12 model judgments; pagination/exhaustive review remains future work.
+
+- [x] [codex] C12 engine implemented 06:43: historical asOf list/recall filters, validity boundaries, historical prompt labeling and mock parity. TTL-deleted/forgotten history remains unavailable.
+
+- [ ] [codex] C12 lead handoff: pass optional validated absolute ISO asOf from GET /api/memories into listMemories; add asOf to src/server/chat/tools.ts recall_memory schema/execution and include snapshot time in historical tool results. Natural-language past-state questions need that explicit tool argument. Historical content follows validFrom/validTo, not a full transaction-time metadata audit.
+
+- [x] [codex] C13 engine implemented 06:54: reflection profile summary, bounded previous version, validated global evidence, profile TTL/erasure and historical exclusion; profiles key by owner _id and require a separate migration invalidation helper in lead auth.
+
+- [ ] [codex] C13 lead integration: call migrateProfile(fromOwnerId,toOwnerId,session) inside the account migration transaction under both owner locks; it invalidates both owner-keyed summaries. Do not add profiles to generic ownerId-only migration because _id also keys the owner. Run authenticated /api/admin/db-setup after deploying C13 for ttl_profile_purge.
+
+- [x] [codex] C14 controlled measurement completed: exact baseline06c5145 vs current954dd8f, identical cold-index fixture 0/3 ->3/3; deterministic31/31. Retain weights due insufficient representative data. Hosted eval remains blocked: authenticated call rejected by automatic approval review before execution, later public GET returned404; endpoint deployment and user authorization are pending.
+
+- [x] [codex] Final engine review patch: add server-trusted allowedSpaceKeys to scoped recall/list/writes and transactional ID mutations; global profile only when global is allowed. Lead MCP must pass verified scopes and must not expose unrestricted detail/trace methods. Add owner reflectionRevision checkpoint before gather/commit so overlapping runs cannot consume counters twice or regress checkpoints.
+
+- [ ] [codex] Final scoped-key handoff: MCP passes verified allowedSpaceKeys on every supported recall/list/remember/correct/forget/update/review call; validate effective global saves too. Do not expose owner-only detail/raw/history/trace/events/conflicts/admin functions through scoped keys until they have equivalent restrictions. The client cannot choose this trusted allowlist.
+
+- [ ] [codex] Lead auth migration audit: src/server/auth/migrate.ts currently deletes source settings after moving owner rows. Acquire both owner locks and retire/redirect the old owner identity so a delayed chat after() write cannot upsert orphan old-owner data after migration; wire profile invalidation in that same transaction. This auth orchestration remains lead-owned.
+
+- [x] [codex] Final CLI guard: unsupported eval flags now fail before env loading/network; --help is usage-only, --deterministic stays offline, default hosted mode remains intentional. The accidental --no-report invocation may have transmitted CRON_SECRET; no hosted result is established, and no more CLI retries were made.

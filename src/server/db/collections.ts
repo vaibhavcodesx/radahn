@@ -16,6 +16,23 @@ import type {
  * taken from the session — never from the client.
  */
 
+/** C13 derived profile snapshots, bounded to current + one previous version. */
+export interface ProfileSnapshot {
+  text: string;
+  version: number;
+  updatedAt: Date;
+  evidenceIds: ObjectId[];
+  evidence: { id: ObjectId; fingerprint: string }[];
+  expiresAt?: Date;
+  purgeAt?: Date;
+}
+export interface ProfileDoc extends ProfileSnapshot {
+  _id: string;
+  ownerId: string;
+  previous?: ProfileSnapshot;
+  invalidatedAt?: Date;
+}
+
 export interface SpaceDoc {
   _id: ObjectId;
   ownerId: string;
@@ -60,6 +77,7 @@ export interface MessageDoc {
 }
 
 export interface UserSettingsDoc {
+  reflectionRevision?: number; // Owner-wide successful reflection generation; distinct from ordinary writes.
   memoryRevision?: number; // Serializes owner memory mutations for cross-document budgets (C5).
   _id: string; // = ownerId
   displayName?: string;
@@ -100,6 +118,7 @@ export interface LlmUsageDoc {
 }
 
 export const COLLECTIONS = {
+  profiles: "profiles",
   spaces: "spaces",
   conversations: "conversations",
   messages: "messages",
@@ -127,6 +146,7 @@ export const OWNED_COLLECTIONS = [
 
 export function collections(database: Db = defaultDb()) {
   return {
+    profiles: database.collection<ProfileDoc>(COLLECTIONS.profiles),
     spaces: database.collection<SpaceDoc>(COLLECTIONS.spaces),
     conversations: database.collection<ConversationDoc>(COLLECTIONS.conversations),
     messages: database.collection<MessageDoc>(COLLECTIONS.messages),
