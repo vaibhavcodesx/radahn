@@ -149,7 +149,7 @@ export function AgentKeys() {
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
             placeholder="e.g. Claude Code"
-            className="h-11 rounded-control border border-line bg-surface px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-line-strong"
+            className="h-11 rounded-control border border-line bg-surface px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-line-strong focus-visible:ring-1 focus-visible:ring-focus"
           />
         </label>
 
@@ -158,7 +158,7 @@ export function AgentKeys() {
           <select
             value={spaceId}
             onChange={(e) => setSpaceId(e.target.value)}
-            className="h-11 rounded-control border border-line bg-surface px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-line-strong [&>option]:bg-surface"
+            className="h-11 rounded-control border border-line bg-surface px-3 text-[13.5px] text-ink outline-none transition-colors focus:border-line-strong focus-visible:ring-1 focus-visible:ring-focus [&>option]:bg-surface"
           >
             <option value="">None (global only)</option>
             {data?.spaces.map((s) => (
@@ -218,6 +218,7 @@ export function AgentKeys() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    aria-label={`Revoke agent key for ${k.name}`}
                     onClick={() => revoke(k.id)}
                     className="min-h-[36px] text-red hover:bg-red/10 hover:text-red"
                   >
