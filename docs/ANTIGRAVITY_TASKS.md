@@ -4,6 +4,21 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
+## ROUND 5 (from Claude, 31 Oct 18:05 IST) — final polish; read first
+Round 4 (#33) is merged. Thank you. Final round before the 20:45 deploy. Branch each from fresh `origin/main`.
+
+**New rule from the user: no mention of the hackathon anywhere in the product** (no "UNCHARTED", "Track 1", "SVNIT", "hackathon", "build window", "submission", "judges"). Radahn must read as a standalone product. Claude is replacing the demo world with a new persona (lands on main ~18:45):
+> **Aarav Mehta**, a final-year CSE student who builds apps on the side, is building **Kestrel**, a flight-log app for hobby drone pilots, with two friends. Spaces: **Kestrel**, **Personal**, **Internships**. Example memories (use these verbatim on public pages): "Kestrel's public beta ships on 7 Nov 2026 at 9:00 PM IST." (constraint) · "Aarav prefers bullet lists over long paragraphs." (preference) · "When Aarav asks for a plan, give at most 5 bullets, each with a time box." (strategy) · "The team chose Next.js over Vite for Kestrel's web dashboard, to deploy on Vercel in one step." (decision) · "Aarav wants 500 active pilots on Kestrel by January 2027." (goal). The correction demo becomes "Actually, the beta launch moved to 10 PM."
+
+**G1 — Scrub the public pages** (`/`, `/how-it-works`, `/signin`, 404, `public/og.png`): remove every hackathon reference listed above; swap example memories/recall cards/diffs to the Kestrel persona. If `og.png` has any such text, regenerate it. (Technical depth on /how-it-works stays; MongoDB is fine to mention as our stack.)
+**G2 — Landing section-nav pill:** the ‹ › arrows and section links must scroll **smoothly** (`scrollIntoView({behavior:"smooth"})` / `scroll-behavior: smooth`), instant only under `prefers-reduced-motion`.
+**G3 — Brand emphasis in the landing nav:** the mark is easy to miss. Mark at 32 px on a subtle hairline tile, wordmark "Radahn" 19–20 px semibold, tight tracking, both clickable to `/`. Claude is doing the same in the app sidebar so they match.
+**G4 — Activity page (you own it):** the user wants **Live events in a fixed-height scrolling panel** (about 480 px on desktop, 60 vh on mobile) that starts at the **most recent** event (newest first), with sticky day headers. If time allows, turn the four stat tiles into the library's **Insight Cards** (catalog #13, lines 4545–5088) without new dependencies.
+**G5 — Review page (you own it):** adapt the library's **Approval Card** (catalog #4, lines 718–1138) for pending items and the **Recommendation Card** (catalog #9, lines 2716–2911) for contradictions ("Which is current?"). Keep every fetch call and body exactly as is.
+**G6 — After Claude's persona deploy (watch for "persona live" in CHANGELOG, ~18:45):** re-capture the landing screenshots (light + dark) with the Kestrel demo loaded, and update `docs/deck/` (deck.md + pptx) and `docs/demo-script.md` so all example content uses Kestrel. The deck may name the event on the title slide only; the product content must not.
+
+Deadlines: **G1–G3 PR by 18:50**, **G4–G5 PR by 19:30**, **G6 PR by 20:10**. Same checks (lint, typecheck, test, build). Tokens only, both themes, no new dependencies.
+
 ## ROUND 4 (from Claude, 31 Oct 17:15 IST) — design elements from the user's saved library
 Round 3 (#29–#32) is merged and live. The user asked for more of **their preferred design elements** (`docs/design.md` §7 catalog; the snippets are in `Inputs/Designs and Components I Like.txt` in your checkout, line numbers in the catalog). Adapt them to our tokens (no raw hex; both themes), swap any icon set for lucide, use `motion` (already installed) for animation, respect `prefers-reduced-motion`, and **add no new dependencies** (no `package.json` edits; if a snippet needs one, rebuild the effect with `motion`/CSS or skip it). Copy stays plain sentence case: no hackathon or model names.
 
