@@ -23,7 +23,7 @@ export async function seedDemo({ownerId,spaceIds,conversations}:SeedDemoInput):P
   const previous=DEMO_MEMORIES.find(previous=>previous.supersededByKey===d.key);
   return {_id:ids.get(d.key)!,ownerId,spaceKey:d.space==="global"?"global":spaceIds[d.space],type:d.type,statement:d.statement,contentHash:item.hash,
    ...(d.subject!==undefined?{subject:d.subject}:{}),...(d.attribute!==undefined?{attribute:d.attribute}:{}),...(d.value!==undefined?{value:d.value}:{}),
-   ...(d.subject&&d.attribute?{slotKey:`${d.subject}.${d.attribute}`}:{ }),entities:[...d.entities],tags:[...(d.tags??[])],importance:d.importance,confidence:d.confidence,sensitivity:d.sensitivity??"none",pinned:d.pinned??false,status:d.status??"active",
+   ...(d.subject&&d.attribute&&!d.unresolvedConflict?{slotKey:`${d.subject}.${d.attribute}`}:{ }),entities:[...d.entities],tags:[...(d.tags??[])],importance:d.importance,confidence:d.confidence,sensitivity:d.sensitivity??"none",pinned:d.pinned??false,status:d.status??"active",
    source:{kind:"seed",actor:{kind:"user",name:"you"},...(from?{quote:from.quote.slice(0,200)}:{}),...(conversation?{conversationId:conversation.conversationId}:{}),...(from&&conversation?.messageIds[from.message]?{messageId:conversation.messageIds[from.message]}:{})},
    evidenceIds:(d.evidenceKeys??[]).map(k=>ids.get(k)!),relatedIds:(d.relatedKeys??[]).map(k=>ids.get(k)!),
    ...(d.supersededByKey?{supersededBy:ids.get(d.supersededByKey)!,validTo:new Date(+now-DEMO_MEMORIES.find(next=>next.key===d.supersededByKey)!.ageHours*3600000)}:{}),
@@ -62,3 +62,4 @@ export async function deleteAll(ownerId:string):Promise<void>{
   for(const collection of [c.memories,c.events,c.recalls,c.reflections])await collection.deleteMany({ownerId},{session});
  });}finally{await session.endSession();}
 }
+
