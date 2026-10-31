@@ -3,6 +3,7 @@
 import { Check, Copy, Ghost, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { CitationSquare, TypeSwatch } from "@/components/atoms";
+import { LoadingState, PixelGrid } from "@/components/atoms/LoadingState";
 import { useLive } from "@/components/realtime/LiveProvider";
 import type { RadahnDataParts, RadahnUIMessage, RecallPickWire } from "@/lib/chat-types";
 import { normalizeCitations } from "@/lib/citations";
@@ -89,7 +90,7 @@ export function AssistantMessage({
       ) : null}
 
       <div className="text-[16px] leading-[1.7] text-ink">
-        {text ? <Markdown text={normalizeCitations(text)} cite={cite} /> : streaming ? <span className="shimmer text-[15px]">Thinking…</span> : null}
+        {text ? <Markdown text={normalizeCitations(text)} cite={cite} /> : streaming ? <LoadingState label="Writing the answer…" /> : null}
       </div>
 
       <div className="mt-3 flex min-h-6 flex-wrap items-center gap-x-4 gap-y-2">
@@ -131,9 +132,8 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
   if (!recall) return null;
   if (recall.status === "running")
     return (
-      <p className="mb-2 flex items-center gap-2 text-[13px]">
-        <PixelLoader />
-        <span className="shimmer">Remembering…</span>
+      <p className="mb-2">
+        <LoadingState label="Remembering…" />
       </p>
     );
   if (recall.status === "error") return <p className="mb-2 text-[13px] text-ink-3">Memory was unavailable for this reply.</p>;
@@ -152,13 +152,7 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
 }
 
 export function PixelLoader() {
-  return (
-    <span className="grid grid-cols-3 gap-[2px]" aria-hidden>
-      {Array.from({ length: 9 }, (_, i) => (
-        <span key={i} className="size-[3px] animate-pixel-on bg-grove-ink" style={{ animationDelay: `${(i * 137) % 900}ms` }} />
-      ))}
-    </span>
-  );
+  return <PixelGrid className="text-grove-ink" />;
 }
 
 function Citation({ pick, index, onOpen }: { pick: RecallPickWire; index: number; onOpen: () => void }) {

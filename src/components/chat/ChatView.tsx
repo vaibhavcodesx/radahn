@@ -5,6 +5,7 @@ import { DefaultChatTransport } from "ai";
 import { PanelRightOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { LoadingState } from "@/components/atoms/LoadingState";
 import { useLive } from "@/components/realtime/LiveProvider";
 import type { RadahnUIMessage } from "@/lib/chat-types";
 import { CHAT_MODELS, DEFAULT_CHAT_MODEL, type ChatModelId } from "@/lib/models";
@@ -229,7 +230,7 @@ export function ChatView({
                 ),
               )}
               {status === "submitted" && messages.at(-1)?.role === "user" ? (
-                <p className="shimmer text-[14px]">Remembering…</p>
+                <p><LoadingState label="Remembering…" /></p>
               ) : null}
               {error ? (
                 <div role="alert" className="rounded-card bg-surface p-4 text-[13px] text-ink-2 shadow-card">
