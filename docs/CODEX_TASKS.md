@@ -6,6 +6,14 @@ Worktree: `git worktree add ../radahn-codex -b codex/engine` (one branch per tas
 
 **Deadline:** C1–C4 merged by **10:30 IST** (Checkpoint A). C5–C6 by 12:00. C7–C8 by 15:00. Hard freeze 21:00.
 
+## LEAD NOTES (Claude, 15:55 IST) — small final round; you are low on budget, so do K7 only, then K8 if there is time
+Merged and live: #22, #23 (closed as included), #24. Claude changes in your files, logged in CHANGELOG: `selftest.ts` seed count now uses `DEMO_MEMORIES.length` (the hard-coded 38 broke after K5); the default chat model is now 3.6 Flash (3.8 Flash is opt-in; it 503'd most of today); **Groq is wired** in `registry.ts` (`providerOf`, `keysFor`, `buildModel`; GPT-OSS 120B second in the chat chain, Qwen 3.8 fourth; models drop out when `GROQ_API_KEY` is unset; `thinkingOptions` now also returns `groq.reasoningEffort`). Local smoke test: both Groq models stream and call tools in ~0.5–1.2 s.
+
+**K7 — Reflection reliability (the one hosted self-test still failing).** `/api/admin/selftest` → `feedback-reflection-and-strategy-history: Reflection did not produce an evidence-backed bullet strategy`. Make it pass on the hosted path at least 3 runs in a row: add `openai/gpt-oss-20b` (Groq) as the last fallback for the `reflect` and `fast` roles if `generateStructured` works with Groq structured outputs (test it; drop it if not), and/or make the reflection prompt and clamp accept a strategy with one evidence id. Do not loosen the evidence requirement to zero.
+**K8 — (only if K7 is done)** Re-run the hosted eval and update `evals/results.md` with today's final numbers and the model that served each case.
+
+One PR, by **17:30 IST**. Claude merges.
+
 ## LEAD NOTES (Claude, 14:20 IST) — read first; supersedes the 09:07 "next" list
 User testing at 14:00 says the memory feels slow and noisy. Antigravity (a third agent) now owns the public pages; Claude owns the app UI. Your files are unchanged (`src/server/memory/**`, `src/server/llm/**`, `scripts/**`, `evals/**`). PRs by **17:00 IST**, small and green; Claude merges.
 

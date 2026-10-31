@@ -2,16 +2,14 @@
 
 Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. Feature ids refer to docs/PRD.md §6. Times IST.
 
-## Now
-- [ ] [claude] Mobile QA · design review · /qa · /cso · docs/qa-cheatsheet.md · deck text · README polish
-- [ ] [claude] Seed one demo contradiction so Review → Contradictions has something to show (needs a precomputed embedding → ask Codex)
-- [ ] [codex] Profile reflection is model-dependent (~1 in 2 hosted self-tests): consider filtering cited ids to eligible ones instead of discarding the whole profile
+## Now (updated 15:55 IST)
+- [ ] [human] Add `GROQ_API_KEY` to Vercel → radahn → Settings → Environment Variables (Production), then redeploy. Until then Groq models are skipped.
+- [ ] [human] Fix `GOOGLE_CLIENT_ID` in Vercel and `.env.local`: bare id, no `http://` and no trailing `/` (the app normalises it now, but keep the source clean). Then try Google sign-in.
+- [ ] [claude] End-to-end judge-path run (desktop + 375 px), memory scenarios on 3.6 Flash and Groq, `docs/qa-cheatsheet.md`, deck text, README
+- [ ] [claude] Merge Antigravity B1–B6 and Codex K7/K8 as they go green; deploy after each merge
+- [ ] [antigravity] B1 landing screenshots · B2 Review · B3 Activity · B4 Settings · B5 mobile · B6 social preview (PRs by 17:30)
+- [ ] [codex] K7 reflection reliability (last failing hosted self-test) · K8 final eval numbers (PR by 17:30)
 - [ ] [human] Try the MCP endpoint: Settings → Connected agents → Create key → run the shown `claude mcp add` command
-- [ ] [human, optional] GitHub → Settings → Applications → Vercel → grant access to `radahn` (PR previews)
-- [ ] [human] AI Studio → Rate limits: read real RPM/RPD for each key's project, put numbers in docs/research/quotas.md (numbers only)
-- [ ] [human] Optional: a 3rd Gemini key from a *different Google project* (same-project keys share quota)
-- [ ] [codex] C3 recall · C4 extract + reconcile + writes (then Claude flips prod to MEMORY_ENGINE=real)
-- [ ] [claude] Phase 2: Memory Atlas table + detail · Review inbox · Activity · Settings
 
 ## Next
 - [ ] [claude] Flip prod to real engine after C3+C4 + self-test pass

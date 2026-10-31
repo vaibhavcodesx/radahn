@@ -4,6 +4,26 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
+## ROUND 2 (from Claude, 31 Oct 15:55 IST) — read first
+Round 1 is merged (PR #20) and live. Thank you. Round 2 widens your ownership to **three logged-in pages** so Claude can focus on chat, memory and the end-to-end judge run.
+
+**Start from fresh main, not your old branch** (main has new deps such as `react-markdown` and `@ai-sdk/groq`):
+`git fetch origin && git switch -c antigravity/app-pages origin/main && npm install`
+
+**Files you now also own:** `src/app/app/review/**`, `src/app/app/activity/**`, `src/app/app/settings/**`, `src/components/activity/**`, `src/components/settings/**`, `src/components/memory/ReviewStack.tsx`, `src/components/memory/ConflictList.tsx`.
+Still **do not edit**: `src/app/app/chat/**`, `src/app/app/memory/**`, `src/app/app/layout.tsx`, `src/components/{chat,shell,atoms,realtime}/**`, other `src/components/memory/*`, `src/server/**`, `src/lib/**`, `globals.css`, `package.json`. Keep every `fetch` URL, request body and prop name exactly as they are; this is a UI pass, not an API change.
+
+House style Claude already applied in the app (match it): no uppercase mono "labels" (use `text-[12.5px] font-medium` sentence case), body text 14–16 px, no MongoDB/TTL/"change stream"/model names in user-facing copy, plain verbs ("Forget", "Keep", "Remember"). Tokens only, both themes.
+
+**B1 — Real screenshots on the landing (was A3).** Use the live site as a guest (`/signin` → "Try it"), load the demo data from the empty chat, and capture 3 shots at 1440×900 (light theme): a chat reply with the Memory panel open, the Memory page (list), the Review page. Save as `public/screens/*.webp` (≤ 200 KB each), show them on `/` with real captions and `next/image` + width/height. Synthetic demo data only; no emails or real names in frame.
+**B2 — Review page.** Make it the clearest page in the app: a short intro ("Radahn wasn't sure about these. Keep or drop each."), pending cards with the statement big (16 px), source quote smaller, two obvious buttons, and the conflict pairs side by side on desktop / stacked on mobile with "Keep left / Keep right / Keep both". Empty state that feels finished ("Nothing to review. Radahn will ask here when it is unsure."). Loading and error states.
+**B3 — Activity page.** A readable timeline: day group headers (Today, Yesterday, date), one line per event with a small icon per kind (saved, updated, forgotten, expired, reviewed), relative time on the right, the memory statement as the main text. No dot that pulses forever; a quiet "Live" text only while connected is fine. Filters as a compact segmented control. Empty, loading, error states.
+**B4 — Settings page.** Group into clear cards (Profile & time zone, Memory behaviour, Agent access keys, Danger zone). Danger-zone actions (delete all memories / demo data) need a typed or two-step confirm. Agent keys: copy button for the one-time key, clear "shown once" note.
+**B5 — Mobile pass for B2–B4** at 375 px and 768 px: no horizontal scroll, 16 px gutters, 44 px tap targets, nothing hidden behind the bottom of the screen.
+**B6 — Social preview.** `public/og.png` (1200×630, product name + one line + a product crop) and the matching Open Graph/Twitter metadata **as a request to lead** (metadata lives in `src/app/layout.tsx`, which Claude owns; put the exact snippet under "Requests to lead").
+
+PRs: B1 alone first (fast win), then B2+B3, then B4–B6. **All PRs open by 17:30 IST**; Claude merges as they go green. Same checks as before (`lint`, `typecheck`, `test`, `build`).
+
 ## Read first (10 min max)
 1. `PRODUCT.md` and `docs/design.md` §1–§5 (direction, tokens, type scale). Tokens only — no raw hex in components; both light and dark themes must work.
 2. `src/app/globals.css` (tokens: `--ink`, `--surface`, `--accent`, type colours `--t-*`, fonts `font-serif` Hedvig Letters Serif, sans Hanken Grotesk, `font-mono` Martian Mono).
