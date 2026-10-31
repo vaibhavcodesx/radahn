@@ -5,6 +5,7 @@ import { collections } from "@/server/db/collections";
 import { mongo } from "@/server/db/client";
 import { embed } from "@/server/llm/registry";
 import { gateCandidate } from "./gate";
+import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
 import { memoryDTO, eventDTO } from "./serialize";
 import { purgeAt } from "./lifecycle";
 import { lockOwner } from "./mutation";
@@ -120,14 +121,15 @@ export async function updateMemory(input:UpdateMemoryInput):Promise<MemoryDTO|nu
   });
 }
 export async function listMemories(input:ListMemoriesInput):Promise<MemoryDTO[]> {
-  const c=collections(),filter:Filter<MemoryUnit>={ownerId:input.ownerId};
+  const at=parseAsOf(input.asOf),c=collections(),filter:Filter<MemoryUnit>={ownerId:input.ownerId};
   const space=input.spaceKey ?? (await c.settings.findOne({_id:input.ownerId}))?.currentSpaceId ?? "global";
   if(space!=="all")filter.spaceKey={$in:[...new Set([space,"global"])]};
   filter.status={$in:input.statuses?.length?input.statuses:["active","pending_review","superseded"]};
+  if(at)Object.assign(filter,historicalFilter(at),{status:{$in:(input.statuses?.length?input.statuses:["active","superseded"]).filter(s=>s==="active" || s==="superseded")}});
   if(input.types?.length)filter.type={$in:input.types};
   if(input.q?.trim())filter.statement=regex(input.q.trim());
   const field={updated:"updatedAt",importance:"importance",recalled:"stats.recallCount",created:"createdAt"}[input.sort??"updated"];
-  return (await c.memories.find(filter).sort({[field]:-1,_id:-1}).limit(Math.max(1,Math.min(input.limit??200,500))).toArray()).map(memoryDTO);
+  return (await c.memories.find(filter).sort({[field]:-1,_id:-1}).limit(Math.max(1,Math.min(input.limit??200,500))).toArray()).filter(m=>!at || (m.ownerId===input.ownerId && (space==="all" || [space,"global"].includes(m.spaceKey)) && isHistoricalMemory(m,at) && (!input.statuses?.length || input.statuses.includes(m.status)))).map(m=>memoryDTO(at?historicalMetadata(m,at):m));
 }
 export async function getMemory(ownerId:string,memoryId:string):Promise<MemoryDetail|null> {
   const _id=id(memoryId);if(!_id)return null;

@@ -239,6 +239,7 @@ export interface RecallLatency {
 }
 
 export interface RecallInput {
+  asOf?: string; // retained content snapshot, absolute ISO timestamp
   ownerId: string;
   spaceKey: SpaceKey; // current space (global is always included)
   query: string; // already pre-scanned/redacted
@@ -252,6 +253,7 @@ export interface RecallInput {
 }
 
 export interface RecallResult {
+  asOf?: string; // retained content snapshot, absolute ISO timestamp
   recallId: string; // recalls._id hex ('' when persistTrace=false)
   intent: RecallIntent;
   channelsRan: RecallChannel[];
@@ -265,6 +267,7 @@ export interface RecallResult {
 
 /** Stored trace document (`recalls`, TTL 14 d). §5.6 */
 export interface RecallTrace {
+  asOf?: string; // retained content snapshot, absolute ISO timestamp
   _id: ObjectId;
   ownerId: string;
   conversationId?: string;
@@ -517,6 +520,7 @@ export interface GhostContextInput {
 // ── Reads for the UI ────────────────────────────────────────────────────────────
 
 export interface ListMemoriesInput {
+  asOf?: string; // retained content snapshot, absolute ISO timestamp
   ownerId: string;
   spaceKey?: SpaceKey | 'all'; // default: current space + global
   types?: MemoryType[];

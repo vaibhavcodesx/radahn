@@ -55,3 +55,11 @@ describe("explicit lifecycle tools",()=>{
   expect(await pendingCount(ownerId)).toBe(3);expect(mock.mem.countDocuments.mock.calls[0][0]).toEqual({ownerId,status:"pending_review"});
  });
 });
+
+it("lists only retained valid historical content and rejects invalid snapshots",async()=>{
+ const asOf="2026-10-01T00:00:00Z",start=new Date("2026-09-01T00:00:00Z");
+ const old=unit({validFrom:start,createdAt:start,status:"superseded",validTo:new Date("2026-10-15T00:00:00Z")});
+ mock.mem.find.mockReturnValue(cursor([old,unit(),unit({status:"pending_review",validFrom:start}),unit({ownerId:"bob",validFrom:start}),unit({validFrom:start,expiresAt:new Date(asOf)})]));
+ expect((await listMemories({ownerId,spaceKey:"s",asOf,statuses:["pending_review","active","superseded"]})).map(m=>m.id)).toEqual([old._id.toHexString()]);
+ await expect(listMemories({ownerId,asOf:"yesterday"})).rejects.toThrow(/asOf/);
+});

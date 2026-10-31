@@ -5,6 +5,7 @@ import * as chrono from "chrono-node";
 import { collections } from "@/server/db/collections";
 import { embed } from "@/server/llm/registry";
 import { cosine, score, select, type Ranked, type Hits } from "./score";
+import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
 import { memoryDTO } from "./serialize";
 import type { MemoryUnit, RecallInput, RecallResult, RecallIntent, RecallChannel, RecallNotice, ReasonCode, RecallLatency } from "./types";
 export function detectIntent(query: string): RecallIntent {
@@ -46,37 +47,39 @@ function reasons(row: Ranked, intent: RecallIntent, planningFallback=false): Rea
   return out.slice(0,3);
 }
 export async function recall(input: RecallInput): Promise<RecallResult> {
-  const started=performance.now(), now=new Date(), c=collections();
+  const started=performance.now(), wallNow=new Date(), at=parseAsOf(input.asOf), now=at ?? wallNow, c=collections();
+  const snapshot=at?{asOf:at.toISOString()}:{};
   const query=(input.query.trim().length<40 || /\b(it|that|this|they|them|those)\b/i.test(input.query)) && input.previousUserMessage ? `${input.previousUserMessage}\n${input.query}` : input.query;
   const intent=input.intent ?? detectIntent(input.query);
   const spaces=[...new Set([input.spaceKey,"global"])];
-  const base: Filter<MemoryUnit>={ownerId:input.ownerId,status:"active",spaceKey:{$in:spaces},...(input.types?.length ? {type:{$in:input.types}} : {})};
+  const base: Filter<MemoryUnit>={ownerId:input.ownerId,status:at?{$in:["active","superseded"]}:"active",spaceKey:{$in:spaces},...(input.types?.length ? {type:{$in:input.types}} : {})};
   const expiry={$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]};
-  const filter:Filter<MemoryUnit>={...base,...expiry};
-  const live=(m:MemoryUnit)=>m.ownerId===input.ownerId && spaces.includes(m.spaceKey) && m.status==="active" && (!m.expiresAt || +m.expiresAt>+now) && (!input.types?.length || input.types.includes(m.type));
+  const filter:Filter<MemoryUnit>={...base,...(at?historicalFilter(at):expiry)};
+  const live=(m:MemoryUnit)=>m.ownerId===input.ownerId && spaces.includes(m.spaceKey) && (at?isHistoricalMemory(m,at):m.status==="active" && (!m.expiresAt || +m.expiresAt>+now)) && (!input.types?.length || input.types.includes(m.type));
   const latency:RecallLatency={embed:0,vector:0,lexical:0,temporal:0,graph:0,total:0};
   const channels:RecallChannel[]=[];
   const run=async (channel:RecallChannel,fn:()=>Promise<MemoryUnit[]>):Promise<MemoryUnit[]>=>{
     const t=performance.now();
-    try {const rows=(await fn()).filter(live);channels.push(channel);return rows;} catch {return [];} finally {latency[channel==="semantic"?"vector":channel]=performance.now()-t;}
+    try {const rows=(await fn()).filter(live).map(m=>at?historicalMetadata(m,at):m);channels.push(channel);return rows;} catch {return [];} finally {latency[channel==="semantic"?"vector":channel]=performance.now()-t;}
   };
   let queryVector:number[]|undefined;
   const embedStart=performance.now();
   const vectorPromise=embed([{text:query}],"query").then(([vector])=>{queryVector=vector;return vector;}).catch(()=>undefined).finally(()=>{latency.embed=performance.now()-embedStart;});
+  // Temporal fields are not vector-index filters; broaden the bounded pool before the historical postfilter.
   const semanticPromise=vectorPromise.then(vector=>vector ? run("semantic",()=>c.memories.aggregate<MemoryUnit & {vector:number}>([
-    {$vectorSearch:{index:"memories_vec",path:"embedding",queryVector:vector,numCandidates:150,limit:40,filter:base}},
+    {$vectorSearch:{index:"memories_vec",path:"embedding",queryVector:vector,numCandidates:at?600:150,limit:at?150:40,filter:base}},
     {$match:filter},{$set:{vector:{$meta:"vectorSearchScore"}}},
   ],{maxTimeMS:1500}).toArray()) : []);
   const lexicalPromise=run("lexical",()=>c.memories.aggregate<MemoryUnit>([
-    {$search:{index:"memories_text",compound:{must:[{text:{query,path:["statement","entities","tags"]}}],filter:[{equals:{path:"ownerId",value:input.ownerId}},{equals:{path:"status",value:"active"}},{in:{path:"spaceKey",value:spaces}}]}}},
+    {$search:{index:"memories_text",compound:{must:[{text:{query,path:["statement","entities","tags"]}}],filter:[{equals:{path:"ownerId",value:input.ownerId}},at?{in:{path:"status",value:["active","superseded"]}}:{equals:{path:"status",value:"active"}},{in:{path:"spaceKey",value:spaces}}]}}},
     {$match:filter},{$limit:40},
   ],{maxTimeMS:1500}).toArray());
   const temporalPromise=(async()=>{
     const settings=await c.settings.findOne({_id:input.ownerId}).catch(()=>null);
     const window=temporalWindow(query,now,settings?.timeZone ?? "Asia/Kolkata");
-    return window ? run("temporal",()=>c.memories.find({...filter,$and:[{$or:[{createdAt:{$gte:window.start,$lt:window.end}},{validFrom:{$gte:window.start,$lt:window.end}}]}]}).sort({createdAt:-1}).limit(20).toArray()) : [];
+    return window ? run("temporal",()=>c.memories.find({...filter,$and:[...(filter.$and ?? []),{$or:[{createdAt:{$gte:window.start,$lt:window.end}},{validFrom:{$gte:window.start,$lt:window.end}}]}]}).sort({createdAt:-1}).limit(20).toArray()) : [];
   })();
-  const corePromise=c.memories.find({...filter,$or:[{pinned:true},{type:"strategy"}],$and:[expiry]}).sort({importance:-1}).limit(200).toArray().catch(()=>[]);
+  const corePromise=c.memories.find({...filter,$and:[...(filter.$and ?? []),expiry,{$or:[{pinned:true},{type:"strategy"}]}]}).sort({importance:-1}).limit(200).toArray().catch(()=>[]);
   const [semantic,lexical,temporal,coreRows]=await Promise.all([semanticPromise,lexicalPromise,temporalPromise,corePromise]);
   const top=[...semantic.slice(0,3),...lexical.slice(0,3)].slice(0,3);
   const entities=[...new Set(top.flatMap(m=>m.entities))];
@@ -101,7 +104,7 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const [a,b]=picked;
   if(a && b && a.unit.value && b.unit.value && a.unit.value!==b.unit.value && ((a.unit.slotKey && a.unit.slotKey===b.unit.slotKey) || (a.unit.subject && a.unit.subject===b.unit.subject && a.unit.attribute===b.unit.attribute && Math.abs(a.scores.final-b.scores.final)<0.03))) notices.push({kind:"ambiguous",text:"Conflicting memories match. Ask one short clarifying question.",memoryIds:[a.unit._id.toHexString(),b.unit._id.toHexString()]});
   const ids=picked.map(row=>row.unit._id);
-  if(ids.length) {
+  if(ids.length && !at) {
     const history=await c.memories.find({ownerId:input.ownerId,spaceKey:{$in:spaces},status:"superseded",supersededBy:{$in:ids},updatedAt:{$gte:new Date(+now-86400000)}}).limit(8).toArray().catch(()=>[]);
     for(const old of history) {
       const current=picked.find(p=>p.unit._id.equals(old.supersededBy!));
@@ -109,18 +112,18 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     }
   }
   let chars=0;
-  const core=coreRows.filter(live).filter(m=>{if(!m.pinned || chars+m.statement.length>1500)return false;chars+=m.statement.length;return true;}).map(memoryDTO);
-  const strategies=coreRows.filter(live).filter(m=>m.type==="strategy").map(m=>({unit:m,relevance:queryVector?cosine(queryVector,m.embedding):0})).filter(x=>x.unit.pinned || x.relevance>=0.6 || (intent==="plan" && /plan|schedule|time.?box/i.test(x.unit.statement))).sort((a,b)=>Number(b.unit.pinned)-Number(a.unit.pinned) || (intent==="plan" ? Number(/plan|schedule|time.?box/i.test(b.unit.statement))-Number(/plan|schedule|time.?box/i.test(a.unit.statement)) : 0) || b.relevance-a.relevance || b.unit.importance-a.unit.importance).slice(0,3).map(x=>memoryDTO(x.unit));
+  const core=coreRows.filter(live).map(m=>at?historicalMetadata(m,at):m).filter(m=>{if(!m.pinned || chars+m.statement.length>1500)return false;chars+=m.statement.length;return true;}).map(memoryDTO);
+  const strategies=coreRows.filter(live).map(m=>at?historicalMetadata(m,at):m).filter(m=>m.type==="strategy").map(m=>({unit:m,relevance:queryVector?cosine(queryVector,m.embedding):0})).filter(x=>x.unit.pinned || x.relevance>=0.6 || (intent==="plan" && /plan|schedule|time.?box/i.test(x.unit.statement))).sort((a,b)=>Number(b.unit.pinned)-Number(a.unit.pinned) || (intent==="plan" ? Number(/plan|schedule|time.?box/i.test(b.unit.statement))-Number(/plan|schedule|time.?box/i.test(a.unit.statement)) : 0) || b.relevance-a.relevance || b.unit.importance-a.unit.importance).slice(0,3).map(x=>memoryDTO(x.unit));
   const picks=picked.map((row,i)=>{const codes=reasons(row,intent,planningFallback);return {ref:`m${i+1}`,memoryId:row.unit._id.toHexString(),type:row.unit.type,statement:row.unit.statement,final:row.scores.final,scores:row.scores,reasons:codes,why:codes.map(code=>REASONS[code]).join(" · "),status:row.unit.status,ageDays:Math.max(0,(+now-+row.unit.updatedAt)/86400000),confirmCount:row.unit.stats.confirmCount};});
   const candidates=ranked.map(row=>({memoryId:row.unit._id.toHexString(),statement:row.unit.statement,type:row.unit.type,scores:row.scores,selected:row.selected,reasons:reasons(row,intent,planningFallback),droppedBy:row.droppedBy}));
   latency.total=performance.now()-started;
   let recallId="";
   if(input.persistTrace!==false) {
     const _id=new ObjectId();
-    try { await c.recalls.insertOne({_id,ownerId:input.ownerId,conversationId:input.conversationId,messageId:input.messageId,query,intent,channelsRan:channels,candidates,picks:picks.map(({ref,memoryId})=>({ref,memoryId})),notices,latencyMs:latency,createdAt:now});
+    try { await c.recalls.insertOne({_id,...snapshot,ownerId:input.ownerId,conversationId:input.conversationId,messageId:input.messageId,query,intent,channelsRan:channels,candidates,picks:picks.map(({ref,memoryId})=>({ref,memoryId})),notices,latencyMs:latency,createdAt:wallNow});
     recallId=_id.toHexString(); } catch { /* Trace storage is best effort during a DB interruption. */ }
-    if(ids.length) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
+    if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
   }
-  return {recallId,intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
+  return {recallId,...snapshot,intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
 }
 export async function getRecallTrace(ownerId:string,messageId:string) {return collections().recalls.findOne({ownerId,messageId});}
