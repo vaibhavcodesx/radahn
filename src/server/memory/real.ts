@@ -8,6 +8,7 @@ import { seedDemo, removeDemo, deleteAll } from "./seed";
 import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import type { MemoryEngine } from "./index";
+import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 
 /**
  * Real engine — OWNED BY CODEX (docs/CODEX_TASKS.md C2–C8).
@@ -38,4 +39,8 @@ export const realEngine: MemoryEngine = {
   seedDemo,
   removeDemo,
   deleteAll,
+  createAgentKey,
+  verifyAgentKey,
+  listAgentKeys,
+  revokeAgentKey,
 };

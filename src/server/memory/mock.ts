@@ -581,6 +581,10 @@ const baseMock: MemoryEngine = {
     for (const [id, m] of s.memories) if (m.demo) s.memories.delete(id);
   },
 
+  async createAgentKey() { throw new Error("Agent keys are unavailable in the mock engine"); },
+  async verifyAgentKey() { return null; },
+  async listAgentKeys() { return []; },
+  async revokeAgentKey() { return false; },
   async deleteAll(ownerId) {
     store.delete(ownerId);
   },
@@ -653,7 +657,7 @@ function ownerOf(args: unknown[]): string | undefined {
 function withMongoState(engine: MemoryEngine): MemoryEngine {
   const wrapped = { ...engine } as Record<string, unknown>;
   for (const [key, fn] of Object.entries(engine)) {
-    if (key === "preScan" || key === "buildContext" || key === "ghostContext") continue;
+    if (key === "preScan" || key === "buildContext" || key === "ghostContext" || key === "verifyAgentKey") continue;
     wrapped[key] = async (...args: unknown[]) => {
       const ownerId = ownerOf(args);
       if (ownerId) await hydrate(ownerId);

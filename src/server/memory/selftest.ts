@@ -12,6 +12,7 @@ import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
 import { flipExpired, runMaintenance } from "./lifecycle";
+import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -119,6 +120,15 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       const repaired=await c.memories.findOne({ownerId,_id:row._id});
       if(!repaired || repaired.needsEmbedding || repaired.embedding.length!==768 || repaired.embedding.some(n=>!Number.isFinite(n)) || !repaired.embedding.some(n=>n!==0))throw new SelfTestAssertion("Embedding backfill failed");
     });
+    await check("agent-key-scope-list-and-revocation",async()=>{
+      const created=await createAgentKey(ownerId,"Synthetic selftest",["global"]);
+      const access=await verifyAgentKey(created.key);
+      if(access?.ownerId!==ownerId || access.spaceKeys.length!==1 || access.spaceKeys[0]!=="global")throw new SelfTestAssertion("Agent key scope verification failed");
+      const listed=await listAgentKeys(ownerId);
+      if(!listed.some(item=>item.id===created.id) || listed.some(item=>"key" in item || "keyHash" in item))throw new SelfTestAssertion("Agent key metadata failed");
+      if(await revokeAgentKey(ownerId+":other",created.id))throw new SelfTestAssertion("Foreign owner revoked agent key");
+      if(!await revokeAgentKey(ownerId,created.id) || await verifyAgentKey(created.key))throw new SelfTestAssertion("Agent key revocation failed");
+    });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
       if(result.added+result.confirmed+result.pending<1)throw new SelfTestAssertion("Extraction produced no useful memory");
@@ -151,7 +161,7 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
     });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId})]);
+      await Promise.all([c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId})]);
     });
   }
   return {ok:checks.every(check=>check.ok),checks};

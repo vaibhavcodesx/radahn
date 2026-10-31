@@ -59,3 +59,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] [codex] C9 lead integration: cron can call runMaintenance({now}) directly once merged; remove its redundant initial flipExpired() call. Keep broad guest purge as cron/operator execution; Codex hosted probe uses only a disposable ownerId.
 
 - [ ] [codex] C9 blocking lead integration: wire engine noteOwnerActivity(ownerId) before every auth session creation/update and account-link activity, reject session creation if owner was erased; only after hooks are deployed enable runMaintenance({now,guestActivityGuardReady:true}) in cron. Guest purge defaults deferred until that protocol is in place. Engine task includes helper; auth stays lead-owned.
+
+- [x] [codex] C10 engine implemented 06:25: agent key CRUD/authentication, owner-validated space scopes and one-time secret display; MCP transport/routes remain Claude-owned.
+
+- [ ] [codex] C10 lead MCP handoff: verify key first; derive ownerId, allowed spaceKeys and actor {kind:'external_agent',name:verified.name} from verified access, never client fields. Enforce the chosen space against the verified allowlist before any memory call. Raw keys are creation-only; metadata omits hashes/secrets.
