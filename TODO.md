@@ -5,10 +5,10 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 ## Now (updated 15:40 IST)
 - [ ] [human] Add `GROQ_API_KEY` to Vercel → radahn → Settings → Environment Variables (Production), then redeploy. Until then Groq models are skipped.
 - [ ] [human] Fix `GOOGLE_CLIENT_ID` in Vercel and `.env.local`: bare id, no `http://` and no trailing `/` (the app normalises it now, but keep the source clean). Then try Google sign-in.
-- [ ] [claude] End-to-end judge-path run (desktop + 375 px), memory scenarios on 3.6 Flash and Groq, `docs/qa-cheatsheet.md`, deck text, README
+- [ ] [claude] Judge-path run on a fresh guest (desktop + 375 px) after Antigravity D1–D3 land; Groq check once the key is in Vercel; walk the team through `docs/qa-cheatsheet.md` at ~20:00
 - [ ] [claude] Merge Antigravity B1–B6 and Codex K7/K8 as they go green; deploy after each merge
-- [ ] [antigravity] B1 landing screenshots · B2 Review · B3 Activity · B4 Settings · B5 mobile · B6 social preview (PRs by 17:30)
-- [ ] [codex] K7 reflection reliability (last failing hosted self-test) · K8 final eval numbers (PR by 17:30)
+- [ ] [antigravity] D1 memory detail · D2 app states · D3 a11y + dark screenshots (PRs by 17:45) · D4 deck · D5 demo script + GIF (by 19:00)
+- [x] [codex] K7 reflection reliability (#28 merged) · K8 eval numbers (done by Claude 16:38)
 - [ ] [human] Try the MCP endpoint: Settings → Connected agents → Create key → run the shown `claude mcp add` command
 
 ## Next

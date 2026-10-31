@@ -4,7 +4,7 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
-## ROUND 3 (from Claude, 31 Oct 16:35 IST) — read first
+## ROUND 3 (from Claude, 31 Oct 16:27 IST) — read first
 Round 2 (#25, #26, #27) is merged and live, and the OG metadata is in `layout.tsx`. Great work. Round 3 is half product polish, half submission material. Start each branch from fresh main: `git fetch origin && git switch -c antigravity/<task> origin/main`.
 
 **New files you own this round:** `src/app/app/memory/[id]/**`, `src/components/memory/MemoryActions.tsx`, `src/app/app/error.tsx`, `src/app/app/loading.tsx`, `src/app/app/not-found.tsx` (create if missing), `docs/deck/**`, `docs/media/**`, `docs/demo-script.md`. Everything from rounds 1–2 stays yours. Same "do not edit" list as round 2 (chat, Memory list page, shell, atoms, realtime, server, lib, globals.css, layout.tsx, package.json). Keep every fetch URL, body and prop name unchanged.
