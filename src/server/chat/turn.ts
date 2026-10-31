@@ -12,7 +12,7 @@ import { after } from "next/server";
 import type { RadahnUIMessage, RecallPickWire } from "@/lib/chat-types";
 import type { SessionUser } from "@/server/auth/session";
 import { collections, type MessageDoc } from "@/server/db/collections";
-import { candidates, generatePlain, modelLabel, thinkingOptions } from "@/server/llm/registry";
+import { candidates, generatePlain, modelLabel, providerOf, thinkingOptions } from "@/server/llm/registry";
 import { engine, type RecallResult } from "@/server/memory";
 import { citedIds, stripCitations } from "@/lib/citations";
 import { startWithFallback } from "./stream-fallback";
@@ -257,7 +257,11 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
       const tools = memoryTools({ engine: eng, ownerId, spaceKey, conversationId, messageId: input.message.id, refs: ctx.refs, writer });
 
       // 5. Stream with pre-first-token model fallback.
-      const list = await candidates("chat", input.model ?? settings.chatModel);
+      const all = await candidates("chat", input.model ?? settings.chatModel);
+      // Groq's free tier allows ~8k tokens/minute per model, and every tool step resends the whole
+      // context, so a long prompt fails mid-answer ("Reply failed"). Keep large turns on Gemini.
+      const approxTokens = Math.ceil((ctx.system.length + modelMessages.reduce((n, m) => n + String(m.content).length, 0)) / 3.5);
+      const list = approxTokens > 2200 && all.some((c) => providerOf(c.modelId) !== "groq") ? all.filter((c) => providerOf(c.modelId) !== "groq") : all;
       const started = await startWithFallback(list, (c, signal) =>
         streamText({
           model: c.model,

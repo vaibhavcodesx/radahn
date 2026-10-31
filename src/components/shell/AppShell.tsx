@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Brain, Inbox, MessageSquarePlus, Moon, PanelLeft, Settings, Sun, X } from "lucide-react";
+import { Activity, Brain, Inbox, MessageSquarePlus, Moon, PanelLeft, Settings, Sun, X, Pencil, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -152,20 +152,7 @@ export function AppShell({
             conversations.map((c) => {
               const active = pathname === `/app/chat/${c.id}`;
               return (
-                <li key={c.id}>
-                  <Link
-                    href={`/app/chat/${c.id}`}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      "flex h-9 items-center gap-2 rounded-control px-3 text-[14px] text-ink-2 hover:bg-hover hover:text-ink",
-                      active && "bg-hover-2 text-ink",
-                    )}
-                    title={`${c.title} · ${timeAgo(c.lastMessageAt)}`}
-                  >
-                    <span className="truncate">{c.title}</span>
-                    {c.demo ? <span className="ml-auto shrink-0 text-[11.5px] text-ink-3">Demo</span> : null}
-                  </Link>
-                </li>
+                <ChatRow key={c.id} chat={c} active={active} onNavigate={() => setMobileOpen(false)} />
               );
             })
           )}
@@ -204,7 +191,8 @@ export function AppShell({
             <button className="absolute inset-0 bg-black/50" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
             <div className="relative h-full w-[280px] animate-fade-in shadow-overlay">
               {sidebar}
-              <button onClick={() => setMobileOpen(false)} className="absolute right-2 top-3 flex size-10 items-center justify-center rounded-control text-ink-2 hover:bg-hover" aria-label="Close">
+              {/* Outside the panel, on the dimmed backdrop, so it never crowds the space switcher. */}
+              <button onClick={() => setMobileOpen(false)} className="absolute -right-12 top-3 flex size-10 items-center justify-center rounded-full bg-surface text-ink shadow-overlay" aria-label="Close navigation">
                 <X className="size-5" />
               </button>
             </div>
@@ -257,5 +245,81 @@ function ThemeToggle() {
     <button onClick={toggle} className="rounded-control p-1.5 text-ink-3 hover:bg-hover hover:text-ink" aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}>
       {theme === "light" ? <Moon className="size-4" strokeWidth={1.75} /> : <Sun className="size-4" strokeWidth={1.75} />}
     </button>
+  );
+}
+
+/** Sidebar chat row with rename (inline) and delete (two-step confirm). */
+function ChatRow({ chat, active, onNavigate }: { chat: { id: string; title: string; lastMessageAt: string | Date; demo?: boolean }; active: boolean; onNavigate: () => void }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<"idle" | "rename" | "confirm" | "busy">("idle");
+  const [title, setTitle] = useState(chat.title);
+
+  async function rename() {
+    const next = title.trim();
+    if (!next || next === chat.title) return setMode("idle");
+    setMode("busy");
+    await fetch(`/api/conversations/${chat.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: next.slice(0, 80) }) }).catch(() => null);
+    setMode("idle");
+    router.refresh();
+  }
+  async function remove() {
+    setMode("busy");
+    const r = await fetch(`/api/conversations/${chat.id}`, { method: "DELETE" }).catch(() => null);
+    if (!r?.ok) return setMode("idle");
+    if (active) router.push("/app");
+    router.refresh();
+  }
+
+  if (mode === "rename")
+    return (
+      <li className="px-1 py-0.5">
+        <input
+          autoFocus
+          value={title}
+          maxLength={80}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void rename();
+            if (e.key === "Escape") (setTitle(chat.title), setMode("idle"));
+          }}
+          onBlur={() => void rename()}
+          aria-label="Chat name"
+          className="h-9 w-full rounded-control bg-surface-2 px-3 text-[14px] text-ink outline-none ring-1 ring-[var(--line-strong)] focus:ring-[var(--ink-3)]"
+        />
+      </li>
+    );
+
+  return (
+    <li className="group/chat relative">
+      <Link
+        href={`/app/chat/${chat.id}`}
+        onClick={onNavigate}
+        className={cn(
+          "flex h-9 items-center gap-2 rounded-control px-3 pr-16 text-[14px] text-ink-2 hover:bg-hover hover:text-ink",
+          active && "bg-hover-2 text-ink",
+        )}
+        title={`${chat.title} · ${timeAgo(chat.lastMessageAt)}`}
+      >
+        <span className="truncate">{chat.title}</span>
+        {chat.demo ? <span className="ml-auto shrink-0 text-[11.5px] text-ink-3">Demo</span> : null}
+      </Link>
+      {mode === "confirm" || mode === "busy" ? (
+        <span className="absolute inset-y-0 right-1 flex items-center gap-1">
+          <button onClick={() => void remove()} disabled={mode === "busy"} className="h-7 rounded-full bg-red px-2.5 text-[12px] font-medium text-white disabled:opacity-60">
+            {mode === "busy" ? "…" : "Delete"}
+          </button>
+          <button onClick={() => setMode("idle")} className="h-7 rounded-full px-2 text-[12px] text-ink-2 hover:bg-hover">Keep</button>
+        </span>
+      ) : (
+        <span className="absolute inset-y-0 right-1 flex items-center opacity-100 transition-opacity md:opacity-0 md:group-hover/chat:opacity-100 md:focus-within:opacity-100">
+          <button onClick={() => setMode("rename")} aria-label={`Rename ${chat.title}`} title="Rename" className="flex size-7 items-center justify-center rounded-control text-ink-3 hover:bg-hover-2 hover:text-ink">
+            <Pencil className="size-3.5" strokeWidth={1.75} />
+          </button>
+          <button onClick={() => setMode("confirm")} aria-label={`Delete ${chat.title}`} title="Delete" className="flex size-7 items-center justify-center rounded-control text-ink-3 hover:bg-hover-2 hover:text-red">
+            <Trash2 className="size-3.5" strokeWidth={1.75} />
+          </button>
+        </span>
+      )}
+    </li>
   );
 }

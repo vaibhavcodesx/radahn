@@ -3,7 +3,10 @@
 import { Check, Copy } from "lucide-react";
 import { memo, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import "katex/dist/katex.min.css";
 
 /**
  * Assistant reply rendering: GitHub-flavoured markdown (headings, lists, fenced code, tables)
@@ -13,6 +16,12 @@ import remarkGfm from "remark-gfm";
 export type CitationRenderer = (ref: string, key: string) => ReactNode;
 
 const toLinks = (text: string) => text.replace(/\[\[(m\d{1,2})\]\]/g, "[$1](#cite-$1)");
+
+/** Models often write LaTeX as \( … \) and \[ … \]; remark-math only knows dollar delimiters. */
+const toMath = (text: string) =>
+  text
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, body: string) => `\n$$\n${body.trim()}\n$$\n`)
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, body: string) => `$${body.trim()}$`);
 
 function CodeBlock({ lang, code }: { lang?: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -87,8 +96,8 @@ function components(cite: CitationRenderer): Components {
 export const Markdown = memo(function Markdown({ text, cite }: { text: string; cite: CitationRenderer }) {
   return (
     <div className="flex flex-col gap-3 [&_tr:last-child_td]:border-b-0">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components(cite)} skipHtml>
-        {toLinks(text)}
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]} components={components(cite)} skipHtml>
+        {toLinks(toMath(text))}
       </ReactMarkdown>
     </div>
   );

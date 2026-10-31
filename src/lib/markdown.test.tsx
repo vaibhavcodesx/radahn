@@ -29,6 +29,13 @@ describe("Markdown", () => {
     expect(code).toContain("print(x)");
   });
 
+  it("renders LaTeX in dollar and bracket delimiters", () => {
+    const out = html(["Energy is $E = mc^2$ and", "", "\\[ \\int_0^1 x\\,dx = \\tfrac{1}{2} \\]"].join("\n"));
+    expect(out).toContain("katex");
+    expect(out).not.toContain("$E");
+    expect(out).not.toContain("\\[");
+  });
+
   it("handles bold and code", () => {
     expect(html("**Now:** run `npm test`")).toContain("<strong");
     expect(html("**Now:** run `npm test`")).toContain("<code");

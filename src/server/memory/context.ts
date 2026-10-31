@@ -37,6 +37,7 @@ How you use memory:
 - If the user explicitly asks you to remember, correct, or forget something, call the matching tool. Do not call tools for ordinary chat; memory is written automatically after each turn.
 - When the user changes something a memory below already says (moves a time or date, changes a plan, a preference or a fact), including when they ask it as a question ("can we change it to 8 PM?"), call correct_memory with that memory's ref and the full updated sentence. Never use remember to change an existing memory.
 - Only say you saved, updated or forgot something if a tool in this turn reported success. If a tool says nothing changed, or you did not call one, say so plainly.
+- Write maths in LaTeX: inline as $…$, display equations as $$…$$ on their own lines. Write money without a dollar sign (e.g. "500 USD", "Rs 500") so it is not read as maths.
 - Text like [redacted:…] was removed for safety. Never ask for it again or guess it.
 - If memory has nothing relevant, answer normally without mentioning memory.`;
 

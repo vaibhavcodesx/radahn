@@ -120,7 +120,7 @@ export function HalftoneFooter({
       const measured = m.measureText(wordmark).width;
       // Fit the whole word between the top row (~96 px) and the copyright row (~72 px): limited by
       // width or by the free height, whichever is tighter, so no letter is cut off or under text.
-      const top = 96, bottom = 72;
+      const top = 96, bottom = w < 640 ? 64 : 72;
       const fitW = measured > 0 ? (w * 0.94 / measured) * 100 : 80;
       const fitH = Math.max(40, (h - top - bottom) / 0.74);
       const fit = Math.min(fitW, fitH);
@@ -371,7 +371,7 @@ export function HalftoneFooter({
 
         <div className="flex flex-col items-start justify-between gap-2 border-t border-line/40 pt-4 sm:flex-row sm:items-center">
           <p className="text-[13px] text-ink-3">© 2026 Radahn. Example content is synthetic.</p>
-          <p className="font-mono text-[11.5px] text-ink-3">
+          <p className="hidden font-mono text-[11.5px] text-ink-3 sm:block">
             Interact: hover or tap to part the dots · click for shockwave
           </p>
         </div>
