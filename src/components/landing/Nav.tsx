@@ -27,16 +27,22 @@ export function Nav() {
           : "bg-transparent"
       }`}
     >
-      <Link href="/" className="flex min-h-[44px] items-center gap-2.5">
-        <Image
-          src="/brand/radahn-mark.png"
-          alt=""
-          width={28}
-          height={28}
-          className="rounded-[4px]"
-          priority
-        />
-        <span className="font-sans text-[17px] font-semibold tracking-[-0.01em] text-ink">
+      <Link
+        href="/"
+        className="group flex min-h-[44px] items-center gap-2.5 transition-opacity hover:opacity-95"
+        aria-label="Radahn home"
+      >
+        <span className="flex size-[38px] items-center justify-center rounded-[8px] border border-line bg-surface/80 p-0.5 shadow-card transition-colors group-hover:border-line-strong">
+          <Image
+            src="/brand/radahn-mark.png"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 rounded-[6px]"
+            priority
+          />
+        </span>
+        <span className="font-sans text-[19.5px] font-semibold tracking-[-0.015em] text-ink">
           Radahn
         </span>
       </Link>

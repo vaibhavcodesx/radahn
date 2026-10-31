@@ -13,7 +13,7 @@ export const metadata = {
 const FEATURES: Array<[string, string, string]> = [
   ["Document model + $jsonSchema", "memories", "Statement, type, scope, provenance, scores, lifecycle and a 768-d vector in one validated document."],
   ["Atlas Vector Search (pre-filtered)", "recall channel 1 · reconcile", "Semantic recall scoped by owner, space, status and type before scoring."],
-  ["Atlas Search (lexical)", "recall channel 2", 'Exact names, codes and numbers that embeddings blur (\u201cM0\u201d, \u201cSVNIT\u201d).'],
+  ["Atlas Search (lexical)", "recall channel 2", 'Exact names, codes and numbers that embeddings blur (\u201cM0\u201d, \u201cKestrel\u201d).'],
   ["TTL index on purgeAt", "expired / rejected units, traces, rate limits", "Physical forgetting without cron code. Recall excludes expired units at query time, before the TTL monitor runs."],
   ["Partial unique index", "{ownerId, spaceKey, slotKey} where active", "A database guarantee of one current value per fact, even with two writers racing."],
   ["Multi-document transactions", "supersede · reflection merges · guest → Google", "A correction never leaves a half-updated memory."],
@@ -56,7 +56,7 @@ export default function HowItWorks() {
           ))}
         </ul>
         <P>
-          Each unit is one self-contained statement (&ldquo;Aarav&apos;s build window closes 31 Oct, 9:00 PM IST&rdquo;) with an owner, a space or global scope, importance,
+          Each unit is one self-contained statement (&ldquo;Kestrel&apos;s public beta ships on 7 Nov 2026 at 9:00 PM IST&rdquo;) with an owner, a space or global scope, importance,
           confidence, sensitivity, provenance (the quote it came from), recall stats, a lifecycle state and an embedding. Short-term memory is the chat
           transcript in <Code>messages</Code>; long-term memory is <Code>memories</Code>.
         </P>
@@ -96,7 +96,7 @@ export default function HowItWorks() {
 
         <H2 n="04">Difficult cases</H2>
         <ul className="flex flex-col gap-3 text-[15px] leading-relaxed text-ink-2">
-          <li><strong className="text-ink">Correction.</strong> &ldquo;Actually, the deadline moved to 10 PM.&rdquo; The old unit becomes <em>outdated</em>, points to its replacement, and the next answer says what changed.</li>
+          <li><strong className="text-ink">Correction.</strong> &ldquo;Actually, the beta launch moved to 10 PM.&rdquo; The old unit becomes <em>outdated</em>, points to its replacement, and the next answer says what changed.</li>
           <li><strong className="text-ink">Conflict.</strong> One active value per fact is enforced by a partial unique index; near-ties ask you a clarifying question instead of guessing.</li>
           <li><strong className="text-ink">Expiry.</strong> &ldquo;Remind me this weekend&rdquo; expires on its own. Recall stops at <Code>expiresAt</Code>; the TTL index deletes it a few minutes later. You can set &ldquo;expire in 2 minutes&rdquo; and watch.</li>
           <li><strong className="text-ink">Forget.</strong> A hard delete — statement and vector — leaving a content-free tombstone event.</li>

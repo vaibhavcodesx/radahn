@@ -7,6 +7,7 @@ import { MorphWord } from "@/components/landing/MorphWord";
 import { Nav } from "@/components/landing/Nav";
 import { ScreenshotsShowcase } from "@/components/landing/ScreenshotsShowcase";
 import { ScrollRevealManifesto } from "@/components/landing/ScrollRevealManifesto";
+import { SectionNavPill } from "@/components/landing/SectionNavPill";
 import { wordDiff } from "@/lib/diff";
 import { type MemoryTypeName } from "@/lib/memory-types";
 
@@ -17,9 +18,9 @@ import { type MemoryTypeName } from "@/lib/memory-types";
  */
 
 const RECALL_CARD: Array<{ type: MemoryTypeName; statement: string; s: [number, number, number, number, number, number]; why: string }> = [
-  { type: "constraint", statement: "Build window closes 31 Oct, 9:00 PM IST.", s: [0.82, 0.96, 1, 0.95, 0.1, 0.89], why: 'matched \u201cnext 4 hours\u201d \u00b7 relevant to planning' },
-  { type: "preference", statement: "Prefers plans in 30\u201360 minute time boxes.", s: [0.71, 0.98, 0.7, 0.85, 0.1, 0.78], why: "close in meaning \u00b7 confirmed 3\u00d7" },
-  { type: "goal", statement: "Wants a top-16 finish at the hackathon.", s: [0.55, 0.9, 0.8, 0.9, 0.1, 0.69], why: "relevant to planning \u00b7 high importance" },
+  { type: "constraint", statement: "Kestrel's public beta ships on 7 Nov 2026 at 9:00 PM IST.", s: [0.82, 0.96, 1, 0.95, 0.1, 0.89], why: 'matched \u201cbeta launch\u201d \u00b7 hard deadline' },
+  { type: "preference", statement: "Aarav prefers bullet lists over long paragraphs.", s: [0.71, 0.98, 0.7, 0.85, 0.1, 0.78], why: "communication style \u00b7 confirmed 3\u00d7" },
+  { type: "goal", statement: "Aarav wants 500 active pilots on Kestrel by January 2027.", s: [0.55, 0.9, 0.8, 0.9, 0.1, 0.69], why: "relevant to planning \u00b7 high importance" },
 ];
 
 const WITHOUT = `Here's a balanced 4-hour plan:
@@ -27,10 +28,10 @@ const WITHOUT = `Here's a balanced 4-hour plan:
 2. Work on your most important task for 90 minutes.
 3. Take a 15-minute break to recharge.
 4. Use the last hour for emails, planning, and wrapping up.`;
-const WITH = `- 5:00–6:00 Finish recall + citations (deadline is 9 PM tonight).
-- 6:00–7:00 Deploy and run the judge path on prod.
-- 7:00–8:00 Record the demo video, under 7 minutes.
-- 8:00–9:00 README, deck, final deploy by 8:45.`;
+const WITH = `- 5:00–6:00 Finalize telemetry ingestion for drone flight logs.
+- 6:00–7:00 Deploy Next.js web dashboard to Vercel production.
+- 7:00–8:00 Test pilot onboarding flow with test flight data.
+- 8:00–9:00 Smoke-test public beta readiness before 9 PM cutoff.`;
 
 /** User-facing value propositions — replaces the old MongoDB features grid (A1/A3). */
 const VALUES = [
@@ -78,7 +79,7 @@ export default function Home() {
               <p className="mono-label text-[10.5px]">Recalled 3 · 41 ms</p>
               <p className="mono-label text-[9.5px] text-grove-ink-2">Example</p>
             </div>
-            <p className="mt-3 rounded-control bg-grove-2 px-3 py-2 text-[14px]">&ldquo;Plan my next 4 hours.&rdquo;</p>
+            <p className="mt-3 rounded-control bg-grove-2 px-3 py-2 text-[14px]">&ldquo;Plan my next 4 hours for Kestrel.&rdquo;</p>
             <ol className="mt-4 flex flex-col gap-4">
               {RECALL_CARD.map((r) => (
                 <li key={r.statement} className="flex flex-col gap-1.5">
@@ -96,18 +97,7 @@ export default function Home() {
       {/* GLYPH FIELD BAND with floating section nav (Griffin) */}
       <section aria-label="How memory moves" className="relative h-[34vh] min-h-[240px] border-y border-line">
         <GlyphField className="absolute inset-0" />
-        <nav aria-label="Sections" className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1 rounded-full bg-surface-2/90 p-1 shadow-overlay backdrop-blur-md">
-          {[
-            ["#proof", "Proof"],
-            ["#screens", "Product"],
-            ["#how", "How it works"],
-            ["#trust", "Control"],
-          ].map(([href, label]) => (
-            <a key={href} href={href} className="mono-label flex min-h-[36px] items-center rounded-full px-3.5 py-1.5 text-[11px] text-ink-2 hover:bg-hover hover:text-ink">
-              {label}
-            </a>
-          ))}
-        </nav>
+        <SectionNavPill />
       </section>
 
       {/* USER-FACING VALUE — replaces MongoDB features grid (A1: remove stack credits, A3: user-facing copy) */}
@@ -178,13 +168,13 @@ export default function Home() {
               {["gather", "cluster", "consolidate", "write"].map((s) => (
                 <li key={s} className="flex items-center gap-2.5"><span className="size-2 rounded-full bg-green" /><span className="w-24 capitalize">{s}</span></li>
               ))}
-              <li className="mt-1 flex gap-2 text-ink-2"><TypeSwatch type="strategy" size={12} className="mt-[3px]" />When asked for a plan, give at most 5 time-boxed bullets.</li>
+              <li className="mt-1 flex gap-2 text-ink-2"><TypeSwatch type="strategy" size={12} className="mt-[3px]" />When Aarav asks for a plan, give at most 5 bullets, each with a time box.</li>
             </ul>
           </Row>
           <Row n="04" title="Correct & forget" body="Corrections supersede — the old belief stays as history. Expiry is automatic. Forget is a hard delete that leaves only a content-free tombstone.">
             <ol className="flex flex-col gap-1.5 border-l border-line pl-4 text-[13px]">
-              <li className="text-ink-3 line-through">Deadline is 9:00 PM.</li>
-              <li className="text-ink">Deadline is 10:00 PM. <span className="mono-label text-[9.5px] text-t-preference">current</span></li>
+              <li className="text-ink-3 line-through">Kestrel beta launch is 9:00 PM.</li>
+              <li className="text-ink">Beta launch moved to 10:00 PM. <span className="mono-label text-[9.5px] text-t-preference">current</span></li>
             </ol>
           </Row>
         </div>
