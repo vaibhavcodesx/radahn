@@ -69,6 +69,7 @@ function sameTrigger(old:MemoryUnit,trigger:string):boolean {
   const hash=contentHash(gate.candidate.statement);if(hashes.has(hash))continue;hashes.add(hash);
   const base=parents[0],expires= [...evidence,...parents].flatMap(m=>m.expiresAt?[m.expiresAt]:[]).sort((a,b)=>+a-+b)[0];
   const unit:MemoryUnit={_id:new ObjectId(),ownerId:input.ownerId,spaceKey,type,statement:gate.candidate.statement,contentHash:hash,entities:candidate.entities,tags:[],importance:candidate.importance,confidence:candidate.confidence,sensitivity,pinned:parents.some(m=>m.pinned),status:gate.op==="pending"?"pending_review":"active",source:{kind:"reflection",actor:{kind:"reflection",name:"reflection"}},evidenceIds:evidence.map(m=>m._id),relatedIds:[],validFrom:now,stats:{recallCount:0,confirmCount:0,citedCount:0},embedding:[],embeddingModel:"gemini-embedding-2@768",createdAt:now,updatedAt:now};
+  if([...evidence,...parents].every(m=>m.demo===true))unit.demo=true;
   if(trigger){unit.subject="strategy";unit.attribute=trigger;unit.slotKey=`strategy.${trigger}`;}
   else if(base?.slotKey){unit.subject=base.subject;unit.attribute=base.attribute;unit.slotKey=base.slotKey;}
   if(expires){unit.expiresAt=expires;unit.purgeAt=purgeAt(expires,now);}
@@ -134,6 +135,7 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
  }
 }
 export async function listReflections(ownerId:string,limit=20):Promise<ReflectionRun[]> {return collections().reflections.find({ownerId}).sort({startedAt:-1}).limit(Math.min(100,Math.max(1,Number.isFinite(limit)?Math.trunc(limit):20))).toArray();}
+
 
 
 
