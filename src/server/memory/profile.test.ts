@@ -27,3 +27,26 @@ it("drops an expired prior snapshot while bounding new current retention indepen
 it("stops profile reads at source expiry before the TTL monitor deletes anything",async()=>{rows[0].expiresAt=new Date(+now+1);rows[0].purgeAt=new Date(+now+100);await writeProfile("alice",raw(),rows,session,now);c.profiles.findOne.mockResolvedValue(c.profiles.replaceOne.mock.calls[0][1]);expect(await readProfile("alice",new Date(+now+2))).toBeUndefined();});
 
 it("validates the entire evidence set in one bounded owner-scoped read",async()=>{rows=Array.from({length:30},()=>unit());await writeProfile("alice",raw(),rows,session,now);c.profiles.findOne.mockResolvedValue(c.profiles.replaceOne.mock.calls[0][1]);c.memories.find.mockClear();expect(await readProfile("alice",now)).toBe(raw().text);expect(c.memories.find).toHaveBeenCalledTimes(1);expect(c.memories.find.mock.lastCall?.[0]).toEqual({ownerId:"alice",_id:{$in:rows.map(m=>m._id)}});});
+
+it('keeps eligible profile evidence when a model citation includes an ineligible id without retaining unsupported prose',async()=>{
+ const eligible=rows[0],privateFact=unit({spaceKey:'private',statement:'Alice private project uses a secret launch plan.'});
+ rows.push(privateFact);
+ await writeProfile('alice',{text:'Alice studies computer science and her private project uses a secret launch plan.',evidenceIds:[eligible._id.toHexString(),privateFact._id.toHexString()]},rows,session,now);
+ expect(c.profiles.replaceOne).toHaveBeenCalledTimes(1);
+ const doc=c.profiles.replaceOne.mock.calls[0][1];expect(doc.evidenceIds).toEqual([eligible._id]);expect(doc.text).toBe('Alice studies computer science.');expect(doc.text).not.toContain('private project');
+});
+it('recovers a profile from eligible citations when another citation is malformed or unknown',async()=>{
+ const eligible=rows[0];await writeProfile('alice',{text:'Alice studies computer science.',evidenceIds:[eligible._id.toHexString(),'not-an-id',new ObjectId().toHexString()]},rows,session,now);
+ expect(c.profiles.replaceOne.mock.calls[0]?.[1].evidenceIds).toEqual([eligible._id]);
+});
+it('rechecks retained mixed-citation sources inside the transaction',async()=>{
+ const eligible=rows[0];c.memories.find.mockReturnValue({toArray:async()=>[{...eligible,statement:'Alice now studies history.'}]});
+ await writeProfile('alice',{text:'Alice studies computer science.',evidenceIds:[eligible._id.toHexString(),'invalid']},rows,session,now);
+ expect(c.profiles.replaceOne).not.toHaveBeenCalled();
+});
+it('bounds mixed-citation source-only reconstruction to complete eligible statements',async()=>{
+ rows=Array.from({length:7},(_,i)=>unit({statement:`Alice stable programming preference number ${i}: `+'a'.repeat(180)+'.'}));
+ await writeProfile('alice',{text:'Alice has stable programming preferences.',evidenceIds:[...rows.map(m=>m._id.toHexString()),'invalid']},rows,session,now);
+ const doc=c.profiles.replaceOne.mock.calls[0][1];expect(doc.text.length).toBeLessThanOrEqual(1200);expect(doc.evidenceIds.length).toBeLessThan(rows.length);expect(doc.evidenceIds.length).toBeGreaterThan(0);
+ expect(doc.text).toBe(rows.filter(m=>doc.evidenceIds.some((id:ObjectId)=>id.equals(m._id))).map(m=>m.statement).join(' '));
+});

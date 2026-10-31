@@ -161,3 +161,5 @@ K2 follow-up [status: implemented 14:33 IST, codex/k2-change-notices; relevance/
 K4 follow-up [status: implemented 14:38 IST, codex/k4-review-uncertainty; pending provenance and consent regressions pass; lead composer Yes/No presentation remains UI-owned].
 
 K3 follow-up [status: implemented 14:43 IST, codex/k3-temporal-scenarios; reviewed temporal/event retrieval and expanded hosted cases; fresh deployed run pending].
+
+K5 follow-up [status: implemented 14:53 IST, codex/k5-profile-demo; source-grounded partial profile recovery,40-unit demo with contradiction pair; independent review passed].

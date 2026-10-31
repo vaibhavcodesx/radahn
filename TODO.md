@@ -102,3 +102,5 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 
 - [x] [codex] K3 implemented 14:43 IST: local temporal windows, scoped event joins, past-window eligibility, partial failure isolation and asOf cutoff. Hosted correction-chain/slot-paraphrase/forget/expiry/project cases authored; display-name extraction instruction shipped in K4.
 - [ ] [codex] K3 deployed acceptance: run POST /api/admin/eval after K3 deploy and replace evals/results.md with fresh measured results (existing 09:05 result is baseline only). Slot paraphrase case covers canonicalized writes; independent extraction semantic paraphrases remain a separate model-quality check.
+
+- [x] [codex] K5 implemented 14:53 IST: mixed-citation profile recovery is source-only and transactionally revalidated; active demo contradiction6PMvs7PM has real precomputed vectors and semantic slot metadata without a canonical-slot uniqueness collision.34 focused tests pass, independent review passed. Newly seeded demos include the pair; existing demos need reload.
