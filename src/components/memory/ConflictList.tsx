@@ -22,14 +22,26 @@ interface Pair {
 }
 
 /**
- * Contradictions (PRD F-23, engine C11): two live memories that can't both be true. Keeping one
- * supersedes the other with history, so the choice is reversible from the memory's detail page.
+ * ConflictList (task B2).
+ * Contradictions and conflicting facts:
+ * - Desktop: side by side
+ * - Mobile: stacked
+ * - Clear actions: Keep left / Keep right / Keep both
+ * - Loading, error, and empty states.
  */
 export function ConflictList() {
   const router = useRouter();
   const [pairs, setPairs] = useState<Pair[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
+  function loadConflicts() {
+    setFailed(false);
+    fetch("/api/conflicts")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((d: { conflicts: Pair[] }) => setPairs(d.conflicts))
+      .catch(() => setFailed(true));
+  }
 
   useEffect(() => {
     let live = true;
@@ -42,50 +54,131 @@ export function ConflictList() {
     };
   }, []);
 
-  async function keep(pair: Pair, side: Side) {
-    const drop = side.id === pair.left.id ? pair.right : pair.left;
+  async function resolveKeep(pair: Pair, keepSide: "left" | "right") {
+    const keepSideObj = keepSide === "left" ? pair.left : pair.right;
+    const dropSideObj = keepSide === "left" ? pair.right : pair.left;
     setBusy(pair.id);
-    const r = await fetch("/api/conflicts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ keepId: side.id, dropIds: [drop.id] }) });
+    const r = await fetch("/api/conflicts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ keepId: keepSideObj.id, dropIds: [dropSideObj.id] }),
+    });
     setBusy(null);
     if (!r.ok) return;
-    setPairs((p) => p?.filter((x) => x.id !== pair.id && x.left.id !== drop.id && x.right.id !== drop.id) ?? null);
+    setPairs((p) => p?.filter((x) => x.id !== pair.id && x.left.id !== dropSideObj.id && x.right.id !== dropSideObj.id) ?? null);
     router.refresh();
+  }
+
+  function keepBoth(pair: Pair) {
+    // Both items remain active in memory without superseding either one
+    setPairs((p) => p?.filter((x) => x.id !== pair.id) ?? null);
   }
 
   return (
     <section className="mt-14" aria-busy={pairs === null && !failed}>
-      <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">Contradictions · pick what&apos;s true</h2>
+      <div className="flex items-baseline justify-between">
+        <h2 className="font-serif text-[22px] text-ink">Contradictions</h2>
+        {pairs && pairs.length > 0 ? (
+          <span className="text-[13px] text-ink-3">
+            {pairs.length} {pairs.length === 1 ? "pair" : "pairs"} found
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 text-[14px] text-ink-2">
+        When two memories disagree, pick which one is current. The other becomes history.
+      </p>
+
       {failed ? (
-        <p className="text-[13px] text-ink-3">Couldn&apos;t check for contradictions right now. Reload to try again.</p>
+        <div className="mt-4 rounded-card border border-line bg-surface p-6 text-center shadow-card">
+          <p className="text-[14px] text-red">Couldn&apos;t check for contradictions right now.</p>
+          <Button variant="secondary" size="sm" onClick={loadConflicts} className="mt-3">
+            Try again
+          </Button>
+        </div>
       ) : pairs === null ? (
-        <p className="text-[13px] text-ink-3">Checking recent memories for contradictions…</p>
+        <div className="mt-4 rounded-card border border-line bg-surface p-6 text-center shadow-card">
+          <p className="text-[14px] text-ink-3">Checking memories for contradictions…</p>
+        </div>
       ) : pairs.length === 0 ? (
-        <p className="text-[13px] text-ink-3">No contradictions in your recent memories.</p>
+        <div className="mt-4 rounded-card border border-line bg-surface p-6 text-center shadow-card">
+          <p className="text-[14px] text-ink-3">No conflicting memories found. All facts are in agreement.</p>
+        </div>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="mt-6 flex flex-col gap-6">
           {pairs.map((pair) => (
-            <li key={pair.id} className="rounded-card bg-surface p-4 shadow-card">
-              <p className="text-[12.5px] font-medium mb-3 text-orange">
-                {pair.reason === "same_slot" ? "Same fact, different values" : "These can't both be true"} · {Math.round(pair.similarity * 100)}% similar
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[pair.left, pair.right].map((side) => (
-                  <div key={side.id} className="flex flex-col gap-3 rounded-control bg-surface-2 p-3">
-                    <p className="flex items-start gap-2 text-[13.5px] leading-snug text-ink">
-                      <TypeSwatch type={side.type as MemoryTypeName} size={13} className="mt-[3px]" />
-                      {side.statement}
-                    </p>
-                    <div className="mt-auto flex items-center justify-between gap-2">
-                      <span className="font-mono text-[10.5px] text-ink-3">
-                        {timeAgo(side.updatedAt)}
-                        {side.demo ? " · DEMO" : ""}
-                      </span>
-                      <Button variant="secondary" size="sm" disabled={busy === pair.id} onClick={() => keep(pair, side)}>
-                        Keep this
-                      </Button>
+            <li key={pair.id} className="overflow-hidden rounded-card border border-line bg-surface p-5 shadow-card sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+                <p className="text-[13.5px] font-medium text-orange">
+                  {pair.reason === "same_slot" ? "Same fact with different values" : "These statements contradict each other"}
+                </p>
+                <span className="font-mono text-[11px] tabular text-ink-3">
+                  {Math.round(pair.similarity * 100)}% match
+                </span>
+              </div>
+
+              {/* Conflict comparison: side by side on desktop, stacked on mobile */}
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                {/* Left Card */}
+                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <TypeSwatch type={pair.left.type as MemoryTypeName} size={13} label />
+                      {pair.left.demo ? <span className="text-[11.5px] text-ink-3">· DEMO</span> : null}
                     </div>
+                    <p className="mt-3 font-serif text-[16px] leading-snug text-ink sm:text-[17px]">
+                      {pair.left.statement}
+                    </p>
                   </div>
-                ))}
+                  <div className="mt-4 flex items-center justify-between pt-2">
+                    <span className="font-mono text-[11px] text-ink-3">{timeAgo(pair.left.updatedAt)}</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={busy === pair.id}
+                      onClick={() => resolveKeep(pair, "left")}
+                      className="min-h-[36px] px-3.5 text-[13px]"
+                    >
+                      Keep this
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Right Card */}
+                <div className="flex flex-col justify-between rounded-control border border-line bg-surface-2 p-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <TypeSwatch type={pair.right.type as MemoryTypeName} size={13} label />
+                      {pair.right.demo ? <span className="text-[11.5px] text-ink-3">· DEMO</span> : null}
+                    </div>
+                    <p className="mt-3 font-serif text-[16px] leading-snug text-ink sm:text-[17px]">
+                      {pair.right.statement}
+                    </p>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between pt-2">
+                    <span className="font-mono text-[11px] text-ink-3">{timeAgo(pair.right.updatedAt)}</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={busy === pair.id}
+                      onClick={() => resolveKeep(pair, "right")}
+                      className="min-h-[36px] px-3.5 text-[13px]"
+                    >
+                      Keep this
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom quick actions */}
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-line pt-3">
+                <Button
+                  variant="quiet"
+                  size="xs"
+                  onClick={() => keepBoth(pair)}
+                  className="text-[12.5px] text-ink-3 hover:text-ink"
+                >
+                  Keep both as active
+                </Button>
               </div>
             </li>
           ))}
