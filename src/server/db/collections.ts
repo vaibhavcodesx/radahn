@@ -77,6 +77,8 @@ export interface MessageDoc {
 }
 
 export interface UserSettingsDoc {
+  /** Set on a guest owner after Google upgrade; late background writes are swept to this owner. */
+  retiredTo?: string;
   reflectionRevision?: number; // Owner-wide successful reflection generation; distinct from ordinary writes.
   memoryRevision?: number; // Serializes owner memory mutations for cross-document budgets (C5).
   _id: string; // = ownerId

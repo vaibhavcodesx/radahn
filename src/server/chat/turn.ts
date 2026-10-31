@@ -1,4 +1,5 @@
 import "server-only";
+import { sweepRetiredOwner } from "@/server/auth/migrate";
 import {
   createUIMessageStream,
   generateId,
@@ -187,6 +188,8 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
         /* keep "New chat" */
       }
     }
+    // A guest who upgraded to Google mid-turn: re-own anything written above under the old id.
+    await sweepRetiredOwner(ownerId).catch(() => {});
   });
 
   // Shared between execute() and onEnd(): the outer onEnd sees every part (data + model).
