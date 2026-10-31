@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, Kbd, TypeSwatch } from "@/components/atoms";
 import { MEMORY_TYPE_META, type MemoryTypeName } from "@/lib/memory-types";
 
@@ -23,9 +23,90 @@ const WHY: Record<string, string> = {
 };
 
 /**
- * ReviewStack (task B2).
- * Approval cards one at a time with big statement, smaller source quote,
- * obvious Keep / Drop buttons, keyboard shortcuts, and finished empty state.
+ * Rolling odometer digits (adapted from Catalog #4 Approval Card, lines 778–850).
+ * Changes roll up or down smoothly when the index updates.
+ */
+function RollingDigits({ value }: { value: string }) {
+  const prevRef = useRef(value);
+  const [oldVal, setOldVal] = useState(value);
+  const [newVal, setNewVal] = useState(value);
+  const [rolling, setRolling] = useState(false);
+  const [shifted, setShifted] = useState(false);
+  const [dir, setDir] = useState<"up" | "down">("up");
+
+  useEffect(() => {
+    if (prevRef.current === value) return;
+    const from = prevRef.current;
+    prevRef.current = value;
+    const fromN = parseInt(from, 10);
+    const toN = parseInt(value, 10);
+    setDir(Number.isFinite(fromN) && Number.isFinite(toN) && toN < fromN ? "down" : "up");
+    setOldVal(from);
+    setNewVal(value);
+    setRolling(true);
+    setShifted(false);
+
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setShifted(true));
+    });
+    const done = setTimeout(() => {
+      setRolling(false);
+      setOldVal(value);
+      setShifted(false);
+    }, 400);
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(done);
+    };
+  }, [value]);
+
+  const chars = rolling ? newVal : oldVal;
+
+  return (
+    <span className="inline-flex items-baseline" aria-label={value}>
+      {Array.from({ length: chars.length }, (_, i) => {
+        const o = oldVal[i] ?? "";
+        const n = chars[i] ?? "";
+        if (!rolling || o === n) {
+          return <span key={`${i}-${n}`}>{n}</span>;
+        }
+        const top = dir === "down" ? n : o;
+        const bottom = dir === "down" ? o : n;
+        const restY = dir === "down" ? "0" : "-1em";
+        const startY = dir === "down" ? "-1em" : "0";
+        return (
+          <span
+            key={`${i}-${o}-${n}-${dir}`}
+            className="relative inline-block h-[1em] overflow-hidden leading-[1em] align-[-0.05em]"
+          >
+            <span
+              className="flex flex-col transition-transform duration-350 ease-out"
+              style={{
+                transform: `translateY(${shifted ? restY : startY})`,
+                transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            >
+              <span className="h-[1em] leading-[1em]">{top}</span>
+              <span className="h-[1em] leading-[1em]">{bottom}</span>
+            </span>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/**
+ * ReviewStack (tasks B2 & G5).
+ * Approval Card adapted from Catalog #4 (lines 718–1138):
+ * - Stack depth visuals with smooth odometer step counter
+ * - Statement editor with clear typography
+ * - Why-held callout and source quote
+ * - Pill actions (Skip, Drop, Keep) with keyboard shortcuts
+ * - Preserves every fetch call and request body
  */
 export function ReviewStack({ items: initial }: { items: Item[] }) {
   const router = useRouter();
@@ -92,7 +173,7 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
 
   return (
     <div className="relative mt-8">
-      {/* stacked cards depth effect */}
+      {/* stacked cards depth effect (Approval Card pattern) */}
       {items.length > 1 ? (
         <div aria-hidden className="absolute inset-x-3 -bottom-2 h-full rounded-card border border-line/40 bg-surface opacity-60 shadow-card" />
       ) : null}
@@ -112,7 +193,7 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
             {item.demo ? <span className="text-[12px] font-medium text-ink-3">· DEMO</span> : null}
           </div>
           <span className="font-mono text-[12px] tabular text-ink-3">
-            {index + 1} of {items.length}
+            <RollingDigits value={String(index + 1)} /> of {items.length}
           </span>
         </div>
 
@@ -142,7 +223,7 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
           </blockquote>
         ) : null}
 
-        {/* Action buttons */}
+        {/* Action buttons (pill actions) */}
         <div className="mt-7 flex flex-wrap items-center gap-3">
           <Button
             variant="accent"
