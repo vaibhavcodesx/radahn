@@ -90,3 +90,12 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] [codex] Lead auth migration audit: src/server/auth/migrate.ts currently deletes source settings after moving owner rows. Acquire both owner locks and retire/redirect the old owner identity so a delayed chat after() write cannot upsert orphan old-owner data after migration; wire profile invalidation in that same transaction. This auth orchestration remains lead-owned.
 
 - [x] [codex] Final CLI guard: unsupported eval flags now fail before env loading/network; --help is usage-only, --deterministic stays offline, default hosted mode remains intentional. The accidental --no-report invocation may have transmitted CRON_SECRET; no hosted result is established, and no more CLI retries were made.
+
+- [x] [codex] K1 engine implemented 14:31 IST: shared eight-second extraction inference budget including quota reads/reports; low thinking and batched embeddings. Independent review passed.
+- [ ] [codex/lead] K1 acceptance: deploy, measure finish-to-first-event p50 (<4s target), and stop zero-candidate UI waiting from existing empty assistant writeSummary or a dedicated completion signal. Engine emits no fake write event.
+
+
+- [x] [codex] K2 implemented 14:33 IST: strong relevance and real slot changes only; atomic announcement claim, monotonic stats, per-pick history, historical/read-only exclusion. Independent review passed; hosted acceptance follows deployment.
+
+- [x] [codex] K4 implemented 14:38 IST: uncertain/personal automatic extraction enters pending_review with message provenance; explicit sensitive consent and privacy ordering preserved. Review passed; full suite346 passed with concurrent K3 scenarios. Golden low-confidence fixture now explicitly models implicit extraction.
+- [ ] [lead] K4 composer: show pending items for the user messageId with Yes/No actions; engine pending events already carry that provenance.

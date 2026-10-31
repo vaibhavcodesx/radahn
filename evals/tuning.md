@@ -23,3 +23,9 @@ Hosted evaluation remains pending. An authenticated POST to the configured Verce
 ## Later integration-verification incident
 
 After the controlled C14 measurements, an unsupported npm run eval -- --no-report invocation executed during integration verification. The old runner selected hosted mode; its generic error cannot establish whether CRON_SECRET was transmitted. This establishes no hosted result and does not change the controlled measurements above. The path was stopped. A follow-up guard now rejects unknown flags before environment loading or fetch, makes --help usage-only, and keeps --deterministic offline; regressions used mocked filesystem/env/fetch and a fake test credential only. The earlier authenticated request was separately rejected by automatic approval review; user authorization remains pending for a future deliberate call after deployment.
+
+## K1 extraction latency follow-up — 31 Oct, 14:31 IST
+
+Root cause: extraction allowed 20 seconds for every fallback attempt. Extraction now requests low thinking with one 8,000 ms inference budget spanning candidate discovery, retries and quota reporting; no further provider attempt starts after expiry. Existing batched candidate embeddings and ambiguous-neighbour-only reconciliation are retained. Empty extraction returns an empty message-tagged summary without fabricated state-change events.
+
+Offline verification establishes timeout settlement and batching, not hosted latency. The budget excludes embeddings, reconciliation and writes. Hosted finish-to-first-event p50 is **not yet measured for this change**; measure after Claude merges/deploys K1. Existing hosted recall p50=507 ms (09:05, three recall queries) is a different metric. Lead integration: the zero-candidate summary already persists on the assistant message, but the UI waits up to20 s without an event; consume that completion summary or add an explicit completion signal. No user-content logging was added.

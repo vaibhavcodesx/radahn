@@ -103,6 +103,8 @@ export function gateCandidate(candidate: CandidateMemory, policy: WritePolicy): 
  if(policy==="review_all") return {op:"pending",reason:"review_all",candidate:safe};
  if(policy==="review_sensitive" && candidate.sensitivity==="sensitive" && !candidate.explicit) return {op:"pending",reason:"sensitive",candidate:safe};
  // 0.55 is the spec's uncertainty threshold; weak automatic extractions need consent.
- if(policy==="auto" && candidate.confidence<0.55) return {op:"pending",reason:"low_confidence",candidate:safe};
+ if(!candidate.explicit && candidate.confidence<0.55) return {op:"pending",reason:"low_confidence",candidate:safe};
+ if(!candidate.explicit && candidate.sensitivity==="personal") return {op:"pending",reason:"personal",candidate:safe};
  return {op:"add",candidate:safe};
 }
+

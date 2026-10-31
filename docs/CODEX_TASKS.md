@@ -154,3 +154,10 @@ Wire `insights`, `graph`. Files: `insights.ts`, `evals/golden/*.json`, `evals/ru
 Status lines: change `[status: todo]` → `[status: in progress HH:MM]` → `[status: merged HH:MM, PR #n]`. Add a `[codex]` line to `CHANGELOG.md` and update `TODO.md` per task. Contract change needed? Put it in the PR description and `TODO.md`; Claude merges contract PRs.
 
 Final review follow-up [07:24]: scoped-agent allowlists and reflection generation checks implemented; unknown eval flags reject before env/network. 309 tests, lint/typecheck pass; engine build passed, final CLI-only guard separately covered. Hosted acceptance and lead route/auth/merge integrations remain pending.
+
+K1 follow-up [status: implemented 14:31 IST, codex/k1-extraction-latency; shared eight-second inference budget reviewed; hosted finish-to-first-event measurements and lead zero-candidate UI completion pending].
+
+
+K2 follow-up [status: implemented 14:33 IST, codex/k2-change-notices; relevance/refinement gate, atomic one-time notice claims, reviewed; hosted scenario acceptance pending].
+
+K4 follow-up [status: implemented 14:38 IST, codex/k4-review-uncertainty; pending provenance and consent regressions pass; lead composer Yes/No presentation remains UI-owned].

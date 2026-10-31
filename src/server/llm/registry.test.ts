@@ -109,3 +109,35 @@ describe("embedding batches", () => {
     await expect(registry.embed([{text:"plan"}], "query")).rejects.toThrow(/^Embedding request failed/);
   });
 });
+
+ describe("structured inference deadline", () => {
+  it("shares one extraction budget across fallback candidates", async () => {
+    const signals: AbortSignal[] = [];
+    mocks.generateText.mockImplementation(async ({abortSignal}) => {
+      signals.push(abortSignal);
+      vi.setSystemTime(Date.now() + 4_000);
+      throw {statusCode:429};
+    });
+    const {z}=await import("zod");
+    await expect(registry.generateStructured("fast", {prompt:"extract",schema:z.object({}),totalTimeoutMs:8_000})).rejects.toThrow(/^LLM request failed/);
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).toBe(signals[1]);
+  });
+ });
+
+it("bounds quota candidate discovery by the inference deadline",async()=>{
+ mocks.find.mockReturnValue({toArray:()=>new Promise(()=>{})});
+ const {z}=await import("zod");
+ const pending=registry.generateStructured("fast",{prompt:"extract",schema:z.object({}),totalTimeoutMs:8_000});
+ const rejected=expect(pending).rejects.toThrow(/deadline/);
+ await vi.advanceTimersByTimeAsync(8_000);await rejected;
+ expect(mocks.generateText).not.toHaveBeenCalled();
+});
+it("bounds quota outcome persistence by the inference deadline",async()=>{
+ mocks.generateText.mockResolvedValue({output:{}});
+ mocks.updateOne.mockImplementation(()=>new Promise(()=>{}));
+ const {z}=await import("zod");
+ const pending=registry.generateStructured("fast",{prompt:"extract",schema:z.object({}),totalTimeoutMs:8_000});
+ const rejected=expect(pending).rejects.toThrow(/deadline/);
+ await vi.advanceTimersByTimeAsync(8_000);await rejected;
+});

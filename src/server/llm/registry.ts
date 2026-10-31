@@ -116,15 +116,40 @@ export function thinkingOptions(modelId: string, level: "low" | "medium" | "high
 export async function withFallback<T>(
   role: ModelRole,
   fn: (c: ModelCandidate) => Promise<T>,
-  opts: { preferred?: string } = {},
+  opts: { preferred?: string; deadlineAt?: number } = {},
+): Promise<{ result: T; servedBy: ServedBy }> {
+  if (opts.deadlineAt === undefined) return runFallback(role, fn, opts);
+  const remaining = opts.deadlineAt - Date.now();
+  if (remaining <= 0) throw new Error("LLM request failed (inference deadline exceeded)");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    // Quota reads/reports can also stall; bound the caller's entire inference wait.
+    return await Promise.race([
+      runFallback(role, fn, opts),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("LLM request failed (inference deadline exceeded)")), remaining);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function runFallback<T>(
+  role: ModelRole,
+  fn: (c: ModelCandidate) => Promise<T>,
+  opts: { preferred?: string; deadlineAt?: number },
 ): Promise<{ result: T; servedBy: ServedBy }> {
   const list = await candidates(role, opts.preferred);
   const hung = new Set<string>();
+  const deadlineReached = () => opts.deadlineAt !== undefined && Date.now() >= opts.deadlineAt;
   for (const c of list) {
     if (hung.has(c.modelId)) continue;
     for (let attempt = 0; attempt < 2; attempt++) {
+      if (deadlineReached()) throw new Error("LLM request failed (inference deadline exceeded)");
       try {
         const result = await fn(c);
+        if (deadlineReached()) throw new Error("LLM request failed (inference deadline exceeded)");
         await report(c, "ok");
         return { result, servedBy: { modelId: c.modelId, label: c.label, fallback: c.fallback } };
       } catch (err) {
@@ -153,8 +178,11 @@ function transient(err: unknown): boolean {
 /** Structured output with fallback (AI SDK v7: generateText + Output.object). */
 export async function generateStructured<S extends z.ZodType>(
   role: ModelRole,
-  args: { system?: string; prompt: string; schema: S; thinking?: "low" | "medium" | "high"; timeoutMs?: number },
+  args: { system?: string; prompt: string; schema: S; thinking?: "low" | "medium" | "high"; timeoutMs?: number; totalTimeoutMs?: number },
 ): Promise<{ object: z.infer<S>; servedBy: ServedBy }> {
+  // Extraction gets one inference budget across keys/models, rather than restarting it on fallback.
+  const deadlineAt = args.totalTimeoutMs === undefined ? undefined : Date.now() + args.totalTimeoutMs;
+  const sharedSignal = args.totalTimeoutMs === undefined ? undefined : AbortSignal.timeout(args.totalTimeoutMs);
   const { result, servedBy } = await withFallback(role, async (c) => {
     const { output } = await generateText({
       model: c.model,
@@ -163,10 +191,10 @@ export async function generateStructured<S extends z.ZodType>(
       prompt: args.prompt,
       output: Output.object({ schema: args.schema }),
       providerOptions: thinkingOptions(c.modelId, args.thinking ?? (role === "reflect" ? "medium" : "low")),
-      abortSignal: AbortSignal.timeout(args.timeoutMs ?? 20_000),
+      abortSignal: sharedSignal ?? AbortSignal.timeout(args.timeoutMs ?? 20_000),
     });
     return output as z.infer<S>;
-  });
+  }, { deadlineAt });
   return { object: result, servedBy };
 }
 
