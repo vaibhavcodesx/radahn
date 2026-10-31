@@ -11,7 +11,7 @@ Radahn is a personal AI agent whose memory you can **see, steer and trust**. It 
 | Remembers / retrieves / updates / corrects / forgets | Chat → "Saving to memory" chips → Memory page (history, Forget bin) |
 | Memory visibly changes the next response | Citation squares in the reply · Memory panel "Used" tab · **Without memory** diff |
 | Inspect memory and explain why it was picked | Memory panel → **Why** tab (score formula + per-memory breakdown) |
-| A difficult case | Correction ("the deadline moved to 10 PM"), Review (sensitive / contradictions), Expire in 2 min, Forget, pasted fake API key |
+| A difficult case | Correction ("the beta launch moved to 10 PM"), Review (sensitive / contradictions), Expire in 2 min, Forget, pasted fake API key |
 
 ## Likely questions
 
@@ -25,10 +25,10 @@ After each reply (in the background, so it never slows the answer): extract cand
 
 **How does recall work? Why these weights?**
 Two stages. Broad retrieval from four channels in parallel (vector, lexical, time window, linked entities), fused with Reciprocal Rank Fusion; then a focused re-rank:
-`final = 0.55·relevance + 0.15·recency + 0.15·importance + 0.10·confidence + type boost`, drop below 0.35, MMR (λ = 0.7) to avoid near-duplicates, budget 8 memories. Relevance dominates on purpose; recency uses a per-type half-life (a deadline goes stale in days, a profile fact never does). The weights follow Generative Agents (recency × importance × relevance) and were tuned on our eval cases (`evals/tuning.md`). Every pick's numbers are stored in a recall trace and shown in the Why tab.
+`final = 0.55·relevance + 0.15·recency + 0.15·importance + 0.10·confidence + type boost`, drop below 0.35, MMR (λ = 0.7) to avoid near-duplicates, budget 8 memories. Relevance dominates on purpose; recency uses a per-type half-life (a launch date goes stale in days, a profile fact never does). The weights follow Generative Agents (recency × importance × relevance) and were tuned on our eval cases (`evals/tuning.md`). Every pick's numbers are stored in a recall trace and shown in the Why tab.
 
 **How does a correction work?**
-"Actually, the deadline moved to 10 PM" → same subject + attribute ("slot") with a new value → in one transaction the old memory becomes *outdated* (kept as history with `validTo`), the new one becomes active. The partial unique index guarantees only one active value per slot, even with two writers racing. The Memory page **As of** control shows what Radahn believed before the change (time travel).
+"Actually, the beta launch moved to 10 PM" → same subject + attribute ("slot") with a new value → in one transaction the old memory becomes *outdated* (kept as history with `validTo`), the new one becomes active. The partial unique index guarantees only one active value per slot, even with two writers racing. The Memory page **As of** control shows what Radahn believed before the change (time travel).
 
 **How does forgetting really work?**
 Three ways. **Forget** = the document and its vector are deleted immediately; only a content-free tombstone event remains. **Expire** = recall stops at `expiresAt` (query-time filter) and MongoDB's TTL monitor deletes it shortly after (it runs about every 60 s). **Reject** in Review = purged by TTL after 24 h. Guest data is kept 7 days.

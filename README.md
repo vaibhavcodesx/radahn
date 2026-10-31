@@ -1,7 +1,7 @@
 # Radahn
 
 **A personal AI agent whose memory you can see, steer, and trust.**
-UNCHARTED 2026 · MongoDB Student Hackathon · **Track 1: Agentic Memory**
+Built on MongoDB Atlas · Next.js · Gemini and Groq
 
 **Live:** https://radahn-ai.vercel.app · **How it works:** https://radahn-ai.vercel.app/how-it-works
 
@@ -14,11 +14,11 @@ Radahn remembers what matters (preferences, decisions, constraints, outcomes, fe
 ## How judges can test (no account needed)
 
 1. Open https://radahn-ai.vercel.app → **Enter as guest**.
-2. Click **Load demo memories** (a synthetic student, Aarav, racing this hackathon's deadline; labelled DEMO).
+2. Click **Load demo memories** (a synthetic student, Aarav, building Kestrel, a flight-log app for drone pilots, a week before its public beta; labelled DEMO).
 3. Ask **“Plan my next 4 hours.”** Watch the Memory panel: memories used, their score breakdowns (**Why** tab), and the learned behaviour that shapes the format. Click a citation square to open a memory. The model picker in the prompt bar switches between Gemini 3.6 Flash (default), 3.8 Flash, Flash-Lite and Groq-hosted models.
 4. Click **Without memory** under the reply to see the word-level diff against a memory-free answer.
 5. Try the difficult cases:
-   - **Correction:** “Actually, the build deadline moved to 10 PM.” The old memory becomes *outdated* and stays in history.
+   - **Correction:** “Actually, the beta launch moved to 10 PM.” The reply shows *Corrected 9:00 PM → 10:00 PM*; the old memory becomes *outdated* and stays in history.
    - **Private info:** paste a fake key like `sk-test_aaaaaaaaaaaaaaaaaaaaaaaa`. It's redacted before the model sees it: “Not saved — looked like a credential”.
    - **Review:** the Review badge holds a sensitive memory until you approve or reject it.
    - **Unsure saves:** when Radahn isn't sure something is worth keeping, it asks above the prompt box: “Remember this? Remember / Don't”.
@@ -28,7 +28,7 @@ Radahn remembers what matters (preferences, decisions, constraints, outcomes, fe
 7. **Review** also lists **contradictions**: two live memories that can't both be true; keep one and the other is superseded with history.
 8. **Connected agents (optional):** Settings → Connected agents → **Create key**, then run the shown command to give Claude Code (or any MCP client) scoped access to this memory. Whatever it saves appears live in Activity under its name.
 
-## Track 1 brief → Radahn
+## Agentic-memory requirements → Radahn
 
 | Brief | Radahn |
 |---|---|
@@ -72,6 +72,10 @@ claude mcp add --transport http radahn https://radahn-ai.vercel.app/api/mcp --he
 ## Measured
 
 Hosted run on production (Vercel + Atlas M0 + free-tier models), 31 Oct 2026, from [`evals/results.md`](evals/results.md): **20/20** live cases (write add / confirm / update-with-history / A→B→C correction, paraphrase confirms without duplicating, privacy no-store, cold-index plan recall, exact and temporal recall, ambiguous name ⇒ no delete, expired excluded, forget then recall nothing, diet memory beats a flood of unrelated "demo" memories), **31/31** deterministic checks (privacy gate, injection, reconcile, expiry grace), **0** secrets stored, write-op accuracy **1.0**, recall@5 **1.0**, recall p50 / p95 **566 / 571 ms** including the query embedding, first memory write **2.0 s** (p50) after the reply. Live samples are deliberately small on the free tier.
+
+## Understand it in 10 minutes
+
+[`docs/how-radahn-works.md`](docs/how-radahn-works.md) walks through one message end to end in plain language, and answers the common questions (how this differs from ChatGPT/Claude memory, why not just RAG, why MongoDB). Short answers: [`docs/qa-cheatsheet.md`](docs/qa-cheatsheet.md).
 
 ## Tech stack
 
