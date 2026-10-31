@@ -61,3 +61,13 @@ test("deleteAll awaits each deletion sequentially within its transaction",async(
 
 test.each([removeDemo,deleteAll])("cleanup erases current and previous profile cache in the owner transaction",async cleanup=>{await cleanup("owner");expect(c.profiles.deleteOne).toHaveBeenCalledWith({_id:"owner",ownerId:"owner"},{session});});
 test("seed replacement also invalidates the entire derived profile cache",async()=>{await seedDemo(input);expect(c.profiles.deleteOne).toHaveBeenCalledWith({_id:"owner",ownerId:"owner"},{session});});
+
+test('seeds an unresolved active contradiction with real similar vectors and no canonical-slot collision',async()=>{
+ await seedDemo(input);const rows=c.memories.insertMany.mock.calls[0][0] as MemoryUnit[];
+ const pair=rows.filter(m=>m.tags.includes('demo-contradiction'));expect(pair).toHaveLength(2);
+ expect(pair.every(m=>m.status==='active'&&m.demo&&m.spaceKey==='hack')).toBe(true);
+ expect(pair[0].subject).toBe(pair[1].subject);expect(pair[0].attribute).toBe(pair[1].attribute);expect(pair[0].value).not.toBe(pair[1].value);
+ expect(pair.every(m=>!m.slotKey)).toBe(true);
+ const dot=pair[0].embedding.reduce((sum,n,i)=>sum+n*pair[1].embedding[i],0),norm=(v:number[])=>Math.sqrt(v.reduce((sum,n)=>sum+n*n,0));
+ expect(dot/(norm(pair[0].embedding)*norm(pair[1].embedding))).toBeGreaterThanOrEqual(.85);
+});

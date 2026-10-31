@@ -5,6 +5,7 @@ vi.mock('@/server/db/client',()=>({db:()=>({databaseName:'radahn',collection:()=
 vi.mock('@/server/db/collections',()=>({collections:()=>{const collection={deleteMany:async(f:{ownerId:string})=>{state.deletes.push(f.ownerId);if(state.fail)throw new Error('cleanup');}};return {memories:collection,events:collection,recalls:collection,reflections:collection,messages:collection,conversations:collection,spaces:collection,settings:{deleteOne:async()=>{state.settings++;return {};}}};}}));
 vi.mock('./write',()=>({writeCandidates:async(_c:unknown,ctx:{ownerId:string})=>{state.owners.push(ctx.ownerId);if(state.slow){state.clock=80000;return {added:1,confirmed:0,superseded:0};}throw new Error('provider private content');}}));
 vi.mock('./recall',()=>({recall:vi.fn()}));
+vi.mock('./extraction-probe',()=>({measureExtractionLatency:vi.fn()}));
 vi.mock('@/server/llm/registry',()=>({candidates:vi.fn(),report:vi.fn(),thinkingOptions:vi.fn()}));
 import {runEvals} from './evals';
 it('cleans its exact disposable owner on failure and exposes no provider content',async()=>{

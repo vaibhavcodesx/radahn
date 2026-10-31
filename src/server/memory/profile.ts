@@ -34,8 +34,17 @@ async function validEvidence(ownerId:string,snapshot:ProfileSnapshot,now:Date,se
 export async function writeProfile(ownerId:string,raw:ProfileOutput|undefined,gathered:MemoryUnit[],session:ClientSession,now=new Date()):Promise<void> {
  if(!raw||!safeText(raw.text)||!raw.evidenceIds.length||raw.evidenceIds.length>60)return;
  const byId=new Map(gathered.map(m=>[m._id.toHexString(),m]));
- const ids=[...new Set(raw.evidenceIds)];
- if(ids.some(id=>!ObjectId.isValid(id)||!byId.has(id)||!profileEligible(byId.get(id)!,ownerId,now)))return;
+  const cited=[...new Set(raw.evidenceIds)];
+ let ids=cited.filter(id=>ObjectId.isValid(id)&&byId.has(id)&&profileEligible(byId.get(id)!,ownerId,now));
+ if(!ids.length)return;
+ let text=raw.text.trim();
+ if(ids.length!==cited.length){
+  // A dropped citation can taint arbitrary prose. Rebuild from eligible source statements instead.
+  const kept:string[]=[];let grounded="";
+  for(const id of ids){const statement=byId.get(id)!.statement.trim();if(grounded.length+statement.length+(grounded?1:0)>1200)continue;kept.push(id);grounded+=`${grounded?" ":""}${statement}`;}
+  ids=kept;text=grounded;
+  if(!ids.length||!safeText(text))return;
+ }
  const freshRows=await collections().memories.find({ownerId,_id:{$in:ids.map(id=>byId.get(id)!._id)}},{session}).toArray();
  const freshById=new Map(freshRows.map(m=>[m._id.toHexString(),m]));
  const sources:MemoryUnit[]=[];
@@ -51,7 +60,7 @@ export async function writeProfile(ownerId:string,raw:ProfileOutput|undefined,ga
  const previous=prior&&await validEvidence(ownerId,prior,now,session,true)?(({text,version,updatedAt,evidenceIds,evidence,expiresAt,purgeAt}:ProfileSnapshot)=>({text,version,updatedAt,evidenceIds,evidence,...(expiresAt?{expiresAt}:{}),...(purgeAt?{purgeAt}:{})}))(prior):undefined;
  // The single physical document contains both snapshots: purge when EITHER snapshot must purge.
  const purgeAt=minDate([ownPurge,previous?.purgeAt]);
- const doc:ProfileDoc={_id:ownerId,ownerId,text:raw.text.trim(),version:(prior?.version??0)+1,updatedAt:now,evidenceIds:sources.map(m=>m._id),evidence:sources.map(m=>({id:m._id,fingerprint:fingerprint(m)})),...(expiresAt?{expiresAt}:{}),...(purgeAt?{purgeAt}:{}),...(previous?{previous}:{})};
+ const doc:ProfileDoc={_id:ownerId,ownerId,text,version:(prior?.version??0)+1,updatedAt:now,evidenceIds:sources.map(m=>m._id),evidence:sources.map(m=>({id:m._id,fingerprint:fingerprint(m)})),...(expiresAt?{expiresAt}:{}),...(purgeAt?{purgeAt}:{}),...(previous?{previous}:{})};
  await collections().profiles.replaceOne({_id:ownerId,ownerId},doc,{session,upsert:true});
 }
 export async function readProfile(ownerId:string,now=new Date()):Promise<string|undefined> {
@@ -66,3 +75,4 @@ export async function invalidateProfile(ownerId:string,session:ClientSession,aff
 }
 /** Auth handoff: call under both owner locks in the migration transaction; rebuild instead of reusing stale ids. */
 export async function migrateProfile(fromOwnerId:string,toOwnerId:string,session:ClientSession):Promise<void> {await invalidateProfile(fromOwnerId,session);if(fromOwnerId!==toOwnerId)await invalidateProfile(toOwnerId,session);}
+

@@ -24,6 +24,23 @@ export const MODEL_CHAINS: Record<ModelRole, string[]> = {
   reflect: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
 };
 
+/** Model selector metadata (CODEX_TASKS K6); availability means configured, not quota guaranteed. */
+export interface ChatModelOption {
+  id: string;
+  label: string;
+  provider: "gemini" | "groq";
+  available: boolean;
+}
+
+/** Typed integration stub: no Groq requests until its provider is installed and wired. */
+export const GROQ_PROVIDER: { readonly provider: "groq"; readonly available: false } = {
+  provider: "groq", available: false,
+};
+
+export function chatModelOptions(): ChatModelOption[] {
+  const available = env().GEMINI_API_KEYS.length > 0;
+  return MODEL_CHAINS.chat.map(id => ({ id, label: modelLabel(id), provider: "gemini", available }));
+}
 /** Human label shown in the UI ("3.8 Flash"). */
 export function modelLabel(model: string): string {
   return model
@@ -39,7 +56,7 @@ export interface ModelCandidate {
   /** Short non-secret key fingerprint (first 6 chars of a sha256), for logs and llm_usage. */
   keyFp: string;
   label: string;
-  /** True when this is not the first choice for the role (UI shows "fell back to …"). */
+  /** Internal diagnostic: true when this model differs from the requested first choice. */
   fallback: boolean;
 }
 
@@ -75,16 +92,19 @@ export function isTimeout(err: unknown): boolean {
 export async function candidates(role: ModelRole, preferred?: string): Promise<ModelCandidate[]> {
   const keys = [...new Set(env().GEMINI_API_KEYS)];
   let chain = MODEL_CHAINS[role];
-  if (preferred && chain.includes(preferred)) chain = [preferred, ...chain.filter(m => m !== preferred)];
+  const selected = preferred && chain.includes(preferred) ? preferred : undefined;
   await refreshUsage(keys.flatMap(key => chain.map(model => `${fingerprint(key)}:${model}`)));
   const offset = rotation++ % Math.max(1, keys.length);
   const ordered = [...keys.slice(offset), ...keys.slice(0, offset)];
   // Slow models go last rather than vanishing, so a fully slow chain still gets tried.
   chain = [...chain.filter((m) => !isSlow(m)), ...chain.filter((m) => isSlow(m))];
-  return chain.flatMap((modelId, mi) => ordered.flatMap(apiKey => {
+  // A user selection takes precedence over the automatic latency heuristic; quota still applies.
+  if (selected) chain = [selected, ...chain.filter(m => m !== selected)];
+  const firstChoice = selected ?? chain[0];
+  return chain.flatMap(modelId => ordered.flatMap(apiKey => {
     const keyFp = fingerprint(apiKey);
     if (!live(`${keyFp}:${modelId}`)) return [];
-    return [{ model: createGoogleGenerativeAI({apiKey})(modelId), modelId, keyFp, label: modelLabel(modelId), fallback: mi > 0 }];
+    return [{ model: createGoogleGenerativeAI({apiKey})(modelId), modelId, keyFp, label: modelLabel(modelId), fallback: modelId !== firstChoice }];
   }));
 }
 

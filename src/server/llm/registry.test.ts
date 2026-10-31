@@ -2,9 +2,9 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({
-  find: vi.fn(), updateOne: vi.fn(), embedMany: vi.fn(), generateText: vi.fn(),
+  find: vi.fn(), updateOne: vi.fn(), embedMany: vi.fn(), generateText: vi.fn(), keys: ["test-key-one", "test-key-two"],
 }));
-vi.mock("@/server/env", () => ({ env: () => ({ GEMINI_API_KEYS: ["test-key-one", "test-key-two"], GEMINI_EMBED_MODEL: "gemini-embedding-2", EMBED_DIM: 768 }) }));
+vi.mock("@/server/env", () => ({ env: () => ({ GEMINI_API_KEYS: mocks.keys, GEMINI_EMBED_MODEL: "gemini-embedding-2", EMBED_DIM: 768 }) }));
 vi.mock("@/server/db/collections", () => ({ collections: () => ({ llmUsage: mocks }) }));
 vi.mock("@ai-sdk/google", () => ({ createGoogleGenerativeAI: ({ apiKey }: {apiKey: string}) => Object.assign((modelId: string) => ({ modelId, apiKey }), { embedding: (modelId: string) => ({ modelId, apiKey }) }) }));
 vi.mock("ai", () => ({ embedMany: mocks.embedMany, generateText: mocks.generateText, Output: { object: (s: unknown) => s } }));
@@ -12,6 +12,7 @@ const fp = (key: string) => createHash("sha256").update(key).digest("hex").slice
 let registry: typeof import("./registry");
 beforeEach(async () => {
   vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers();
+  mocks.keys = ["test-key-one", "test-key-two"];
   vi.setSystemTime(new Date("2026-10-31T12:00:00Z"));
   mocks.find.mockReturnValue({ toArray: async () => [] });
   mocks.updateOne.mockResolvedValue({});
@@ -140,4 +141,32 @@ it("bounds quota outcome persistence by the inference deadline",async()=>{
  const pending=registry.generateStructured("fast",{prompt:"extract",schema:z.object({}),totalTimeoutMs:8_000});
  const rejected=expect(pending).rejects.toThrow(/deadline/);
  await vi.advanceTimersByTimeAsync(8_000);await rejected;
+});
+
+describe("chat model catalog and preference", () => {
+  it("marks catalog entries unavailable without configured Gemini keys", () => {
+    mocks.keys = [];
+    expect(registry.chatModelOptions().every(option => !option.available)).toBe(true);
+  });
+  it("lists Gemini chat models and a typed unavailable Groq provider", () => {
+    expect(registry.chatModelOptions()).toEqual(registry.MODEL_CHAINS.chat.map(id => ({
+      id, label: registry.modelLabel(id), provider: "gemini", available: true,
+    })));
+    expect(registry.GROQ_PROVIDER).toEqual({ provider: "groq", available: false });
+  });
+  it("honors an explicit live preference even when the model was slow", async () => {
+    registry.markSlow("gemini-3.8-flash");
+    const selected = await registry.candidates("chat", "gemini-3.8-flash");
+    expect(selected[0].modelId).toBe("gemini-3.8-flash");
+    expect(selected[0].fallback).toBe(false);
+    expect((await registry.candidates("chat"))[0].modelId).toBe("gemini-3.6-flash");
+  });
+  it("silently uses another model when every selected-model key is exhausted", async () => {
+    mocks.find.mockReturnValue({ toArray: async () => ["test-key-one", "test-key-two"].map(key => ({
+      _id: `${fp(key)}:gemini-3.8-flash`, exhaustedUntil: new Date("2026-11-01T07:00:00Z"),
+    })) });
+    const result = await registry.withFallback("chat", async () => "answer", { preferred: "gemini-3.8-flash" });
+    expect(result.result).toBe("answer");
+    expect(result.servedBy).toMatchObject({ modelId: "gemini-3.6-flash", fallback: true });
+  });
 });

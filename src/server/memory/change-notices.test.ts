@@ -23,3 +23,12 @@ it('announces changed numeric constraints even when the old tokens are retained'
  expect(shouldAnnounceChange({...old,type:'constraint',value:'9 PM'},{...row(),unit:{...current,type:'constraint',value:'9 PM tomorrow'}})).toBe(true);
 });
 
+
+it('suppresses lexical strength with weak query cosine after semantic blending',()=>{
+ const r=row({rrf:1,final:.61});r.hits={ranks:{lexical:1},semanticSimilarity:.1};
+ expect(shouldAnnounceChange(old,r)).toBe(false);
+});
+it('announces a locally strong cosine-only change without an Atlas score',()=>{
+ const r=row({rrf:.3,final:.9,vector:undefined});r.hits={ranks:{semantic:1},semanticSimilarity:.95};
+ expect(shouldAnnounceChange(old,r)).toBe(true);
+});

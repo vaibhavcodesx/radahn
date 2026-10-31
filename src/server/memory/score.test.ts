@@ -46,3 +46,26 @@ describe("recall scoring",()=>{
   expect(buildSystemPrompt({userName:"Aarav",now,timeZone:"Asia/Kolkata",spaceName:"hackathon",recall}).refs).toEqual({m1:"id1"});
  });
 });
+
+// Explicit mocked search scores and vectors: deterministic flood regression, no hosted embeddings.
+it("keeps a strong dietary semantic hit ahead of incidental demo lexical/entity flood",()=>{
+ const diet=unit({type:"profile",importance:6,statement:"Aarav switched to a vegetarian diet in October 2026",embedding:[0,1]});
+ const hits={ranks:{semantic:1},vector:.88,semanticSimilarity:.76};
+ const dietary:Ranked={unit:diet,hits,scores:score(diet,hits,"plan",4,now),selected:false};
+ const flood=Array.from({length:8},(_,i)=>{
+  const u=unit({type:"constraint",importance:10,statement:`Demo detail ${i}`,embedding:Array.from({length:10},(_,j)=>j===i?1:0)});
+  const h={ranks:{semantic:i+2,lexical:i+1,graph:i+1},vector:.56,semanticSimilarity:.12};
+  return {unit:u,hits:h,scores:score(u,h,"plan",4,now),selected:false};
+ });
+ expect(select([...flood,dietary]).map(r=>r.unit._id)).toContainEqual(diet._id);
+ expect(dietary.scores.final).toBeGreaterThan(flood[0].scores.final);
+});
+
+it("reserves the strongest focused semantic match against real measured close cosine competitors",()=>{
+ // Synthetic fixture metadata; cosine scalars are parent synthetic Gemini probe measurements.
+ const diet=unit({type:"profile",importance:7,confidence:.9,statement:"Aarav switched to a vegetarian diet in October 2026."});
+ const hits={ranks:{semantic:1},semanticSimilarity:.619713};
+ const dietary:Ranked={unit:diet,hits,scores:score(diet,hits,"plan",3,now),selected:false};
+ const flood=Array.from({length:8},(_,i)=>{const u=unit({type:"constraint",importance:10,confidence:.9,embedding:[i,1]});const h={ranks:{semantic:i+2,lexical:i+1,graph:i+1},semanticSimilarity:.60536-i*.001};return {unit:u,hits:h,scores:score(u,h,"plan",3,now),selected:false};});
+ expect(select([...flood,dietary],{preserveSemanticBest:true})[0]).toBe(dietary);
+});

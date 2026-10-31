@@ -23,6 +23,8 @@ export interface DemoMemory {
   space: DemoSpace | "global";
   type: MemoryType;
   statement: string;
+  /** Imported conflicting claims retain semantic metadata but await a canonical slot decision. */
+  unresolvedConflict?: boolean;
   subject?: string;
   attribute?: string;
   value?: string;
@@ -64,6 +66,10 @@ export const DEMO_MEMORIES: DemoMemory[] = [
   { key: "f3", space: "hackathon", type: "fact", statement: "The team uses Claude Code and Codex as coding agents alongside three humans.", entities: ["claude code", "codex"], importance: 5, confidence: 0.85, ageHours: 18 },
   { key: "f4", space: "internships", type: "fact", statement: "Aarav's resume is one page and was last updated on 20 Oct 2026.", entities: ["aarav", "resume"], importance: 4, confidence: 0.8, ageHours: 260 },
   { key: "f5", space: "personal", type: "fact", statement: "Aarav's DBMS end-semester exam is on 12 Nov 2026.", subject: "aarav", attribute: "dbms_exam_date", value: "2026-11-12", entities: ["aarav", "dbms"], importance: 7, confidence: 0.9, ageHours: 200 },
+
+  // Deliberately unresolved imports: Review resolves the two rehearsal claims before canonicalizing.
+  { key: "cf1", space: "hackathon", type: "fact", statement: "The Radahn demo rehearsal starts at 6:00 PM IST on 31 Oct 2026.", subject: "radahn_demo", attribute: "rehearsal_time", value: "18:00", unresolvedConflict: true, entities: ["radahn", "demo rehearsal"], tags: ["demo-contradiction"], importance: 5, confidence: 0.8, ageHours: 4 },
+  { key: "cf2", space: "hackathon", type: "fact", statement: "The Radahn demo rehearsal starts at 7:00 PM IST on 31 Oct 2026.", subject: "radahn_demo", attribute: "rehearsal_time", value: "19:00", unresolvedConflict: true, entities: ["radahn", "demo rehearsal"], tags: ["demo-contradiction"], importance: 5, confidence: 0.8, ageHours: 3 },
 
   // ── goal ──
   { key: "g1", space: "hackathon", type: "goal", statement: "Aarav wants a top-16 finish at UNCHARTED 2026.", entities: ["aarav", "uncharted"], importance: 8, confidence: 0.9, ageHours: 30, recallCount: 5 },
@@ -154,3 +160,4 @@ export const DEMO_SUGGESTIONS = [
   "What did we decide about auth, and how did it go?",
   "Actually, the build deadline moved to 10 PM.",
 ];
+

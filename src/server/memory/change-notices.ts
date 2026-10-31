@@ -12,8 +12,9 @@ export function shouldAnnounceChange(old:MemoryUnit,current:Ranked):boolean {
  if(["profile","fact","preference"].includes(unit.type)&&!reversal&&before.size>0&&[...before].every(token=>after.has(token)))return false;
  if(unit.stats.lastRecalledAt&&+unit.stats.lastRecalledAt>=+old.updatedAt)return false;
  // Query relevance must outweigh recency/importance/confidence, with real semantic/lexical support.
- const relevance=.55*current.scores.rrf;
  const background=.15*current.scores.recency+.15*current.scores.importance+.10*current.scores.confidence+current.scores.typeBoost;
- return current.scores.final>=.5&&relevance>=background&&Boolean(current.hits.ranks.lexical||(current.hits.ranks.semantic&&(current.hits.vector??current.scores.vector??0)>=.7));
+ const relevance=current.scores.final-background;
+ const semantic=current.hits.semanticSimilarity??current.hits.vector??current.scores.vector??0;
+ return current.scores.final>=.5&&relevance>=background&&Boolean(current.hits.ranks.lexical||(current.hits.ranks.semantic&&semantic>=.7));
 }
 
