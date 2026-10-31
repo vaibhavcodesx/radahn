@@ -19,8 +19,10 @@ export const envSchema = z.object({
   EMBED_DIM: z.coerce.number().int().default(768),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().url().optional(),
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Pasted console values sometimes carry a trailing slash or newline; Google then answers
+  // "invalid_client: OAuth client was not found".
+  GOOGLE_CLIENT_ID: z.string().trim().transform((v) => v.replace(/\/+$/, "")).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
   CRON_SECRET: z.string().min(16),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   MEMORY_ENGINE: z.enum(["mock", "real"]).default("mock"),
