@@ -24,6 +24,13 @@ describe("parseEnv", () => {
     }
   });
 
+  it("normalises a Google client id pasted as a URL", () => {
+    const id = "123-abc.apps.googleusercontent.com";
+    expect(parseEnv({ ...base, GOOGLE_CLIENT_ID: `http://${id}/
+` }).GOOGLE_CLIENT_ID).toBe(id);
+    expect(parseEnv({ ...base, GOOGLE_CLIENT_ID: id }).GOOGLE_CLIENT_ID).toBe(id);
+  });
+
   it("falls back to placeholders when SKIP_ENV_VALIDATION=1", () => {
     expect(parseEnv({ SKIP_ENV_VALIDATION: "1" }).MEMORY_ENGINE).toBe("mock");
   });

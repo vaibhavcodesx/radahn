@@ -19,9 +19,9 @@ export const envSchema = z.object({
   EMBED_DIM: z.coerce.number().int().default(768),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().url().optional(),
-  // Pasted console values sometimes carry a trailing slash or newline; Google then answers
-  // "invalid_client: OAuth client was not found".
-  GOOGLE_CLIENT_ID: z.string().trim().transform((v) => v.replace(/\/+$/, "")).optional(),
+  // The deployed value was pasted as "http://<id>.apps.googleusercontent.com/"; Google answers
+  // "invalid_client: OAuth client was not found" unless it is the bare id.
+  GOOGLE_CLIENT_ID: z.string().trim().transform((v) => v.replace(/^https?:\/\//i, "").replace(/\/+$/, "")).optional(),
   GOOGLE_CLIENT_SECRET: z.string().trim().optional(),
   CRON_SECRET: z.string().min(16),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
