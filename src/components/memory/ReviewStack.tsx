@@ -17,14 +17,15 @@ interface Item {
 }
 
 const WHY: Record<string, string> = {
-  sensitive: "Looks like sensitive information (health, money, location, or someone else's details).",
-  personal: "Personal detail — kept for review under your policy.",
-  none: "Radahn wasn't confident enough to save this on its own.",
+  sensitive: "Looks like sensitive information (health, finances, location, or another person's details).",
+  personal: "Personal preference or constraint flagged for your review.",
+  none: "Radahn wasn't confident enough to save this automatically.",
 };
 
 /**
- * Approval cards, one at a time (design.md §6.7, PRD F-23). Approve makes the unit recallable
- * immediately; reject drops it (purged by TTL after 24 h). Enter approves, X rejects, S skips.
+ * ReviewStack (task B2).
+ * Approval cards one at a time with big statement, smaller source quote,
+ * obvious Keep / Drop buttons, keyboard shortcuts, and finished empty state.
  */
 export function ReviewStack({ items: initial }: { items: Item[] }) {
   const router = useRouter();
@@ -39,7 +40,11 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
     if (!item || busy) return;
     setBusy(true);
     const edits = decision === "approve" && text.trim() !== item.statement ? { statement: text.trim() } : undefined;
-    const r = await fetch(`/api/memories/${item.id}/review`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision, edits }) });
+    const r = await fetch(`/api/memories/${item.id}/review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ decision, edits }),
+    });
     setBusy(false);
     if (!r.ok) return;
     setDone((d) => [...d, { statement: edits?.statement ?? item.statement, decision }]);
@@ -69,27 +74,48 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (!item)
+  if (!item) {
     return (
-      <div className="mt-10 rounded-card bg-surface p-8 text-center shadow-card">
-        <p className="font-serif text-[22px]">All clear.</p>
-        <p className="mt-2 text-[13px] text-ink-2">{done.length ? `You decided ${done.length} item${done.length > 1 ? "s" : ""}.` : "Nothing is waiting for your approval."}</p>
+      <div className="mt-8 rounded-card border border-line bg-surface p-8 text-center shadow-card sm:p-10">
+        <p className="font-serif text-[24px] text-ink">Nothing to review.</p>
+        <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+          {done.length
+            ? `You decided ${done.length} item${done.length > 1 ? "s" : ""}. Radahn will ask here when it is unsure.`
+            : "Radahn will ask here when it is unsure about a memory or needs your approval."}
+        </p>
       </div>
     );
+  }
 
   const type = item.type as MemoryTypeName;
+  const isEdited = text.trim() !== item.statement;
+
   return (
-    <div className="relative mt-10">
-      {/* stacked cards behind the current one */}
-      {items.length > 1 ? <div aria-hidden className="absolute inset-x-4 -bottom-2 h-full rounded-card bg-surface opacity-60 shadow-card" /> : null}
-      {items.length > 2 ? <div aria-hidden className="absolute inset-x-8 -bottom-4 h-full rounded-card bg-surface opacity-30 shadow-card" /> : null}
-      <article key={item.id} className="relative animate-pop-in rounded-card bg-surface-2 p-6 shadow-overlay" aria-label="Memory awaiting approval">
+    <div className="relative mt-8">
+      {/* stacked cards depth effect */}
+      {items.length > 1 ? (
+        <div aria-hidden className="absolute inset-x-3 -bottom-2 h-full rounded-card border border-line/40 bg-surface opacity-60 shadow-card" />
+      ) : null}
+      {items.length > 2 ? (
+        <div aria-hidden className="absolute inset-x-6 -bottom-4 h-full rounded-card border border-line/20 bg-surface opacity-30 shadow-card" />
+      ) : null}
+
+      <article
+        key={item.id}
+        className="relative animate-pop-in rounded-card border border-line bg-surface-2 p-6 shadow-overlay sm:p-8"
+        aria-label="Memory awaiting approval"
+      >
         <div className="flex items-center justify-between">
-          <p className="text-[12.5px] font-medium text-ink-3">Save this to memory?</p>
-          <span className="font-mono text-[11px] tabular text-ink-3">
-            {index + 1} / {items.length}
+          <div className="flex items-center gap-2">
+            <TypeSwatch type={type} size={14} label />
+            {item.spaceName ? <span className="text-[13px] text-ink-3">· {item.spaceName}</span> : null}
+            {item.demo ? <span className="text-[12px] font-medium text-ink-3">· DEMO</span> : null}
+          </div>
+          <span className="font-mono text-[12px] tabular text-ink-3">
+            {index + 1} of {items.length}
           </span>
         </div>
+
         <label htmlFor="review-statement" className="sr-only">
           Statement (editable)
         </label>
@@ -99,33 +125,60 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
           onChange={(e) => setText(e.target.value)}
           maxLength={240}
           rows={3}
-          className="mt-4 w-full resize-none bg-transparent font-serif text-[22px] leading-snug text-ink outline-none"
+          className="mt-4 w-full resize-none rounded-control border border-transparent bg-transparent font-serif text-[20px] leading-snug text-ink transition-colors hover:border-line focus:border-line-strong focus:bg-canvas/50 focus:p-2 sm:text-[22px]"
+          placeholder="Memory statement..."
         />
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-2">
-          <TypeSwatch type={type} size={13} label />
-          <span>{item.spaceName}</span>
-          <span className="font-mono tabular">conf {item.confidence.toFixed(2)}</span>
-          {item.demo ? <span className="text-[12.5px] font-medium text-ink-3">DEMO</span> : null}
-        </div>
-        <p className="mt-4 rounded-control bg-[color-mix(in_srgb,var(--orange)_10%,transparent)] px-3 py-2 text-[12.5px] text-ink-2">
-          <span className="text-[12.5px] font-medium mr-2 text-orange">Why held</span>
+
+        {/* Why held banner */}
+        <div className="mt-4 rounded-control bg-[color-mix(in_srgb,var(--orange)_10%,transparent)] px-3.5 py-2.5 text-[13.5px] leading-relaxed text-ink-2">
+          <span className="mr-2 font-medium text-orange">Why held:</span>
           {WHY[item.sensitivity] ?? WHY.none}
-        </p>
-        {item.source.quote ? <blockquote className="mt-4 border-l-2 border-line-strong pl-3 text-[13px] italic text-ink-3">“{item.source.quote}”</blockquote> : null}
-        <div className="mt-6 flex flex-wrap items-center gap-2">
-          <Button variant="accent" size="md" kbd="↵" onClick={() => decide("approve")} disabled={busy}>
-            {text.trim() !== item.statement ? "Approve edited" : "Approve"}
+        </div>
+
+        {/* Source quote */}
+        {item.source.quote ? (
+          <blockquote className="mt-4 border-l-2 border-line-strong pl-3 text-[13.5px] italic text-ink-3">
+            &ldquo;{item.source.quote}&rdquo;
+          </blockquote>
+        ) : null}
+
+        {/* Action buttons */}
+        <div className="mt-7 flex flex-wrap items-center gap-3">
+          <Button
+            variant="accent"
+            size="md"
+            kbd="↵"
+            onClick={() => decide("approve")}
+            disabled={busy}
+            className="min-h-[44px] min-w-[120px] px-5 text-[14px]"
+          >
+            {isEdited ? "Keep edited" : "Keep"}
           </Button>
-          <Button variant="secondary" size="md" kbd="X" onClick={() => decide("reject")} disabled={busy}>
-            Reject
+          <Button
+            variant="secondary"
+            size="md"
+            kbd="X"
+            onClick={() => decide("reject")}
+            disabled={busy}
+            className="min-h-[44px] min-w-[100px] px-5 text-[14px]"
+          >
+            Drop
           </Button>
           {items.length > 1 ? (
-            <Button variant="ghost" size="md" onClick={skip}>
-              Skip <Kbd className="ml-1">S</Kbd>
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={skip}
+              className="min-h-[44px] px-4 text-[14px]"
+            >
+              Skip <Kbd className="ml-1.5">S</Kbd>
             </Button>
           ) : null}
         </div>
-        <p className="mt-4 text-[11.5px] text-ink-3">{MEMORY_TYPE_META[type].blurb} · approving makes it usable in the next answer.</p>
+
+        <p className="mt-5 text-[13px] text-ink-3">
+          {MEMORY_TYPE_META[type].blurb} · Keeping this makes it usable in your next answers.
+        </p>
       </article>
     </div>
   );
