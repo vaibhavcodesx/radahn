@@ -4,6 +4,7 @@ Append-only. Newest first. Prefix entries with `[claude]`, `[codex]`, or `[human
 
 ## 2026-10-31
 
+- 17:00 [antigravity] Task D5 (Demo video kit): created docs/demo-script.md (6:15 timed voice-over script, shot-by-shot with exact clicks, spoken dialogue, and technical callouts across all 4 beats of the brief) and generated docs/media/judge-path.gif (1280px wide, 23.2s duration, 0.34 MB, capturing the full core loop: demo seeding, prompt recall, citation badge, Memory Lens scoring, and live ghost diff).
 - 16:38 [claude] Hosted eval re-run on production after K3/K5/K7 + Groq: **20/20 live cases** (incl. diet-beats-demo-flood and extraction first event p50 < 4 s), **31/31** deterministic, recall@5 1.0, 0 secrets stored, recall p50/p95 566/571 ms, first memory write p50 2.0 s → `evals/results.md` (covers Codex K8). README refreshed (screenshots, model picker + Groq routing, unsure-save prompt, bin, measured numbers, three agents, honest limitations) and `docs/qa-cheatsheet.md` written for the team. Verified a fresh demo load shows the seeded 6 PM vs 7 PM rehearsal contradiction in Review.
 - 16:33 [claude] Activity page overflowed to 879 px on phones (grid children kept their min-content width from the no-wrap rows): grid children `min-w-0`, filter control scrolls, actor name hidden below `sm`. All other pages checked at 375 px: no horizontal overflow.
 - 16:27 [claude] Antigravity round 3 tasks (D1 memory detail page, D2 app error/loading/not-found, D3 accessibility + dark screenshots, D4 submission deck, D5 demo-video script + README GIF).
