@@ -139,7 +139,9 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
    });run.outputs=outputs.outputs;run.steps=outputs.steps;
   }finally{await session.endSession();}
   run.status="done";run.finishedAt=new Date();return run;
- }catch{
+ }catch(e){
+  // Logged (message only) so a failed run is diagnosable; the stored run keeps the generic error.
+  console.error(`[reflect] failed at ${current}:`,(e as Error)?.message?.slice(0,300));
   run.status="failed";run.error="Reflection could not complete";run.finishedAt=new Date();run.steps=run.steps.map(s=>s.name===current?{...s,status:"failed",detail:"operation failed"}:s);
   await c.reflections.updateOne({ownerId:input.ownerId,_id:run._id},{$set:{status:run.status,error:run.error,steps:run.steps,finishedAt:run.finishedAt}});return run;
  }
