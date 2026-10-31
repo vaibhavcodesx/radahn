@@ -3,13 +3,15 @@ import type { TextStreamPart, ToolSet } from "ai";
 import { classifyError, markSlow, report, type ModelCandidate } from "@/server/llm/registry";
 
 /**
- * Streaming model fallback (TRD §9). Gemini quota errors surface as an `error` part before any
- * token, so we read each candidate's stream until its first meaningful part. On error we try the
- * next (key, model); on success we hand back a stream that replays the buffered parts and then
- * continues — the user never sees a failed attempt.
- *
- * AI SDK v7 allows ONE consumer per result by default, so we consume `result.stream` here and
- * re-expose it rather than reading it twice.
+ * Hedged streaming start (TRD §9). Free-tier Gemini models sometimes accept a request and then
+ * send nothing for 20+ s (observed 05:10 and 05:30 IST on 3.8 and 3.6 Flash), and quota errors
+ * arrive as an `error` part before any token. So:
+ *  - start the best candidate; if it has produced no meaningful part after `hedgeMs`, also start
+ *    the next candidate (preferring a different model) — whichever streams first wins;
+ *  - an attempt that errors starts the next candidate immediately;
+ *  - losers are aborted; a model that loses by silence is marked slow for a while.
+ * The winner's stream is re-exposed with its buffered parts replayed (AI SDK v7 allows one
+ * consumer per result, so we consume `result.stream` here and never read it twice).
  */
 const FIRST_MEANINGFUL = new Set(["text-delta", "tool-call", "reasoning-delta", "finish-step", "finish"]);
 
@@ -18,83 +20,143 @@ export interface StartedStream<TOOLS extends ToolSet> {
   candidate: ModelCandidate;
 }
 
-const TIMEOUT = Symbol("first-token-timeout");
+interface Attempt<TOOLS extends ToolSet> {
+  candidate: ModelCandidate;
+  abort: AbortController;
+  it: AsyncIterator<TextStreamPart<TOOLS>>;
+  buffered: TextStreamPart<TOOLS>[];
+  done: boolean;
+  settled: boolean;
+}
 
 export async function startWithFallback<TOOLS extends ToolSet>(
   candidates: ModelCandidate[],
   start: (c: ModelCandidate, signal: AbortSignal) => { stream: AsyncIterable<TextStreamPart<TOOLS>> },
-  opts: { firstTokenMs?: number } = {},
+  opts: { hedgeMs?: number; totalMs?: number; firstTokenMs?: number } = {},
 ): Promise<StartedStream<TOOLS>> {
+  const hedgeMs = opts.hedgeMs ?? opts.firstTokenMs ?? 3500;
+  const totalMs = opts.totalMs ?? Math.max(hedgeMs * 3, 20_000);
+  // Prefer trying a *different model* next: a hung model usually hangs on every key.
+  const queue = orderForHedging(candidates);
+  const attempts: Attempt<TOOLS>[] = [];
   let lastError: unknown = new Error("No chat model is available right now.");
-  const hung = new Set<string>();
-  for (const candidate of candidates) {
-    if (hung.has(candidate.modelId)) continue;
-    // A model can accept the request and then send nothing (no 429, no tokens). Give each
-    // candidate a first-token deadline, then abort it and move on.
-    const abort = new AbortController();
-    const result = start(candidate, abort.signal);
-    const it = result.stream[Symbol.asyncIterator]();
-    const buffered: TextStreamPart<TOOLS>[] = [];
-    let failed: unknown;
-    let done = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<typeof TIMEOUT>((r) => (timer = setTimeout(() => r(TIMEOUT), opts.firstTokenMs ?? 9_000)));
-    try {
-      for (;;) {
-        const next = await Promise.race([it.next(), deadline]);
-        if (next === TIMEOUT) {
-          failed = new Error(`timeout: ${candidate.modelId} sent no tokens`);
-          markSlow(candidate.modelId);
-          hung.add(candidate.modelId);
-          abort.abort();
-          break;
+
+  return new Promise<StartedStream<TOOLS>>((resolve, reject) => {
+    let finished = false;
+    let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+    const totalTimer = setTimeout(() => fail(new Error("timeout: no model produced tokens")), totalMs);
+
+    const fail = (e: unknown) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(hedgeTimer);
+      clearTimeout(totalTimer);
+      for (const a of attempts) {
+        if (!a.settled) {
+          markSlow(a.candidate.modelId);
+          a.abort.abort();
         }
-        if (next.done) {
-          done = true;
-          break;
-        }
-        const part = next.value;
-        if (part.type === "error") {
-          failed = part.error;
-          break;
-        }
-        buffered.push(part);
-        if (FIRST_MEANINGFUL.has(part.type)) break;
       }
-    } catch (e) {
-      failed = e;
-    } finally {
-      clearTimeout(timer);
-    }
-    if (failed) {
-      lastError = failed;
-      if (!hung.has(candidate.modelId)) await report(candidate, classifyError(failed));
-      void it.return?.();
-      continue;
-    }
-    void report(candidate, "ok");
-    const stream = new ReadableStream<TextStreamPart<TOOLS>>({
-      start(controller) {
-        for (const p of buffered) controller.enqueue(p);
-        if (done) controller.close();
-      },
-      async pull(controller) {
-        if (done) return;
-        try {
-          const next = await it.next();
-          if (next.done) {
-            done = true;
-            controller.close();
-          } else controller.enqueue(next.value);
-        } catch (e) {
-          controller.error(e);
+      reject(e);
+    };
+
+    const win = (a: Attempt<TOOLS>) => {
+      finished = true;
+      clearTimeout(hedgeTimer);
+      clearTimeout(totalTimer);
+      for (const other of attempts) {
+        if (other !== a && !other.settled) {
+          // Lost by silence: skip this model for a while on this instance.
+          markSlow(other.candidate.modelId);
+          other.abort.abort();
+          void other.it.return?.();
         }
-      },
-      cancel() {
-        void it.return?.();
-      },
-    });
-    return { stream, candidate };
-  }
-  throw lastError;
+      }
+      void report(a.candidate, "ok");
+      resolve({ stream: replay(a), candidate: a.candidate });
+    };
+
+    const launchNext = () => {
+      if (finished) return;
+      const candidate = queue.shift();
+      if (!candidate) {
+        if (attempts.every((a) => a.settled)) fail(lastError);
+        return;
+      }
+      const abort = new AbortController();
+      const result = start(candidate, abort.signal);
+      const a: Attempt<TOOLS> = { candidate, abort, it: result.stream[Symbol.asyncIterator](), buffered: [], done: false, settled: false };
+      attempts.push(a);
+      void pump(a);
+      clearTimeout(hedgeTimer);
+      hedgeTimer = setTimeout(launchNext, hedgeMs);
+    };
+
+    const pump = async (a: Attempt<TOOLS>) => {
+      try {
+        for (;;) {
+          const next = await a.it.next();
+          if (finished) return;
+          if (next.done) {
+            a.done = true;
+            a.settled = true;
+            return win(a);
+          }
+          const part = next.value;
+          if (part.type === "error") throw part.error;
+          a.buffered.push(part);
+          if (FIRST_MEANINGFUL.has(part.type)) {
+            a.settled = true;
+            return win(a);
+          }
+        }
+      } catch (e) {
+        a.settled = true;
+        if (finished) return;
+        lastError = e;
+        void report(a.candidate, classifyError(e));
+        void a.it.return?.();
+        launchNext(); // a fast failure moves on immediately
+        if (queue.length === 0 && attempts.every((x) => x.settled)) fail(lastError);
+      }
+    };
+
+    launchNext();
+  });
+}
+
+function orderForHedging(list: ModelCandidate[]): ModelCandidate[] {
+  // Interleave by model: [m1k1, m2k1, m3k1, m1k2, m2k2, ...] keeps the preferred model first
+  // while making the hedge (second launch) a different model.
+  const byModel = new Map<string, ModelCandidate[]>();
+  for (const c of list) byModel.set(c.modelId, [...(byModel.get(c.modelId) ?? []), c]);
+  const groups = [...byModel.values()];
+  const out: ModelCandidate[] = [];
+  for (let i = 0; groups.some((g) => g[i]); i++) for (const g of groups) if (g[i]) out.push(g[i]);
+  return out;
+}
+
+function replay<TOOLS extends ToolSet>(a: Attempt<TOOLS>): ReadableStream<TextStreamPart<TOOLS>> {
+  return new ReadableStream<TextStreamPart<TOOLS>>({
+    start(controller) {
+      for (const p of a.buffered) controller.enqueue(p);
+      if (a.done) controller.close();
+    },
+    async pull(controller) {
+      if (a.done) return;
+      try {
+        const next = await a.it.next();
+        if (next.done) {
+          a.done = true;
+          controller.close();
+        } else controller.enqueue(next.value);
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+    cancel() {
+      a.abort.abort();
+      void a.it.return?.();
+    },
+  });
 }

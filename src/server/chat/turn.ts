@@ -13,7 +13,7 @@ import type { SessionUser } from "@/server/auth/session";
 import { collections, type MessageDoc } from "@/server/db/collections";
 import { candidates, generatePlain, modelLabel, thinkingOptions } from "@/server/llm/registry";
 import { engine, type RecallResult } from "@/server/memory";
-import { citedIds, stripCitations } from "./citations";
+import { citedIds, stripCitations } from "@/lib/citations";
 import { startWithFallback } from "./stream-fallback";
 import { memoryTools } from "./tools";
 import {
@@ -226,7 +226,7 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
             core: recall.core.map((m) => ({ id: m.id, type: m.type, statement: m.statement })),
             strategies: recall.strategies.map((m) => ({ id: m.id, statement: m.statement })),
             notices: recall.notices.map((n) => n.text),
-            latencyMs: recall.latencyMs.total,
+            latencyMs: Math.round(recall.latencyMs.total),
             candidateCount: recall.candidates.length,
           },
         });

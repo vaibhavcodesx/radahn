@@ -5,6 +5,7 @@ import { useState } from "react";
 import { CitationSquare, TypeSwatch } from "@/components/atoms";
 import { useLive } from "@/components/realtime/LiveProvider";
 import type { RadahnDataParts, RadahnUIMessage, RecallPickWire } from "@/lib/chat-types";
+import { normalizeCitations } from "@/lib/citations";
 import { Markdown } from "@/lib/markdown";
 import { MEMORY_TYPE_META } from "@/lib/memory-types";
 import { cn } from "@/lib/utils";
@@ -96,7 +97,7 @@ export function AssistantMessage({
       ) : null}
 
       <div className="text-[14.5px] leading-[1.65] text-ink-2 [&_strong]:text-ink">
-        {text ? <Markdown text={text} cite={cite} /> : streaming ? <span className="shimmer">Thinking…</span> : null}
+        {text ? <Markdown text={normalizeCitations(text)} cite={cite} /> : streaming ? <span className="shimmer">Thinking…</span> : null}
       </div>
 
       <div className="mt-3 flex min-h-6 flex-wrap items-center gap-x-4 gap-y-2">
@@ -153,7 +154,7 @@ function RecallLine({ recall }: { recall?: RadahnDataParts["recall"] }) {
           <span key={p.ref} className="size-2 rounded-[1px]" style={{ background: `var(${MEMORY_TYPE_META[p.type].colorVar})` }} />
         ))}
       </span>
-      {n === 0 ? "No memories needed" : `Recalled ${n} · ${recall.latencyMs ?? 0} ms`}
+      {n === 0 ? "No memories needed" : `Recalled ${n} · ${Math.round(recall.latencyMs ?? 0)} ms`}
       {recall.strategies?.length ? <span>· {recall.strategies.length} learned behaviour{recall.strategies.length > 1 ? "s" : ""}</span> : null}
     </p>
   );

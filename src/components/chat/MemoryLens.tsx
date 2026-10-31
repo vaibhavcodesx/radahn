@@ -149,7 +149,7 @@ function Recalled({ recall }: { recall: RadahnDataParts["recall"] }) {
   return (
     <div className="flex flex-col gap-5">
       <p className="mono-label text-[10px] text-grove-ink-2">
-        Intent {recall.intent} · {recall.channels?.join(" + ")} · {recall.candidateCount ?? 0} candidates · {recall.latencyMs ?? 0} ms
+        Intent {recall.intent} · {recall.channels?.join(" + ")} · {recall.candidateCount ?? 0} candidates · {Math.round(recall.latencyMs ?? 0)} ms
       </p>
       {picks.length === 0 ? (
         <p className="text-[13px] text-grove-ink-2">Nothing in memory was relevant enough (score ≥ 0.35) for this message.</p>
@@ -249,7 +249,7 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
         {Object.entries(trace.latencyMs).map(([k, v]) => (
           <div key={k} className="bg-grove px-2 py-1.5">
             <dt className="text-grove-ink-2">{k}</dt>
-            <dd className="tabular">{v} ms</dd>
+            <dd className="tabular">{Math.round(v)} ms</dd>
           </div>
         ))}
       </dl>

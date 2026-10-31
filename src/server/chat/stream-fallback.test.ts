@@ -28,13 +28,13 @@ async function drain(stream: ReadableStream<Part>) {
 }
 
 describe("startWithFallback", () => {
-  it("skips a model that sends no tokens before the deadline", async () => {
+  it("hedges: a silent model loses to the next one that streams", async () => {
     const started = await startWithFallback(
       [cand("hung"), cand("ok")] as never,
       ((c: { modelId: string }) => ({
         stream: c.modelId === "hung" ? parts([{ type: "start" }], true) : parts([{ type: "start" }, { type: "text-delta", text: "hi" }, { type: "finish" }]),
       })) as never,
-      { firstTokenMs: 50 },
+      { hedgeMs: 50 },
     );
     expect(started.candidate.modelId).toBe("ok");
     expect(await drain(started.stream as never)).toEqual(["start", "text-delta", "finish"]);
@@ -46,7 +46,7 @@ describe("startWithFallback", () => {
       ((c: { modelId: string }) => ({
         stream: c.modelId === "limited" ? parts([{ type: "start" }, { type: "error", error: new Error("429") }]) : parts([{ type: "start" }, { type: "text-delta" }]),
       })) as never,
-      { firstTokenMs: 1000 },
+      { hedgeMs: 1000 },
     );
     expect(started.candidate.modelId).toBe("ok");
     expect(await drain(started.stream as never)).toEqual(["start", "text-delta"]);
@@ -56,5 +56,21 @@ describe("startWithFallback", () => {
     await expect(
       startWithFallback([cand("a")] as never, (() => ({ stream: parts([{ type: "error", error: new Error("x") }]) })) as never),
     ).rejects.toThrow("x");
+  });
+});
+
+describe("hedging order", () => {
+  it("tries a different model second, keeping the preferred model first", async () => {
+    const seen: string[] = [];
+    const c = (m: string, k: string) => ({ model: {} as never, modelId: m, keyFp: k, label: m, fallback: false });
+    await startWithFallback(
+      [c("a", "1"), c("a", "2"), c("b", "1")] as never,
+      ((x: { modelId: string; keyFp: string }) => {
+        seen.push(`${x.modelId}${x.keyFp}`);
+        return { stream: parts([{ type: "error", error: new Error("429") }]) };
+      }) as never,
+      { hedgeMs: 1000 },
+    ).catch(() => {});
+    expect(seen).toEqual(["a1", "b1", "a2"]);
   });
 });
