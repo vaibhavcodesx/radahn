@@ -67,6 +67,8 @@ export function ChatView({
   const [tab, setTab] = useState<"recalled" | "written" | "trace" | "ghost">("recalled");
   const [ghosts, setGhosts] = useState<Record<string, GhostState>>({});
   const [prefill, setPrefill] = useState<string | undefined>();
+  // Replies loaded from history never show the "saving" indicator — only ones produced now.
+  const [historyIds] = useState(() => new Set(initialMessages.map((m) => m.id)));
   const scroller = useRef<HTMLDivElement>(null);
   const model = useSyncExternalStore(subscribeModel, readModel, () => DEFAULT_CHAT_MODEL);
   const modelRef = useRef(model);
@@ -220,7 +222,7 @@ export function ChatView({
                     onGhost={busy ? undefined : () => runGhost(m.id)}
                     onRetry={m.id === latestAssistant?.id && !busy ? () => void regenerate() : undefined}
                     streaming={busy && m.id === latestAssistant?.id}
-                    isLatest={m.id === latestAssistant?.id}
+                    isLatest={m.id === latestAssistant?.id && !historyIds.has(m.id)}
                   />
                 ),
               )}
