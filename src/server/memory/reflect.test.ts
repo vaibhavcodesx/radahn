@@ -16,7 +16,7 @@ beforeEach(()=>{vi.clearAllMocks();rows=[];mock.mem.find.mockImplementation(()=>
 describe("reflection",()=>{
  it("clusters only same-type near duplicates",()=>{const a=unit(),b=unit(),c=unit({type:"fact"}),d=unit({embedding:[0,1]});expect(clusterMemories([a,b,c,d])).toEqual([[a,b]]);});
  it("turns three feedback units into one refined existing planning strategy atomically",async()=>{rows=[unit(),unit(),unit(),unit({type:"strategy",statement:"When Aarav asks for a plan, give at most 5 bullets.",pinned:true})];const prior=rows[3];prior.evidenceIds=rows.slice(0,2).map(m=>m._id);mock.generate.mockResolvedValue({object:output({strategies:[{statement:"When planning, use at most 5 concise bullets with time boxes.",trigger:"planning",evidenceIds:rows.slice(0,3).map(m=>m._id.toHexString()),targetId:prior._id.toHexString()}]})});const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("done");expect(result.outputs.strategies).toHaveLength(1);expect(mock.generate.mock.calls[0][0]).toBe("reflect");expect(mock.transaction).toHaveBeenCalledTimes(1);const saved=mock.mem.insertOne.mock.calls[0][0];expect(saved.supersedes).toEqual(prior._id);expect(saved.pinned).toBe(true);expect(saved.evidenceIds).toHaveLength(3);expect(saved).not.toHaveProperty("expiresAt");expect(mock.events.insertOne.mock.calls.map(([e])=>e.kind)).toEqual(["superseded","reflected"]);});
- it("drops unknown evidence and refuses unsupported strategies and model targets",async()=>{rows=[unit()];mock.generate.mockResolvedValue({object:output({strategies:[{statement:"Use bullets for plans.",trigger:"plans",evidenceIds:[rows[0]._id.toHexString(),new ObjectId().toHexString()]}],observations:[{statement:"User likes concise answers.",evidenceIds:[new ObjectId().toHexString()]}]})});expect((await runReflection({ownerId,spaceKey,trigger:"manual"})).status).toBe("done");expect(mock.mem.insertOne).not.toHaveBeenCalled();});
+ it("drops unknown evidence and refuses unsupported strategies and model targets",async()=>{rows=[unit({type:"fact"})];mock.generate.mockResolvedValue({object:output({strategies:[{statement:"Use bullets for plans.",trigger:"plans",evidenceIds:[rows[0]._id.toHexString(),new ObjectId().toHexString()]}],observations:[{statement:"User likes concise answers.",evidenceIds:[new ObjectId().toHexString()]}]})});expect((await runReflection({ownerId,spaceKey,trigger:"manual"})).status).toBe("done");expect(mock.mem.insertOne).not.toHaveBeenCalled();});
  it("accepts one explicit manual instruction and sanitizes failed model error",async()=>{rows=[unit({source:{kind:"manual",actor:{kind:"user",name:"you"}}})];mock.generate.mockRejectedValue(new Error("private user content"));const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("failed");expect(JSON.stringify(result)).not.toContain("private user content");expect(mock.transaction).not.toHaveBeenCalled();});
  it("rejects stale evidence within the transaction before output writes",async()=>{rows=[unit(),unit()];mock.generate.mockResolvedValue({object:output({observations:[{statement:"User likes concise answers.",evidenceIds:rows.map(m=>m._id.toHexString())}]})});mock.mem.findOne.mockResolvedValue(null);const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("failed");expect(mock.mem.insertOne).not.toHaveBeenCalled();expect(mock.end).toHaveBeenCalled();});
  it("marks transactional failure without publishing successful outputs",async()=>{rows=[unit()];mock.generate.mockResolvedValue({object:output({observations:[{statement:"User likes concise answers.",evidenceIds:[rows[0]._id.toHexString()]}]})});mock.events.insertOne.mockRejectedValue(new Error("transaction aborted"));const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("failed");expect(result.outputs.observations).toEqual([]);expect(mock.spaces.updateOne).not.toHaveBeenCalled();});
@@ -95,4 +95,23 @@ it('holds personal consolidation for consent without retiring the active evidenc
  mock.generate.mockResolvedValue({object:output({merges:[{statement:'Aarav prefers concise bullet answers.',evidenceIds:rows.map(m=>m._id.toHexString())}]})});
  await runReflection({ownerId,spaceKey,trigger:'manual'});
  expect(mock.mem.insertOne.mock.calls[0][0].status).toBe('pending_review');expect(mock.mem.updateOne).not.toHaveBeenCalled();
+});
+
+describe('K7 evidence-backed strategy reliability',()=>{
+ it('accepts one validated feedback source as a complete strategy basis',async()=>{
+  rows=[unit()];mock.generate.mockResolvedValue({object:output({strategies:[{statement:'When planning, use at most 5 concise bullets with time boxes.',trigger:'planning',evidenceIds:[rows[0]._id.toHexString()]}]})});
+  const result=await runReflection({ownerId,spaceKey,trigger:'manual'});expect(result.status).toBe('done');expect(result.outputs.strategies).toHaveLength(1);expect(mock.mem.insertOne.mock.calls[0][0].evidenceIds).toEqual([rows[0]._id]);
+ });
+ it.each([{evidenceIds:[]},{evidenceIds:['unknown']}])('never invents a strategy without a known supporting source: %j',async({evidenceIds})=>{
+  rows=[unit()];mock.generate.mockResolvedValue({object:output({strategies:[{statement:'Use concise bullets for plans.',trigger:'planning',evidenceIds}]})});
+  const result=await runReflection({ownerId,spaceKey,trigger:'manual'});expect(result.status).toBe('done');expect(mock.mem.insertOne).not.toHaveBeenCalled();
+ });
+ it('does not treat a single ordinary fact as behavioral feedback',async()=>{
+  rows=[unit({type:'fact'})];mock.generate.mockResolvedValue({object:output({strategies:[{statement:'Use concise bullets for plans.',trigger:'planning',evidenceIds:[rows[0]._id.toHexString()]}]})});
+  const result=await runReflection({ownerId,spaceKey,trigger:'manual'});expect(result.status).toBe('done');expect(mock.mem.insertOne).not.toHaveBeenCalled();
+ });
+});
+it('records the actual reflection model in content-free progress metadata',async()=>{
+ rows=[unit()];mock.generate.mockResolvedValue({object:output(),servedBy:{modelId:'openai/gpt-oss-20b',label:'GPT-OSS20B',fallback:true}});
+ const run=await runReflection({ownerId,spaceKey,trigger:'manual'});expect(run.steps.find(step=>step.name==='consolidate')?.detail).toContain('model: openai/gpt-oss-20b');
 });

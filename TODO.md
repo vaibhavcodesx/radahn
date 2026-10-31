@@ -110,3 +110,8 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] [codex] Run fresh hosted eval after food/probe deployment: previous measured baseline31pure+15/16live, exactrecallmiss, cleanuptrue,secrets0; preserve before/after measurements and report K1 engine-to-event p50 separately from browser/chat scheduling.
 - [ ] [lead contract proposal] Add optional ScoreBreakdown.semanticSimilarity (or a named relevance component) to trace cosine used in final weighting. Existing vector field remains raw Atlas score; CODEX read-only types.ts remains unchanged. Prompt/query-focus visibility in the Trace UI is lead-owned.
 - [x] [user authorization] Explicit hosted-eval exception confirmed in chat: disposable eval:<uuid> owners in radahn, exact-owner finally cleanup; CRON_SECRET only to verified Radahn operator endpoint, never printed.
+
+- [ ] [codex] K7 started15:48IST: reproduce hosted reflection strategy failure; verify Groq structured-output compatibility and preserve nonzero validated evidence. Require three consecutive hosted self-test passes before K8.
+
+- [x] [codex] K7 engine implemented/reviewed: one-known behavioral source, Groq20B tested and excluded after registry-wrapper400s, typed SDK output failure recovery, and meaningful new-learning self-test fixture. K7 supersedes the older two-source minimum; zero evidence remains prohibited.
+- [ ] [codex/lead] Deploy K7, then require three consecutive full hosted self-tests with cleanup passing; save run times and serving models in evals/k7-reflection.md. Only then run K8 if time remains; one PR by17:30IST.

@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/server/env", () => ({ env: () => ({ GEMINI_API_KEYS: mocks.keys, GROQ_API_KEY: mocks.groq, GEMINI_EMBED_MODEL: "gemini-embedding-2", EMBED_DIM: 768 }) }));
 vi.mock("@/server/db/collections", () => ({ collections: () => ({ llmUsage: mocks }) }));
 vi.mock("@ai-sdk/google", () => ({ createGoogleGenerativeAI: ({ apiKey }: {apiKey: string}) => Object.assign((modelId: string) => ({ modelId, apiKey }), { embedding: (modelId: string) => ({ modelId, apiKey }) }) }));
-vi.mock("ai", () => ({ embedMany: mocks.embedMany, generateText: mocks.generateText, Output: { object: (s: unknown) => s } }));
+vi.mock("ai", async () => {const actual=await vi.importActual<typeof import("ai")>("ai");return {NoObjectGeneratedError:actual.NoObjectGeneratedError,NoOutputGeneratedError:actual.NoOutputGeneratedError,embedMany:mocks.embedMany,generateText:mocks.generateText,Output:{object:(s:unknown)=>s}};});
 const fp = (key: string) => createHash("sha256").update(key).digest("hex").slice(0, 6);
 let registry: typeof import("./registry");
 beforeEach(async () => {
@@ -180,4 +180,13 @@ describe("chat model catalog and preference", () => {
     expect(result.result).toBe("answer");
     expect(result.servedBy).toMatchObject({ modelId: "gemini-3.6-flash", fallback: true });
   });
+});
+
+describe('K7 structured provider fallback',()=>{
+ it.each(['object','output'])('moves to the next model after an SDK structured %s failure',async kind=>{
+  const {NoObjectGeneratedError,NoOutputGeneratedError}=await import('ai');const models:string[]=[];
+  const failure=kind==='object'?new NoObjectGeneratedError({text:'synthetic invalid output',response:{id:'synthetic',modelId:'synthetic',timestamp:new Date()},usage:{inputTokens:1,outputTokens:1,totalTokens:2,inputTokenDetails:{noCacheTokens:1,cacheReadTokens:0,cacheWriteTokens:0},outputTokenDetails:{textTokens:1,reasoningTokens:0}},finishReason:'stop'}):new NoOutputGeneratedError();
+  const result=await registry.withFallback('reflect',async c=>{models.push(c.modelId);if(models.length===1)throw failure;return 'ok';});
+  expect(result.result).toBe('ok');expect(models).toEqual(['gemini-3.5-flash-lite','gemini-3.1-flash-lite']);
+ });
 });
