@@ -155,7 +155,11 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const ranked:Ranked[]=[...fused.values()].map(row=>({...row,scores:score(row.unit,row.hits,intent,channels.length,now),selected:false}));
   // Explicit time questions use their requested window as an eligibility boundary, not a weak semantic boost.
   // Otherwise one fresh, high-importance semantic neighbour can displace every actual event.
-  const temporalQuestion=requestedWindow && (intent!=="plan" || /\b(what did|when did|yesterday|last night|last week)\b/i.test(query));
+  // Only a question about the past narrows recall to its window. A statement that merely contains a
+  // clock time ("the launch moved to 10 PM") must still see the fact it corrects. (Claude, 31 Oct:
+  // corrections that mentioned a time recalled nothing, so they were saved as new facts.)
+  const askedAboutPast=/\b(what did|when did|what happened|did i|did we|yesterday|last (night|week|month)|ago|this morning|earlier today)\b/i.test(query);
+  const temporalQuestion=Boolean(requestedWindow) && askedAboutPast && (intent!=="plan" ||/\b(what did|when did|yesterday|last night|last week)\b/i.test(query));
   const eligible=temporalQuestion?ranked.filter(row=>row.hits.ranks.temporal):ranked;
   if(temporalQuestion)for(const row of ranked){
     if(!row.hits.ranks.temporal)row.droppedBy="threshold";

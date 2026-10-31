@@ -43,6 +43,13 @@ it('returns no unrelated semantic picks when the requested window has no memorie
  expect(result.picks).toEqual([]);
 });
 
+it('keeps the fact a correction targets when the message only mentions a clock time',async()=>{
+ const launch=row({type:'constraint',statement:"Kestrel's public beta ships on 7 Nov 2026 at 9:00 PM IST.",importance:10,confidence:.95,updatedAt:new Date('2026-10-30Z')});
+ m.aggregate.mockReturnValue(cursor([launch]));
+ const result=await recall({ownerId:'alice',spaceKey:'s',query:'Actually, the beta launch moved to 10 PM.',persistTrace:false});
+ expect(result.picks.map(p=>p.memoryId)).toContain(launch._id.toHexString());
+});
+
 it('does not use events after the asOf instant even inside the requested night',async()=>{
  const target=row();
  m.events.mockReturnValue(cursor([{ownerId:'alice',spaceKey:'s',memoryId:target._id,kind:'confirmed',at:new Date('2026-10-30T23:30Z')}]));
