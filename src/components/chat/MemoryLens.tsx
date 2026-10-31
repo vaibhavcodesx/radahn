@@ -45,6 +45,7 @@ export interface GhostState {
 export function MemoryLens({
   recall,
   notices = [],
+  ops = [],
   assistantId,
   userMessageId,
   replyText,
@@ -56,6 +57,8 @@ export function MemoryLens({
 }: {
   recall?: RadahnDataParts["recall"];
   notices?: Array<RadahnDataParts["notice"]>;
+  /** Changes the model made with its own tools during this reply (remember / correct / forget). */
+  ops?: Array<RadahnDataParts["memory-op"]>;
   assistantId?: string;
   userMessageId?: string;
   replyText: string;
@@ -67,9 +70,11 @@ export function MemoryLens({
 }) {
   const live = useLive();
   const writes = userMessageId ? live.forMessage(userMessageId) : [];
+  const toolOps = ops.filter((o) => o.op !== "recall" && o.status === "done");
+  const savedCount = writes.length || toolOps.length;
   const tabs: Array<{ id: Tab; label: string; n?: number }> = [
     { id: "recalled", label: "Used", n: recall?.picks?.length },
-    { id: "written", label: "Saved", n: writes.length || undefined },
+    { id: "written", label: "Saved", n: savedCount || undefined },
     { id: "trace", label: "Why" },
     { id: "ghost", label: "Without memory" },
   ];
@@ -121,7 +126,7 @@ export function MemoryLens({
         ) : tab === "recalled" ? (
           <Recalled recall={recall!} notices={notices} />
         ) : tab === "written" ? (
-          <Written writes={writes} />
+          <Written writes={writes} ops={toolOps} />
         ) : tab === "trace" ? (
           <Trace assistantId={assistantId} recall={recall!} />
         ) : (
@@ -208,7 +213,36 @@ const KIND_LABEL: Record<string, string> = {
   rejected: "Rejected",
 };
 
-function Written({ writes }: { writes: ReturnType<ReturnType<typeof useLive>["forMessage"]> }) {
+const OP_KIND: Record<string, string> = { remember: "Remembered", correct: "Corrected", forget: "Forgotten" };
+
+function Written({ writes, ops }: { writes: ReturnType<ReturnType<typeof useLive>["forMessage"]>; ops: Array<RadahnDataParts["memory-op"]> }) {
+  // Live events are only in memory for this session; after a reload, fall back to the reply's own record.
+  if (writes.length === 0 && ops.length)
+    return (
+      <ul className="flex flex-col gap-3">
+        {ops.map((o, i) => (
+          <li key={i} className="flex flex-col gap-1">
+            <span className="flex items-center gap-2 text-[14px] text-grove-ink">
+              {o.type ? <TypeSwatch type={o.type} size={12} /> : null}
+              {OP_KIND[o.op] ?? o.op}
+              {o.type ? <span className="text-grove-ink-2">· {MEMORY_TYPE_META[o.type]?.label ?? o.type}</span> : null}
+            </span>
+            {o.before && o.after ? (
+              <span className="text-[14px] leading-snug text-grove-ink">
+                <del className="text-grove-ink-2">{o.before}</del> → {o.after}
+              </span>
+            ) : o.statement ? (
+              <span className="text-[14px] leading-snug text-grove-ink">{o.statement}</span>
+            ) : null}
+            {o.memoryId && o.op !== "forget" ? (
+              <Link href={`/app/memory/${o.memoryId}`} className="text-[13px] text-grove-ink-2 underline-offset-4 hover:text-grove-ink hover:underline">
+                Open memory
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
   if (writes.length === 0)
     return <p className="text-[14px] leading-relaxed text-grove-ink-2">Nothing new was saved from this turn.</p>;
   return (

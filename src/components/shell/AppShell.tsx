@@ -102,7 +102,7 @@ export function AppShell({
       <div className="flex items-center px-4 pb-3 pt-4">
         <Link href="/" className="group flex items-center gap-3 rounded-control" aria-label="Radahn home">
           <span className="flex size-10 items-center justify-center rounded-[10px] bg-[var(--t-ink-dark)] shadow-[inset_0_0_0_1px_var(--line-strong),0_1px_6px_rgb(0_0_0/0.25)] transition-transform group-hover:scale-[1.04]">
-            <Image src="/brand/radahn-mark.png" alt="" width={30} height={30} className="rounded-[6px]" />
+            <Image src="/brand/radahn-mark.png" alt="" width={30} height={30} className="rounded-[6px] [filter:brightness(1.9)_contrast(1.15)]" />
           </span>
           <span className="flex flex-col leading-none">
             <span className="font-serif text-[23px] tracking-[-0.01em] text-ink">Radahn</span>
@@ -216,7 +216,7 @@ export function AppShell({
               <PanelLeft className="size-5" />
             </button>
             <span className="flex size-8 items-center justify-center rounded-[8px] bg-[var(--t-ink-dark)] shadow-[inset_0_0_0_1px_var(--line-strong)]">
-              <Image src="/brand/radahn-mark.png" alt="" width={24} height={24} className="rounded-[5px]" />
+              <Image src="/brand/radahn-mark.png" alt="" width={24} height={24} className="rounded-[5px] [filter:brightness(1.9)_contrast(1.15)]" />
             </span>
             <span className="font-serif text-[19px] text-ink">Radahn</span>
             {pending ? (

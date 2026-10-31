@@ -92,12 +92,12 @@ export function AssistantMessage({
       <RecallLine recall={recall} onShow={onShowMemory} />
 
       {ops.length ? (
-        <ul className="mb-2 flex flex-wrap gap-1.5">
+        <ul className="mb-2 flex min-w-0 flex-wrap gap-1.5">
           {ops.map((o, i) => (
-            <li key={i} className="flex h-7 items-center gap-1.5 rounded-full bg-hover px-2.5 text-[13px] text-ink-2">
+            <li key={i} className="flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-full bg-hover px-2.5 text-[13px] text-ink-2">
               {o.type ? <TypeSwatch type={o.type} size={11} /> : null}
-              <span className="font-medium text-ink">{OP_LABEL[o.op] ?? o.op}</span>
-              <span className="max-w-[40ch] truncate">
+              <span className="shrink-0 font-medium text-ink">{OP_LABEL[o.op] ?? o.op}</span>
+              <span className="min-w-0 max-w-[40ch] truncate">
                 {o.status === "blocked" ? "blocked: looked unsafe" : o.before && o.after ? `${o.before} → ${o.after}` : (o.statement ?? o.status)}
               </span>
             </li>

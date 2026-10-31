@@ -213,6 +213,7 @@ export function ChatView({
     <MemoryLens
       recall={selected ? dataPart(selected, "recall") : undefined}
       notices={selected ? dataParts(selected, "notice") : []}
+      ops={selected ? dataParts(selected, "memory-op") : []}
       onClose={() => {
         setLensOpen(false);
         setMobileLens(false);
