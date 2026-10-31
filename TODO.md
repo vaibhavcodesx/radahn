@@ -53,3 +53,9 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C7 implemented 05:39; evidence-backed reflection, strategy refinement, steps/history, atomic outputs/events, preserved concurrent write counter. Hosted bullet-strategy/history check added.
 
 - [x] [codex] C8 implemented 06:05: owner-scoped insights/graph and measured eval harness; Claude to expose runEvals() via authenticated /api/admin/eval. PR #8 C7 CI green, hosted reflection check pending deploy. PR #7 gate follow-up also CI green.
+
+- [x] [codex] C9 engine implemented 06:18: bounded expiry/backfill and conservative guest maintenance; single-owner mode for hosted backfill verification. Claude owns cron scheduling/execution. C8 PR #9 submitted; lead operator eval route pending.
+
+- [ ] [codex] C9 lead integration: cron can call runMaintenance({now}) directly once merged; remove its redundant initial flipExpired() call. Keep broad guest purge as cron/operator execution; Codex hosted probe uses only a disposable ownerId.
+
+- [ ] [codex] C9 blocking lead integration: wire engine noteOwnerActivity(ownerId) before every auth session creation/update and account-link activity, reject session creation if owner was erased; only after hooks are deployed enable runMaintenance({now,guestActivityGuardReady:true}) in cron. Guest purge defaults deferred until that protocol is in place. Engine task includes helper; auth stays lead-owned.

@@ -11,7 +11,7 @@ import { correctMemory, forgetMemory, reviewMemory, updateMemory } from "./tools
 import { runReflection, listReflections } from "./reflect";
 import { graph, insights } from "./insights";
 import { seedDemo, removeDemo } from "./seed";
-import { flipExpired } from "./lifecycle";
+import { flipExpired, runMaintenance } from "./lifecycle";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -110,6 +110,14 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       const now=new Date(),row={...sample,_id:new ObjectId(),pinned:false,expiresAt:new Date(+now-1000),purgeAt:new Date(+now+180000),createdAt:new Date(+now-3000)};delete row.slotKey;
       await c.memories.insertOne(row);await flipExpired(ownerId,now);
       if((await c.memories.findOne({ownerId,_id:row._id}))?.status!=="expired" || !await c.events.findOne({ownerId,memoryId:row._id,kind:"expired"}))throw new SelfTestAssertion("Expiry event failed");
+    });
+    await check("owner-only-embedding-maintenance",async()=>{
+      const sample=await c.memories.findOne({ownerId,status:"active"});if(!sample)throw new SelfTestAssertion("No maintenance fixture");
+      const now=new Date(),row={...sample,_id:new ObjectId(),statement:"An eval memory needs a replacement document embedding.",pinned:false,embedding:Array(768).fill(0),needsEmbedding:true,createdAt:now,updatedAt:now};delete row.slotKey;delete row.contentHash;
+      await c.memories.insertOne(row);
+      await runMaintenance({ownerId,now});
+      const repaired=await c.memories.findOne({ownerId,_id:row._id});
+      if(!repaired || repaired.needsEmbedding || repaired.embedding.length!==768 || repaired.embedding.some(n=>!Number.isFinite(n)) || !repaired.embedding.some(n=>n!==0))throw new SelfTestAssertion("Embedding backfill failed");
     });
     await check("structured-extraction-live-provider",async()=>{
       const result=await extractAndWrite({ownerId,spaceKey,conversationId:"selftest",messageId:"selftest-extract",turns:[{role:"user",text:"Remember that Aarav prefers answers as short bullet lists."}],recalled:[],userName:"Aarav",timeZone:"Asia/Kolkata",now:new Date(),policy:"review_sensitive"});
