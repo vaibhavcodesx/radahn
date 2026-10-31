@@ -241,7 +241,7 @@ export function ActivityView() {
         </section>
 
         {/* Main content grid */}
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1.4fr_1fr]">
+        <div className="mt-10 grid gap-10 lg:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
           {/* Timeline of events (left / primary) */}
           <section>
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4">
@@ -251,7 +251,7 @@ export function ActivityView() {
               <div
                 role="tablist"
                 aria-label="Filter events"
-                className="flex rounded-full border border-line bg-surface p-0.5"
+                className="flex max-w-full overflow-x-auto rounded-full border border-line bg-surface p-0.5"
               >
                 {(Object.keys(FILTER_LABELS) as FilterCategory[]).map((cat) => (
                   <button
@@ -317,7 +317,7 @@ export function ActivityView() {
                           </div>
 
                           <div className="flex shrink-0 items-center gap-3">
-                            <span className="text-[11.5px] text-ink-3">
+                            <span className="hidden text-[11.5px] text-ink-3 sm:inline">
                               {e.actor.name}
                             </span>
                             <span className="font-mono text-[11px] tabular text-ink-3">
