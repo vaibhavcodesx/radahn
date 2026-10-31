@@ -108,9 +108,14 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const ids=picked.map(row=>row.unit._id);
   if(ids.length && !at) {
     const history=await c.memories.find({ownerId:input.ownerId,spaceKey:{$in:spaces},status:"superseded",supersededBy:{$in:ids},updatedAt:{$gte:new Date(+now-86400000)}}).limit(8).toArray().catch(()=>[]);
-    for(const old of history.filter(m=>m.ownerId===input.ownerId&&spaces.includes(m.spaceKey))) {
+    // One notice per current memory (its newest prior version), in words both the model and the UI can use.
+    const seen=new Set<string>();
+    for(const old of history.filter(m=>m.ownerId===input.ownerId&&spaces.includes(m.spaceKey)).sort((x,y)=>+y.createdAt-+x.createdAt)) {
       const current=picked.find(p=>p.unit._id.equals(old.supersededBy!));
-      if(current) notices.push({kind:"changed",text:`On ${old.createdAt.toISOString()} you said ${old.value ?? old.statement}; now ${current.unit.value ?? current.unit.statement}.`,memoryIds:[old._id.toHexString(),current.unit._id.toHexString()]});
+      if(!current || seen.has(current.unit._id.toHexString()))continue;
+      seen.add(current.unit._id.toHexString());
+      const when=old.createdAt.toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"Asia/Kolkata"});
+      notices.push({kind:"changed",text:`Earlier (${when}): ${old.statement} Now: ${current.unit.statement}`,memoryIds:[old._id.toHexString(),current.unit._id.toHexString()]});
     }
   }
   let chars=0;
