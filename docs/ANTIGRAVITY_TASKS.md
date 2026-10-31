@@ -19,21 +19,12 @@ Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/rad
 **Do not edit:** `src/app/app/**`, `src/components/{chat,memory,shell,activity,settings,atoms,realtime}/**`, `src/server/**`, `src/lib/**`, `src/app/globals.css`, `src/app/layout.tsx`, `package.json`. If you need a token or a dependency, write the request at the bottom of this file under "Requests to lead" and continue.
 
 ## Tasks, in order
-**A1 — Remove "AI-slop" labels everywhere you own.** No hackathon/meta text in the product: delete "Agentic memory · UNCHARTED 2026 · MongoDB Track 1", "BUILT ON MONGODB ATLAS · GEMINI 3.8 FLASH", and any model names (Gemini 3.8 Flash, Flash-Lite…) from public pages. The product talks about what it does for the user, not how it was built. (The README keeps the hackathon framing; the site doesn't.)
-
-**A2 — Nav bar.** Today the wordmark "RADAHN" is tiny, low-contrast mono and the links are small uppercase mono. Make it look like a real product: logo mark + wordmark in a legible weight/size (e.g. 17–18 px, `text-ink`, sans or serif — pick one and be consistent), links in sans 14–15 px sentence case ("How it works", "GitHub", "Sign in"), primary CTA button ("Try it — no sign-up" or similar) that goes to the guest flow it goes to today. Sticky with a subtle backdrop on scroll. Mobile: compact nav (logo + CTA, links in a menu).
-
-**A3 — Landing sections.** Keep the strong parts (hero, glyph field, recall card, proof diff), but:
-- Replace the "MongoDB features" grid ($vectorSearch, Atlas Search, TTL …) with user-facing value (e.g. "Remembers what matters / Shows why / You stay in control / Forgets on command") — or move tech detail to /how-it-works.
-- **Screenshots section:** use real product screenshots. Capture from production at 1440×900 (guest → "Load demo memories" → ask "Plan my next 4 hours."): (1) chat with Memory lens open, (2) Memory page, (3) Review. Save as optimized PNG/WebP in `public/screens/`, show them in a polished framed showcase (browser-frame or soft shadow, captions in plain language, `next/image` with width/height, lazy). No fake UI mock-ups.
-- Body text ≥ 16 px, line-height ~1.6; section headings large and calm. Fewer mono uppercase labels (they read as "generated"); keep mono only for tiny metadata.
-- Footer: product name, GitHub, How it works. No stack credits.
-
-**A4 — /how-it-works.** Same cleanup. Keep the honest technical explanation (this is where MongoDB features can be named) but write it for a curious user: short sections, real diagrams/figures if present, readable sizes.
-
-**A5 — /signin.** Clean card, both options clear (Continue as guest / Continue with Google), short honest note that guest memories last 7 days. Works at 375 px.
-
-**A6 — Mobile pass (375 px and 768 px)** for every page you own: no horizontal scroll, 16 px side gutters, tap targets ≥ 44 px, nav works.
+**A1 — Remove "AI-slop" labels everywhere you own.** [DONE] Removed hackathon and meta labels, model mentions from public landing and explainers.
+**A2 — Nav bar.** [DONE] Created `src/components/landing/Nav.tsx` with bold logo mark + wordmark, sentence-case sans links, primary CTA "Try it — no sign-up", sticky with scroll backdrop, and responsive mobile menu.
+**A3 — Landing sections.** [DONE] Replaced MongoDB features grid with user-facing values; body text ≥ 16px, line-height 1.6; calmed headings; cleaned footer. (Screenshots deferred per user decision).
+**A4 — /how-it-works.** [DONE] Cleaned up slop and model credits in intro, preserved technical depth in feature & lineage tables, unified nav and responsive design.
+**A5 — /signin.** [DONE] Clean cards, clear options, responsive 375px design with 16px gutters.
+**A6 — Mobile pass (375 px and 768 px)** [DONE] Verified all public pages: no horizontal scroll, 16px gutters, tap targets ≥ 44px, full responsive nav.
 
 ## Workflow
 - Work on a branch `antigravity/<task>` (one PR per 1–2 tasks), PR into `main`. Before each PR: `npm run lint && npm run typecheck && npm run test && npm run build` all green. CI must be green; Claude merges.

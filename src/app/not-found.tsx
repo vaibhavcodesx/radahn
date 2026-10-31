@@ -4,7 +4,7 @@ import Link from "next/link";
 export default function NotFound() {
   const glyphs = "·:;/\\|·:·";
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-6 text-center">
+    <main className="flex min-h-dvh flex-col items-center justify-center px-4 text-center sm:px-6">
       <div aria-hidden className="grid grid-cols-9 gap-1.5 font-mono text-[13px] text-ink-3">
         {Array.from({ length: 27 }, (_, i) =>
           i === 13 ? (
@@ -15,7 +15,7 @@ export default function NotFound() {
         )}
       </div>
       <h1 className="mt-8 font-serif text-[34px] leading-tight">Radahn has no memory of this page.</h1>
-      <Link href="/" className="mono-label mt-6 inline-flex h-10 items-center rounded-full bg-accent px-5 text-accent-ink">Go home</Link>
+      <Link href="/" className="mono-label mt-6 inline-flex h-11 items-center rounded-full bg-accent px-5 text-accent-ink hover:opacity-90">Go home</Link>
     </main>
   );
 }
