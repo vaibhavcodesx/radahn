@@ -117,12 +117,16 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
   const previousUser = [...recent].reverse().find((m) => m.role === "user")?.text;
 
   // Deferred: the assistant text is known only when the stream ends; after() waits for it.
-  let finish!: (v: { text: string; recall?: RecallResult; refs: Record<string, string>; model?: string }) => void;
-  const finished = new Promise<{ text: string; recall?: RecallResult; refs: Record<string, string>; model?: string }>((r) => (finish = r));
+  type Finished = { text: string; recall?: RecallResult; refs: Record<string, string>; model?: string; toolWrote?: boolean };
+  let finish!: (v: Finished) => void;
+  const finished = new Promise<Finished>((r) => (finish = r));
 
   after(async () => {
     const result = await finished;
     if (!result.text) return;
+    // The model already saved, corrected or forgot something with its tools this turn; a second
+    // extraction pass would record the same change again as a near-duplicate memory.
+    if (result.toolWrote) return;
     const turns = [
       ...recent.slice(-4).map((m) => ({ role: m.role, text: stripCitations(m.text) })),
       { role: "user" as const, text: userText },
@@ -310,7 +314,10 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           );
         }
       } finally {
-        finish({ text, recall, refs, model: servedModel });
+        const toolWrote = responseMessage.parts.some(
+          (p) => /^tool-(remember|correct_memory|forget_memory)$/.test(p.type) && (p as { state?: string }).state === "output-available",
+        );
+        finish({ text, recall, refs, model: servedModel, toolWrote });
       }
     },
     onError: (e) => {
