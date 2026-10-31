@@ -3,6 +3,7 @@ import { ScoreBar, TypeSwatch } from "@/components/atoms";
 import { GlyphField } from "@/components/landing/GlyphField";
 import { MorphWord } from "@/components/landing/MorphWord";
 import { Nav } from "@/components/landing/Nav";
+import { ScreenshotsShowcase } from "@/components/landing/ScreenshotsShowcase";
 import { wordDiff } from "@/lib/diff";
 import { MEMORY_TYPE_LIST, MEMORY_TYPE_META, type MemoryTypeName } from "@/lib/memory-types";
 
@@ -95,6 +96,7 @@ export default function Home() {
         <nav aria-label="Sections" className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1 rounded-full bg-surface-2/90 p-1 shadow-overlay backdrop-blur-md">
           {[
             ["#proof", "Proof"],
+            ["#screens", "Product"],
             ["#how", "How it works"],
             ["#trust", "Control"],
           ].map(([href, label]) => (
@@ -149,6 +151,9 @@ export default function Home() {
           <p className="mono-label mt-4 text-[10px] text-grove-ink-2">Example · one click on any reply in the app (&ldquo;Without memory&rdquo;) runs this live</p>
         </div>
       </section>
+
+      {/* SCREENSHOTS SHOWCASE (B1) */}
+      <ScreenshotsShowcase />
 
       {/* HOW IT WORKS: numbered rows (LocalCan) */}
       <section id="how" className="px-4 py-16 sm:px-6 md:px-10">

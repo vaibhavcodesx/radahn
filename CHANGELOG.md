@@ -4,6 +4,8 @@ Append-only. Newest first. Prefix entries with `[claude]`, `[codex]`, or `[human
 
 ## 2026-10-31
 
+- 15:56 [antigravity] B1 real product screenshots on landing: captured 3 shots at 1440x900 (light theme) from production (chat with Memory Lens, Memory Atlas table, Review Queue), optimized to WebP (≤ 85 KB each, well below 200 KB limit), created responsive framed ScreenshotsShowcase with tabbed navigation and real captions.
+
 - 15:40 [claude] Task round 2: Antigravity now also owns Review, Activity and Settings (B1 real landing screenshots, B2–B4 page polish, B5 mobile, B6 social preview); Codex gets one small round (K7 reflection reliability, K8 final eval numbers). See `docs/ANTIGRAVITY_TASKS.md`, `docs/CODEX_TASKS.md`.
 - 15:38 [claude] **Groq chat models** (user added a Groq key): `@ai-sdk/groq` 4.0.63; GPT-OSS 120B and Qwen 3.8 in the composer picker and in the chat chain (GPT-OSS second, so the 3.5 s hedge reaches a different provider when Gemini stalls). Groq models are skipped when `GROQ_API_KEY` is unset. Replaces Codex's K6 stub in `registry.ts` (integration edit in a Codex file). Local smoke test: both stream and call tools, first token 0.4–1.2 s.
 - 15:32 [claude] **Google sign-in, real fix:** the deployed `GOOGLE_CLIENT_ID` is `http://<id>.apps.googleusercontent.com/`; the 14:50 fix only removed the slash, so Google still saw an unknown client. The env schema now strips the scheme too (+test); prod now sends the bare id and Google shows its account picker.
