@@ -97,7 +97,7 @@ export function ActivityView() {
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_1.2fr]">
           <section>
-            <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">Reflection runs</h2>
+            <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">Reflection runs</h2>
             {!base?.reflections.length ? (
               <p className="text-[13px] leading-relaxed text-ink-3">
                 No reflections yet. Reflection merges duplicates, writes observations with evidence, and turns repeated feedback into learned behaviour.
@@ -106,7 +106,7 @@ export function ActivityView() {
               <ol className="flex flex-col gap-4">
                 {base.reflections.map((r) => (
                   <li key={r.id} className="rounded-card bg-surface p-4 shadow-card">
-                    <p className="mono-label flex justify-between text-[10px] text-ink-3">
+                    <p className="text-[12.5px] font-medium flex justify-between text-ink-3">
                       <span>{r.trigger} · {r.status}</span>
                       <span>{new Date(r.startedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                     </p>
@@ -128,7 +128,7 @@ export function ActivityView() {
                           <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 hover:text-ink"><TypeSwatch type="observation" size={12} className="mt-[3px]" />{s.statement}</Link></li>
                         ))}
                         {r.outputs.merged.map((s) => (
-                          <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 text-ink-3 hover:text-ink"><span className="mono-label text-[9px]">merged</span>{s.statement}</Link></li>
+                          <li key={s.id}><Link href={`/app/memory/${s.id}`} className="flex gap-2 text-ink-3 hover:text-ink"><span className="text-[12.5px] font-medium">merged</span>{s.statement}</Link></li>
                         ))}
                       </ul>
                     ) : null}
@@ -139,7 +139,7 @@ export function ActivityView() {
           </section>
 
           <section>
-            <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">Live events</h2>
+            <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">Live events</h2>
             {events.length === 0 ? (
               <p className="text-[13px] text-ink-3">{base ? "No memory events yet. Chat with Radahn and watch them land here." : "Loading…"}</p>
             ) : (
@@ -150,9 +150,9 @@ export function ActivityView() {
                       {new Date(e.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                     {e.type ? <TypeSwatch type={e.type as MemoryTypeName} size={12} className="mt-[3px]" /> : <span className="mt-[3px] size-3 shrink-0" />}
-                    <span className={cn("mono-label w-20 shrink-0 pt-px text-[9.5px]", ACTOR_TONE[e.actor.kind] ?? "text-ink-3")}>{e.actor.name}</span>
+                    <span className={cn("text-[12.5px] font-medium w-20 shrink-0 pt-px", ACTOR_TONE[e.actor.kind] ?? "text-ink-3")}>{e.actor.name}</span>
                     <span className="min-w-0 flex-1 text-[12.5px] text-ink-2">
-                      <span className="mono-label mr-2 text-[9.5px] text-ink-3">{e.kind}</span>
+                      <span className="text-[12.5px] font-medium mr-2 text-ink-3">{e.kind}</span>
                       {e.summary}
                     </span>
                   </li>
@@ -169,7 +169,7 @@ export function ActivityView() {
 function Stat({ label, value, note, children }: { label: string; value: string; note?: string; children?: React.ReactNode }) {
   return (
     <div className="bg-surface px-5 py-4">
-      <p className="mono-label text-[9.5px] text-ink-3">{label}</p>
+      <p className="text-[12.5px] font-medium text-ink-3">{label}</p>
       <p className="mt-1.5 font-serif text-[28px] leading-none tabular">{value}</p>
       {note ? <p className="mt-1.5 text-[11.5px] text-ink-3">{note}</p> : null}
       {children}

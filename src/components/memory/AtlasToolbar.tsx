@@ -84,7 +84,7 @@ export function AtlasToolbar({
 function Select({ label, value, options, onChange }: { label: string; value: string; options: Array<{ v: string; label: string }>; onChange: (v: string) => void }) {
   return (
     <label className="flex h-9 items-center gap-2 rounded-control bg-surface pl-3 pr-1 shadow-card">
-      <span className="mono-label text-[9.5px] text-ink-3">{label}</span>
+      <span className="text-[12.5px] font-medium text-ink-3">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}

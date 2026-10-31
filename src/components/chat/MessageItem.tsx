@@ -179,7 +179,7 @@ function Citation({ pick, index, onOpen }: { pick: RecallPickWire; index: number
       </button>
       {hover ? (
         <span role="tooltip" className="absolute bottom-6 left-1/2 z-30 w-72 -translate-x-1/2 animate-pop-in rounded-card bg-tooltip-bg p-3 text-left shadow-overlay">
-          <span className="mono-label flex items-center justify-between text-[10px] text-tooltip-muted">
+          <span className="text-[12.5px] font-medium flex items-center justify-between text-tooltip-muted">
             <span>{MEMORY_TYPE_META[pick.type].label}</span>
             <span className="tabular">score {pick.final.toFixed(2)}</span>
           </span>

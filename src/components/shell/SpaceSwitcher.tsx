@@ -68,7 +68,7 @@ export function SpaceSwitcher({ spaces, currentSpaceId }: { spaces: SpaceItem[];
       </button>
       {open ? (
         <div className="absolute left-0 right-0 top-10 z-40 animate-pop-in rounded-card bg-surface-2 p-1 shadow-overlay" role="listbox" aria-label="Spaces">
-          <p className="mono-label px-2.5 pb-1 pt-1.5 text-ink-3">Spaces</p>
+          <p className="text-[12.5px] font-medium px-2.5 pb-1 pt-1.5 text-ink-3">Spaces</p>
           {spaces.map((s) => (
             <button
               key={s.id}
@@ -79,7 +79,7 @@ export function SpaceSwitcher({ spaces, currentSpaceId }: { spaces: SpaceItem[];
             >
               <span className="size-2.5 rounded-[2px]" style={{ background: `var(${s.color})` }} />
               <span className="flex-1 truncate text-left">{s.name}</span>
-              {s.demo ? <span className="mono-label text-[9.5px] text-ink-3">Demo</span> : null}
+              {s.demo ? <span className="text-[12.5px] font-medium text-ink-3">Demo</span> : null}
               {s.id === currentSpaceId ? <Check className="size-3.5" /> : null}
             </button>
           ))}
@@ -95,7 +95,7 @@ export function SpaceSwitcher({ spaces, currentSpaceId }: { spaces: SpaceItem[];
                 aria-label="New space name"
                 className="h-8 min-w-0 flex-1 rounded-control bg-hover px-2.5 text-[12.5px] text-ink outline-none placeholder:text-ink-3"
               />
-              <button type="submit" className="mono-label h-8 rounded-control bg-accent px-2.5 text-accent-ink">Add</button>
+              <button type="submit" className="text-[12.5px] font-medium h-8 rounded-control bg-accent px-2.5 text-accent-ink">Add</button>
             </form>
           ) : (
             <button onClick={() => setCreating(true)} className="flex h-8 w-full items-center gap-2.5 rounded-control px-2.5 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink">

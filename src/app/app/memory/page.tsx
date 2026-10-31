@@ -95,7 +95,7 @@ export default async function MemoryAtlas({ searchParams }: PageProps<"/app/memo
                 style={{ flexGrow: n, background: `var(${MEMORY_TYPE_META[t].colorVar})`, color: MEMORY_TYPE_META[t].onSwatch === "dark" ? "var(--t-ink-dark)" : "var(--t-ink-light)" }}
               >
                 <span className="font-mono text-[11px] leading-none">{MEMORY_TYPE_META[t].glyph}</span>
-                <span className="mono-label ml-1.5 hidden truncate text-[9.5px] leading-none group-hover:inline">{MEMORY_TYPE_META[t].label} {n}</span>
+                <span className="text-[12.5px] font-medium ml-1.5 hidden truncate leading-none group-hover:inline">{MEMORY_TYPE_META[t].label} {n}</span>
               </Link>
             ))}
           </nav>

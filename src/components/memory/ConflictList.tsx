@@ -54,7 +54,7 @@ export function ConflictList() {
 
   return (
     <section className="mt-14" aria-busy={pairs === null && !failed}>
-      <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">Contradictions · pick what&apos;s true</h2>
+      <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">Contradictions · pick what&apos;s true</h2>
       {failed ? (
         <p className="text-[13px] text-ink-3">Couldn&apos;t check for contradictions right now. Reload to try again.</p>
       ) : pairs === null ? (
@@ -65,7 +65,7 @@ export function ConflictList() {
         <ul className="flex flex-col gap-3">
           {pairs.map((pair) => (
             <li key={pair.id} className="rounded-card bg-surface p-4 shadow-card">
-              <p className="mono-label mb-3 text-[9.5px] text-orange">
+              <p className="text-[12.5px] font-medium mb-3 text-orange">
                 {pair.reason === "same_slot" ? "Same fact, different values" : "These can't both be true"} · {Math.round(pair.similarity * 100)}% similar
               </p>
               <div className="grid gap-3 sm:grid-cols-2">

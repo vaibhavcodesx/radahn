@@ -80,7 +80,7 @@ export function MemoryActions({
     <div className="mt-6">
       {mode === "edit" ? (
         <div className="flex flex-col gap-2">
-          <label htmlFor="mem-edit" className="mono-label text-[10px] text-ink-3">
+          <label htmlFor="mem-edit" className="text-[12.5px] font-medium text-ink-3">
             Correct this memory — the old version stays in history
           </label>
           <textarea

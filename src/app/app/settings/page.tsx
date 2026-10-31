@@ -18,7 +18,7 @@ export default async function SettingsPage() {
           demoLoaded={Boolean(s.demoLoadedAt)}
         />
         <section className="mt-12 rounded-card bg-surface p-5 text-[12.5px] leading-relaxed text-ink-2 shadow-card">
-          <p className="mono-label mb-2 text-[10px] text-ink-3">Privacy</p>
+          <p className="text-[12.5px] font-medium mb-2 text-ink-3">Privacy</p>
           Radahn runs on the Gemini API free tier, where Google may use prompts to improve its products. Don&apos;t enter real secrets: Radahn
           redacts credentials before anything is sent or stored, and holds sensitive details for your approval. 
           <Link href="/how-it-works" className="underline underline-offset-4">How memory works</Link>

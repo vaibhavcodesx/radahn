@@ -85,7 +85,7 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
       {items.length > 2 ? <div aria-hidden className="absolute inset-x-8 -bottom-4 h-full rounded-card bg-surface opacity-30 shadow-card" /> : null}
       <article key={item.id} className="relative animate-pop-in rounded-card bg-surface-2 p-6 shadow-overlay" aria-label="Memory awaiting approval">
         <div className="flex items-center justify-between">
-          <p className="mono-label text-[10.5px] text-ink-3">Save this to memory?</p>
+          <p className="text-[12.5px] font-medium text-ink-3">Save this to memory?</p>
           <span className="font-mono text-[11px] tabular text-ink-3">
             {index + 1} / {items.length}
           </span>
@@ -105,10 +105,10 @@ export function ReviewStack({ items: initial }: { items: Item[] }) {
           <TypeSwatch type={type} size={13} label />
           <span>{item.spaceName}</span>
           <span className="font-mono tabular">conf {item.confidence.toFixed(2)}</span>
-          {item.demo ? <span className="mono-label text-[9.5px] text-ink-3">DEMO</span> : null}
+          {item.demo ? <span className="text-[12.5px] font-medium text-ink-3">DEMO</span> : null}
         </div>
         <p className="mt-4 rounded-control bg-[color-mix(in_srgb,var(--orange)_10%,transparent)] px-3 py-2 text-[12.5px] text-ink-2">
-          <span className="mono-label mr-2 text-[9.5px] text-orange">Why held</span>
+          <span className="text-[12.5px] font-medium mr-2 text-orange">Why held</span>
           {WHY[item.sensitivity] ?? WHY.none}
         </p>
         {item.source.quote ? <blockquote className="mt-4 border-l-2 border-line-strong pl-3 text-[13px] italic text-ink-3">“{item.source.quote}”</blockquote> : null}

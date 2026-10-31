@@ -76,7 +76,7 @@ export function AgentKeys() {
 
       {created ? (
         <div className="rounded-card bg-surface-2 p-4 shadow-overlay">
-          <p className="mono-label text-[10px] text-orange">Copy now · shown once</p>
+          <p className="text-[12.5px] font-medium text-orange">Copy now · shown once</p>
           <p className="mt-2 text-[12.5px] text-ink-2">Add “{created.name}” to Claude Code:</p>
           <div className="mt-2 flex items-start gap-2">
             <code className="block min-w-0 flex-1 break-all rounded-control bg-surface px-3 py-2 font-mono text-[11px] text-ink">{command}</code>

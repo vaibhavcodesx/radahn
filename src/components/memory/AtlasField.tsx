@@ -234,13 +234,13 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
   return (
     <div className="mt-4 overflow-hidden rounded-card bg-grove text-grove-ink shadow-card">
       <div className="flex flex-wrap items-center gap-2 border-b border-grove-line px-4 py-2.5">
-        <span className="mono-label text-[10px] text-grove-ink-2">Arrange by</span>
+        <span className="text-[12.5px] font-medium text-grove-ink-2">Arrange by</span>
         {(["type", "space", "time"] as const).map((a) => (
           <button
             key={a}
             onClick={() => setArrange(a)}
             aria-pressed={arrange === a}
-            className={cn("mono-label h-7 rounded-full px-3 text-[10px]", arrange === a ? "bg-grove-ink text-grove" : "text-grove-ink-2 shadow-[inset_0_0_0_1px_var(--grove-line)] hover:text-grove-ink")}
+            className={cn("text-[12.5px] font-medium h-7 rounded-full px-3", arrange === a ? "bg-grove-ink text-grove" : "text-grove-ink-2 shadow-[inset_0_0_0_1px_var(--grove-line)] hover:text-grove-ink")}
           >
             {a}
           </button>
@@ -267,7 +267,7 @@ export function AtlasField({ spaceNames }: { spaceNames: Record<string, string> 
             className="pointer-events-none absolute z-10 w-72 animate-pop-in rounded-card bg-tooltip-bg p-3 shadow-overlay"
             style={{ left: Math.min(hover.x + 14, hover.cw - 300), top: Math.max(8, hover.y - 20) }}
           >
-            <p className="mono-label flex justify-between text-[9.5px] text-tooltip-muted">
+            <p className="text-[12.5px] font-medium flex justify-between text-tooltip-muted">
               <span>{MEMORY_TYPE_META[hover.node.type].label} · {STATUS_LABEL[hover.node.status]}</span>
               <span>{timeAgo(hover.node.updatedAt)}</span>
             </p>

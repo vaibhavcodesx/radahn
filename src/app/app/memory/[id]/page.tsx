@@ -42,17 +42,17 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-[880px] px-5 pb-20 pt-6 md:px-8">
-        <Link href="/app/memory" className="mono-label inline-flex items-center gap-1.5 text-[10.5px] text-ink-3 hover:text-ink">
+        <Link href="/app/memory" className="text-[12.5px] font-medium inline-flex items-center gap-1.5 text-ink-3 hover:text-ink">
           <ArrowLeft className="size-3.5" /> Memory
         </Link>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <TypeSwatch type={type} status={m.status} size={18} label />
-          <span className={cn("mono-label rounded-full px-2.5 py-1 text-[9.5px]", m.status === "active" ? "bg-hover-2 text-ink-2" : m.status === "pending_review" ? "bg-[color-mix(in_srgb,var(--orange)_18%,transparent)] text-orange" : "bg-hover text-ink-3")}>
+          <span className={cn("text-[12.5px] font-medium rounded-full px-2.5 py-1", m.status === "active" ? "bg-hover-2 text-ink-2" : m.status === "pending_review" ? "bg-[color-mix(in_srgb,var(--orange)_18%,transparent)] text-orange" : "bg-hover text-ink-3")}>
             {STATUS_LABEL[m.status]}
           </span>
-          {m.pinned ? <span className="mono-label text-[9.5px] text-t-preference">PINNED TO CORE</span> : null}
-          {m.demo ? <span className="mono-label text-[9.5px] text-ink-3">DEMO</span> : null}
+          {m.pinned ? <span className="text-[12.5px] font-medium text-t-preference">PINNED TO CORE</span> : null}
+          {m.demo ? <span className="text-[12.5px] font-medium text-ink-3">DEMO</span> : null}
         </div>
 
         <h1 className={cn("mt-4 font-serif text-[30px] leading-[1.15] tracking-[-0.01em]", m.status === "superseded" && "text-ink-3 line-through")}>{m.statement}</h1>
@@ -63,7 +63,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
         <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-card bg-line shadow-card sm:grid-cols-5">
           {meta.map(([k, v]) => (
             <div key={k} className="bg-surface px-4 py-3">
-              <dt className="mono-label text-[9.5px] text-ink-3">{k}</dt>
+              <dt className="text-[12.5px] font-medium text-ink-3">{k}</dt>
               <dd className="mt-1 text-[12.5px] text-ink">{v}</dd>
             </div>
           ))}
@@ -73,7 +73,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
           <Section title="Provenance">
             <blockquote className="border-l-2 border-line-strong pl-4 font-serif text-[17px] leading-snug text-ink-2">“{m.source.quote}”</blockquote>
             {m.source.conversationId ? (
-              <Link href={`/app/chat/${m.source.conversationId}`} className="mono-label mt-3 inline-block text-[10.5px] text-ink-3 hover:text-ink">
+              <Link href={`/app/chat/${m.source.conversationId}`} className="text-[12.5px] font-medium mt-3 inline-block text-ink-3 hover:text-ink">
                 Open in chat →
               </Link>
             ) : null}
@@ -86,7 +86,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
               {versions.map((v, i) => (
                 <li key={v.id} className="relative">
                   <span className="absolute -left-[25px] top-1.5 size-2 rounded-full" style={{ background: v.status === "active" ? `var(${MEMORY_TYPE_META[v.type as MemoryTypeName].colorVar})` : "var(--ink-3)" }} />
-                  <p className="mono-label text-[9.5px] text-ink-3">
+                  <p className="text-[12.5px] font-medium text-ink-3">
                     {fmt(v.createdAt)} · {STATUS_LABEL[v.status]}
                     {i > 0 && v.supersedeReason ? ` · ${v.supersedeReason}` : ""}
                   </p>
@@ -116,7 +116,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
                   </span>
                   <span className="font-mono text-[11px] tabular text-ink-2">{r.final.toFixed(2)}</span>
                   {r.conversationId ? (
-                    <Link href={`/app/chat/${r.conversationId}`} className="mono-label text-[9.5px] text-ink-3 hover:text-ink">
+                    <Link href={`/app/chat/${r.conversationId}`} className="text-[12.5px] font-medium text-ink-3 hover:text-ink">
                       chat →
                     </Link>
                   ) : null}
@@ -134,7 +134,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
                   <Link href={`/app/memory/${e.id}`} className="flex items-start gap-2 text-[13px] text-ink-2 hover:text-ink">
                     <TypeSwatch type={e.type as MemoryTypeName} status={e.status} size={12} className="mt-[3px]" />
                     <span>
-                      <span className="mono-label mr-2 text-[9.5px] text-ink-3">{e.rel}</span>
+                      <span className="text-[12.5px] font-medium mr-2 text-ink-3">{e.rel}</span>
                       {e.statement}
                     </span>
                   </Link>
@@ -166,7 +166,7 @@ export default async function MemoryDetailPage({ params }: PageProps<"/app/memor
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-10">
-      <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">{title}</h2>
+      <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">{title}</h2>
       {children}
     </section>
   );

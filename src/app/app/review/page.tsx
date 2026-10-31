@@ -29,7 +29,7 @@ export default async function ReviewPage() {
         <ConflictList />
 
         <section className="mt-14">
-          <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">Blocked · never stored</h2>
+          <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">Blocked · never stored</h2>
           {blocked.length === 0 ? (
             <p className="text-[13px] text-ink-3">Nothing blocked. If you paste a password, key, or card number, it shows up here — as a kind, never the value.</p>
           ) : (

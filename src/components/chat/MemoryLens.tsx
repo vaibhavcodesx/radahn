@@ -263,7 +263,7 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
       </dl>
       <table className="w-full table-fixed border-collapse text-[12.5px]">
         <thead>
-          <tr className="mono-label text-left text-[9.5px] text-grove-ink-2">
+          <tr className="text-[12.5px] font-medium text-left text-grove-ink-2">
             <th className="w-5 pb-1.5" />
             <th className="pb-1.5">Memory</th>
             <th className="w-11 pb-1.5 text-right">vec</th>
@@ -278,7 +278,7 @@ function Trace({ assistantId, recall }: { assistantId?: string; recall: RadahnDa
               </td>
               <td className="py-1.5 pr-2">
                 <span className="line-clamp-2">{c.statement}</span>
-                {c.droppedBy ? <span className="mono-label text-[9px] text-grove-ink-2">dropped: {c.droppedBy}</span> : null}
+                {c.droppedBy ? <span className="text-[12.5px] font-medium text-grove-ink-2">dropped: {c.droppedBy}</span> : null}
               </td>
               <td className="py-1.5 text-right font-mono tabular">{formatScore(c.scores.vector)}</td>
               <td className="py-1.5 text-right font-mono tabular">{formatScore(c.scores.final)}</td>
@@ -310,7 +310,7 @@ function GhostDiff({ ghost, replyText, recall }: { ghost: GhostState; replyText:
       </p>
       <div className="flex gap-1">
         {(["diff", "side"] as const).map((m) => (
-          <button key={m} onClick={() => setMode(m)} className={cn("mono-label h-7 rounded-full px-3 text-[10px]", mode === m ? "bg-grove-ink text-grove" : "text-grove-ink-2 shadow-[inset_0_0_0_1px_var(--grove-line)]")}>
+          <button key={m} onClick={() => setMode(m)} className={cn("text-[12.5px] font-medium h-7 rounded-full px-3", mode === m ? "bg-grove-ink text-grove" : "text-grove-ink-2 shadow-[inset_0_0_0_1px_var(--grove-line)]")}>
             {m === "diff" ? "Diff" : "Side by side"}
           </button>
         ))}
@@ -330,11 +330,11 @@ function GhostDiff({ ghost, replyText, recall }: { ghost: GhostState; replyText:
       ) : (
         <div className="grid grid-cols-1 gap-2">
           <section className="rounded-control bg-grove-2 p-3">
-            <p className="mono-label mb-1.5 text-[10px] text-grove-ink-2">Without memory</p>
+            <p className="text-[12.5px] font-medium mb-1.5 text-grove-ink-2">Without memory</p>
             <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed">{ghost.text}</p>
           </section>
           <section className="rounded-control bg-grove-2 p-3">
-            <p className="mono-label mb-1.5 text-[10px] text-grove-ink-2">With memory</p>
+            <p className="text-[12.5px] font-medium mb-1.5 text-grove-ink-2">With memory</p>
             <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed">{replyText.replace(/\[\[m\d+\]\]/g, "")}</p>
           </section>
         </div>

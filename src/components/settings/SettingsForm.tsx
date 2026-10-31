@@ -11,11 +11,6 @@ const POLICIES = [
   { v: "auto", label: "Automatic", note: "Saves everything that passes the privacy gate; only low-confidence items wait." },
   { v: "review_all", label: "Review everything", note: "Nothing is remembered until you approve it." },
 ];
-const MODELS = [
-  { v: "gemini-3.8-flash", label: "Gemini 3.8 Flash", note: "Best answers. Small free-tier daily quota; Radahn falls back automatically." },
-  { v: "gemini-3.6-flash", label: "Gemini 3.6 Flash", note: "Fast and steady." },
-  { v: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", note: "Fastest; plainer answers." },
-];
 
 export function SettingsForm({
   initial,
@@ -79,10 +74,6 @@ export function SettingsForm({
         <Choice options={POLICIES} value={v.writePolicy} onChange={(writePolicy) => save({ writePolicy })} />
       </Group>
 
-      <Group title="Model">
-        <Choice options={MODELS} value={v.chatModel} onChange={(chatModel) => save({ chatModel })} />
-      </Group>
-
       <Group title="Connected agents">
         <AgentKeys />
       </Group>
@@ -117,7 +108,7 @@ export function SettingsForm({
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mono-label mb-3 text-[10.5px] text-ink-3">{title}</h2>
+      <h2 className="text-[12.5px] font-medium mb-3 text-ink-3">{title}</h2>
       <div className="flex flex-col gap-4">{children}</div>
     </section>
   );
