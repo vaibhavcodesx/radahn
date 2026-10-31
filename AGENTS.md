@@ -40,7 +40,7 @@ You may research to make the engine better (time-boxed: about 15 minutes before 
 ## Hard rules
 - Never commit `.env*` or `Inputs/`. Never log or store secrets; the privacy gate is part of your job.
 - Every query scopes by `ownerId`.
-- Never touch production data from evals: use database `radahn_eval`.
+- Evals never touch real users: they run in `radahn` under a disposable `eval:<uuid>` owner deleted in `finally` (M0 allows 3 search indexes per cluster, so no separate eval database; see CODEX_TASKS LEAD NOTES).
 - No commits after 21:00 IST.
 
 <!-- BEGIN:nextjs-agent-rules -->
