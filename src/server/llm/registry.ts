@@ -1,6 +1,7 @@
 import "server-only";
 import { fingerprint, refreshUsage, live, record } from "./quota";
 import { createGoogleGenerativeAI, type GoogleLanguageModelOptions } from "@ai-sdk/google";
+import { createGroq, type GroqLanguageModelChatOptions } from "@ai-sdk/groq";
 import { embedMany, generateText, Output, type LanguageModel } from "ai";
 import type { z } from "zod";
 import { env } from "@/server/env";
@@ -20,7 +21,8 @@ export type ModelRole = "chat" | "fast" | "reflect";
 /** Ordered fallback chains (TRD §1; research/quotas.md: 3.8 Flash has a small daily cap). */
 export const MODEL_CHAINS: Record<ModelRole, string[]> = {
   // 3.8 Flash is opt-in from the picker: it returned "high demand" 503s most of 31 Oct.
-  chat: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash"],
+  // Groq's GPT-OSS sits second so the 3.5 s hedge reaches a different provider when Gemini stalls.
+  chat: ["gemini-3.6-flash", "openai/gpt-oss-120b", "gemini-3.5-flash-lite", "qwen/qwen3.8-27b", "gemini-3.8-flash"],
   fast: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
   reflect: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
 };
@@ -33,17 +35,31 @@ export interface ChatModelOption {
   available: boolean;
 }
 
-/** Typed integration stub: no Groq requests until its provider is installed and wired. */
-export const GROQ_PROVIDER: { readonly provider: "groq"; readonly available: false } = {
-  provider: "groq", available: false,
-};
+/** Groq-hosted ids carry a vendor prefix ("openai/gpt-oss-120b"); Gemini ids never do. */
+export function providerOf(modelId: string): "gemini" | "groq" {
+  return modelId.includes("/") ? "groq" : "gemini";
+}
+
+/** API keys that can serve a model; empty means the provider is not configured. */
+function keysFor(modelId: string): string[] {
+  const e = env();
+  if (providerOf(modelId) === "groq") return e.GROQ_API_KEY ? [e.GROQ_API_KEY] : [];
+  return [...new Set(e.GEMINI_API_KEYS)];
+}
+
+function buildModel(modelId: string, apiKey: string): LanguageModel {
+  return providerOf(modelId) === "groq" ? createGroq({ apiKey })(modelId) : createGoogleGenerativeAI({ apiKey })(modelId);
+}
 
 export function chatModelOptions(): ChatModelOption[] {
-  const available = env().GEMINI_API_KEYS.length > 0;
-  return MODEL_CHAINS.chat.map(id => ({ id, label: modelLabel(id), provider: "gemini", available }));
+  return MODEL_CHAINS.chat.map(id => ({ id, label: modelLabel(id), provider: providerOf(id), available: keysFor(id).length > 0 }));
 }
+
+const LABELS: Record<string, string> = { "openai/gpt-oss-120b": "GPT-OSS 120B", "qwen/qwen3.8-27b": "Qwen 3.8" };
+
 /** Human label shown in the UI ("3.8 Flash"). */
 export function modelLabel(model: string): string {
+  if (LABELS[model]) return LABELS[model];
   return model
     .replace(/^gemini-/, "")
     .replace(/-flash-lite$/, " Flash-Lite")
@@ -92,9 +108,10 @@ export function isTimeout(err: unknown): boolean {
 
 export async function candidates(role: ModelRole, preferred?: string): Promise<ModelCandidate[]> {
   const keys = [...new Set(env().GEMINI_API_KEYS)];
-  let chain = MODEL_CHAINS[role];
+  // Models whose provider has no key are dropped up front (Groq is optional).
+  let chain = MODEL_CHAINS[role].filter(model => keysFor(model).length > 0);
   const selected = preferred && chain.includes(preferred) ? preferred : undefined;
-  await refreshUsage(keys.flatMap(key => chain.map(model => `${fingerprint(key)}:${model}`)));
+  await refreshUsage(chain.flatMap(model => keysFor(model).map(key => `${fingerprint(key)}:${model}`)));
   const offset = rotation++ % Math.max(1, keys.length);
   const ordered = [...keys.slice(offset), ...keys.slice(0, offset)];
   // Slow models go last rather than vanishing, so a fully slow chain still gets tried.
@@ -102,10 +119,10 @@ export async function candidates(role: ModelRole, preferred?: string): Promise<M
   // A user selection takes precedence over the automatic latency heuristic; quota still applies.
   if (selected) chain = [selected, ...chain.filter(m => m !== selected)];
   const firstChoice = selected ?? chain[0];
-  return chain.flatMap(modelId => ordered.flatMap(apiKey => {
+  return chain.flatMap(modelId => (providerOf(modelId) === "groq" ? keysFor(modelId) : ordered).flatMap(apiKey => {
     const keyFp = fingerprint(apiKey);
     if (!live(`${keyFp}:${modelId}`)) return [];
-    return [{ model: createGoogleGenerativeAI({apiKey})(modelId), modelId, keyFp, label: modelLabel(modelId), fallback: modelId !== firstChoice }];
+    return [{ model: buildModel(modelId, apiKey), modelId, keyFp, label: modelLabel(modelId), fallback: modelId !== firstChoice }];
   }));
 }
 
@@ -127,9 +144,10 @@ export function classifyError(err: unknown): "rate_limited" | "quota_exhausted" 
 
 /** Gemini 3 thinking levels: 3.8 Flash has no 'minimal' (research/quotas.md). */
 export function thinkingOptions(modelId: string, level: "low" | "medium" | "high" = "low") {
-  void modelId; // reserved: per-model level clamping
+  // Each provider reads only its own key. Qwen on Groq accepts only "none" | "default".
   return {
     google: { thinkingConfig: { thinkingLevel: level } } satisfies GoogleLanguageModelOptions,
+    groq: { reasoningEffort: modelId.startsWith("qwen/") ? "none" : level } satisfies GroqLanguageModelChatOptions,
   };
 }
 

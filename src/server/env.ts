@@ -27,6 +27,8 @@ export const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   MEMORY_ENGINE: z.enum(["mock", "real"]).default("mock"),
   VOYAGE_API_KEY: z.string().optional(),
+  // Optional Groq key: adds Groq-hosted chat models to the picker and the fallback chain.
+  GROQ_API_KEY: z.string().trim().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -2,9 +2,9 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({
-  find: vi.fn(), updateOne: vi.fn(), embedMany: vi.fn(), generateText: vi.fn(), keys: ["test-key-one", "test-key-two"],
+  find: vi.fn(), updateOne: vi.fn(), embedMany: vi.fn(), generateText: vi.fn(), keys: ["test-key-one", "test-key-two"], groq: undefined as string | undefined,
 }));
-vi.mock("@/server/env", () => ({ env: () => ({ GEMINI_API_KEYS: mocks.keys, GEMINI_EMBED_MODEL: "gemini-embedding-2", EMBED_DIM: 768 }) }));
+vi.mock("@/server/env", () => ({ env: () => ({ GEMINI_API_KEYS: mocks.keys, GROQ_API_KEY: mocks.groq, GEMINI_EMBED_MODEL: "gemini-embedding-2", EMBED_DIM: 768 }) }));
 vi.mock("@/server/db/collections", () => ({ collections: () => ({ llmUsage: mocks }) }));
 vi.mock("@ai-sdk/google", () => ({ createGoogleGenerativeAI: ({ apiKey }: {apiKey: string}) => Object.assign((modelId: string) => ({ modelId, apiKey }), { embedding: (modelId: string) => ({ modelId, apiKey }) }) }));
 vi.mock("ai", () => ({ embedMany: mocks.embedMany, generateText: mocks.generateText, Output: { object: (s: unknown) => s } }));
@@ -12,7 +12,7 @@ const fp = (key: string) => createHash("sha256").update(key).digest("hex").slice
 let registry: typeof import("./registry");
 beforeEach(async () => {
   vi.resetModules(); vi.clearAllMocks(); vi.useFakeTimers();
-  mocks.keys = ["test-key-one", "test-key-two"];
+  mocks.keys = ["test-key-one", "test-key-two"]; mocks.groq = undefined;
   vi.setSystemTime(new Date("2026-10-31T12:00:00Z"));
   mocks.find.mockReturnValue({ toArray: async () => [] });
   mocks.updateOne.mockResolvedValue({});
@@ -148,11 +148,22 @@ describe("chat model catalog and preference", () => {
     mocks.keys = [];
     expect(registry.chatModelOptions().every(option => !option.available)).toBe(true);
   });
-  it("lists Gemini chat models and a typed unavailable Groq provider", () => {
-    expect(registry.chatModelOptions()).toEqual(registry.MODEL_CHAINS.chat.map(id => ({
-      id, label: registry.modelLabel(id), provider: "gemini", available: true,
-    })));
-    expect(registry.GROQ_PROVIDER).toEqual({ provider: "groq", available: false });
+  it("lists Groq models as unavailable until GROQ_API_KEY is set", () => {
+    const groq = () => registry.chatModelOptions().filter(o => o.provider === "groq");
+    expect(groq().map(o => o.id)).toEqual(["openai/gpt-oss-120b", "qwen/qwen3.8-27b"]);
+    expect(groq().every(o => !o.available)).toBe(true);
+    expect(registry.chatModelOptions().filter(o => o.provider === "gemini").every(o => o.available)).toBe(true);
+    mocks.groq = "groq-test-key";
+    expect(groq().every(o => o.available)).toBe(true);
+    expect(registry.modelLabel("openai/gpt-oss-120b")).toBe("GPT-OSS 120B");
+  });
+  it("routes Groq models only when the key exists and keeps them as a hedge after the default", async () => {
+    expect((await registry.candidates("chat")).some(c => registry.providerOf(c.modelId) === "groq")).toBe(false);
+    mocks.groq = "groq-test-key";
+    const models = [...new Set((await registry.candidates("chat")).map(c => c.modelId))];
+    expect(models.slice(0, 2)).toEqual(["gemini-3.6-flash", "openai/gpt-oss-120b"]);
+    const picked = await registry.candidates("chat", "qwen/qwen3.8-27b");
+    expect(picked[0]).toMatchObject({ modelId: "qwen/qwen3.8-27b", keyFp: fp("groq-test-key"), fallback: false });
   });
   it("honors an explicit live preference even when the model was slow", async () => {
     registry.markSlow("gemini-3.8-flash");
