@@ -104,3 +104,6 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] [codex] K3 deployed acceptance: run POST /api/admin/eval after K3 deploy and replace evals/results.md with fresh measured results (existing 09:05 result is baseline only). Slot paraphrase case covers canonicalized writes; independent extraction semantic paraphrases remain a separate model-quality check.
 
 - [x] [codex] K5 implemented 14:53 IST: mixed-citation profile recovery is source-only and transactionally revalidated; active demo contradiction6PMvs7PM has real precomputed vectors and semantic slot metadata without a canonical-slot uniqueness collision.34 focused tests pass, independent review passed. Newly seeded demos include the pair; existing demos need reload.
+
+- [x] [codex] K6: Gemini chatModelOptions() metadata plus typed GROQ_PROVIDER unavailable stub; explicit supported preference is honored and exhausted models fall back silently.22 registry tests, full356 tests, lint/typecheck pass; independent review passed.
+- [ ] [lead] K6: consume chatModelOptions() for app model choices. available means configured credentials, not a guarantee of quota. Groq remains unavailable until its provider/env wiring is intentionally added.
