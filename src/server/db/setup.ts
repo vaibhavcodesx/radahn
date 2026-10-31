@@ -64,6 +64,7 @@ const INDEXES: Record<string, IndexDef[]> = {
   ],
   conversations: [[{ ownerId: 1, spaceId: 1, lastMessageAt: -1 }, { name: "owner_space_last" }]],
   spaces: [[{ ownerId: 1, createdAt: 1 }, { name: "owner_created" }]],
+  profiles: [[{purgeAt:1},{name:"ttl_profile_purge",expireAfterSeconds:0}]],
   reflections: [[{ ownerId: 1, startedAt: -1 }, { name: "owner_started" }]],
   user_settings: [],
   agent_keys: [

@@ -253,6 +253,8 @@ export interface RecallInput {
 }
 
 export interface RecallResult {
+  /** Current validated global profile; absent for historical recall. */
+  profile?: string;
   asOf?: string; // retained content snapshot, absolute ISO timestamp
   recallId: string; // recalls._id hex ('' when persistTrace=false)
   intent: RecallIntent;

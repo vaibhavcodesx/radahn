@@ -8,6 +8,7 @@ import { gateCandidate } from "./gate";
 import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
 import { memoryDTO, eventDTO } from "./serialize";
 import { purgeAt } from "./lifecycle";
+import {invalidateProfile} from "./profile";
 import { lockOwner } from "./mutation";
 import { contentHash } from "./reconcile";
 import { writeCandidates } from "./write";
@@ -60,6 +61,7 @@ export async function forgetMemory(input:ForgetInput):Promise<ForgetResult> {
   return transaction(input.ownerId,async session=>{
     const result=await collections().memories.deleteOne({ownerId:input.ownerId,_id:unit._id},{session});
     if(!result.deletedCount)return {status:"not_found"};
+    await invalidateProfile(input.ownerId,session,[unit._id]);
     await event(input.ownerId,unit,"forgotten",input.actor,session);
     return {status:"forgotten",forgotten:{id:unit._id.toHexString(),type:unit.type}};
   });
@@ -92,7 +94,7 @@ export async function reviewMemory(input:ReviewInput):Promise<MemoryDTO|null> {
         const active=await c.memories.findOne({ownerId:input.ownerId,spaceKey:updated.spaceKey,slotKey:updated.slotKey,status:"active",_id:{$ne:_id}},{session});
         if(active) {
           if(+updated.validFrom<+active.validFrom) {updated.status="superseded";updated.validTo=active.validFrom;updated.supersededBy=active._id;Object.assign(set,{validTo:updated.validTo,supersededBy:active._id});}
-          else {await c.memories.updateOne({ownerId:input.ownerId,_id:active._id,status:"active"},{$set:{status:"superseded",validTo:updated.validFrom,supersededBy:_id,updatedAt:now,supersedeReason:"update"}},{session});updated.supersedes=active._id;set.supersedes=active._id;await event(input.ownerId,active,"superseded",input.actor,session);}
+          else {await invalidateProfile(input.ownerId,session,[active._id],false);await c.memories.updateOne({ownerId:input.ownerId,_id:active._id,status:"active"},{$set:{status:"superseded",validTo:updated.validFrom,supersededBy:_id,updatedAt:now,supersedeReason:"update"}},{session});updated.supersedes=active._id;set.supersedes=active._id;await event(input.ownerId,active,"superseded",input.actor,session);}
         }
       }
       await pinBudget(input.ownerId,updated,session);
@@ -116,6 +118,7 @@ export async function updateMemory(input:UpdateMemoryInput):Promise<MemoryDTO|nu
     await pinBudget(input.ownerId,next,session);
     const update:UpdateFilter<MemoryUnit>={$set:set,...(Object.keys(unset).length?{$unset:unset}:{})};
     const result=await c.memories.updateOne({ownerId:input.ownerId,_id},update,{session});if(!result.matchedCount)return null;
+    await invalidateProfile(input.ownerId,session,[_id],input.patch.spaceKey!==undefined||(next.expiresAt!==undefined&&(!unit.expiresAt||+next.expiresAt<+unit.expiresAt)));
     await event(input.ownerId,next,input.patch.pinned===undefined?"updated":input.patch.pinned?"pinned":"unpinned",input.actor,session);
     return memoryDTO(next);
   });

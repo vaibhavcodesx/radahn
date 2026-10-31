@@ -1,8 +1,8 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({mem:{findOne:vi.fn(),find:vi.fn(),deleteOne:vi.fn(),updateOne:vi.fn(),countDocuments:vi.fn()},events:{insertOne:vi.fn(),find:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},recalls:{find:vi.fn()},transaction:vi.fn(),end:vi.fn(),embed:vi.fn()}));
-vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock.mem,events:mock.events,settings:mock.settings,recalls:mock.recalls})}));
+const mock=vi.hoisted(()=>({profiles:{updateOne:vi.fn(),deleteOne:vi.fn()},mem:{findOne:vi.fn(),find:vi.fn(),deleteOne:vi.fn(),updateOne:vi.fn(),countDocuments:vi.fn()},events:{insertOne:vi.fn(),find:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},recalls:{find:vi.fn()},transaction:vi.fn(),end:vi.fn(),embed:vi.fn()}));
+vi.mock("@/server/db/collections",()=>({collections:()=>({profiles:mock.profiles,memories:mock.mem,events:mock.events,settings:mock.settings,recalls:mock.recalls})}));
 vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>({withTransaction:mock.transaction,endSession:mock.end})})}));
 vi.mock("@/server/llm/registry",()=>({embed:mock.embed}));
 const {forgetMemory,updateMemory,reviewMemory,getMemory,listMemories,pendingCount}=await import("./tools");
@@ -63,3 +63,5 @@ it("lists only retained valid historical content and rejects invalid snapshots",
  expect((await listMemories({ownerId,spaceKey:"s",asOf,statuses:["pending_review","active","superseded"]})).map(m=>m.id)).toEqual([old._id.toHexString()]);
  await expect(listMemories({ownerId,asOf:"yesterday"})).rejects.toThrow(/asOf/);
 });
+
+it("forgets and updates with profile invalidation in the source transaction including previous evidence",async()=>{const m=unit();mock.mem.findOne.mockResolvedValue(m);await forgetMemory({ownerId,memoryId:m._id.toHexString(),actor});expect(mock.profiles.deleteOne.mock.lastCall?.[0]).toMatchObject({ownerId,$or:[{evidenceIds:{$in:[m._id]}},{"previous.evidenceIds":{$in:[m._id]}}]});expect(mock.profiles.deleteOne.mock.lastCall?.[1]).toEqual(mock.mem.deleteOne.mock.lastCall?.[1]);await updateMemory({ownerId,memoryId:m._id.toHexString(),patch:{spaceKey:"other"},actor});expect(mock.profiles.deleteOne).toHaveBeenCalledTimes(2);});

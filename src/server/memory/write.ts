@@ -8,6 +8,7 @@ import { embed, generateStructured } from "@/server/llm/registry";
 import { preScan, gateCandidate } from "./gate";
 import { contentHash, normalise, confirmConfidence, slotDecision, neighbourDecision } from "./reconcile";
 import { PinBudgetError } from "./errors";
+import {invalidateProfile} from "./profile";
 import { lockOwner } from "./mutation";
 import { purgeAt } from "./lifecycle";
 import type { CandidateMemory, MemoryUnit, MemoryEvent, MemoryEventKind, RecallPick, WritePolicy, WriteSummary, WriteOpResult, SupersedeReason } from "./types";
@@ -133,6 +134,7 @@ async function persist(plan:Plan,ctx:WriteContext,session:ClientSession):Promise
     unit.supersedes=plan.target._id;unit.supersedeReason=ctx.reason??"update";
     const changed=await c.memories.updateOne({ownerId:ctx.ownerId,_id:plan.target._id,status:"active"},{$set:{status:"superseded",validTo:unit.validFrom,supersededBy:_id,supersedeReason:ctx.reason??"update",updatedAt:ctx.now}},opts);
     if(!changed.matchedCount)throw new WriteRace();
+    await invalidateProfile(ctx.ownerId,session,[plan.target._id],false);
     await event("superseded",plan.target,false);
   }
   if(plan.op==="history" && plan.target) {unit.validTo=plan.target.validFrom;unit.supersededBy=plan.target._id;unit.supersedeReason="update";}

@@ -11,10 +11,11 @@ import {gateCandidate,preScan} from "./gate";
 import {lockOwner} from "./mutation";
 import {purgeAt} from "./lifecycle";
 import {PinBudgetError} from "./errors";
+import {writeProfile,profileEligible,invalidateProfile} from "./profile";
 import {reflectionPrompt} from "./prompts/reflect";
 import type {CandidateMemory,MemoryUnit,ReflectInput,ReflectionRun,ReflectionStep,Sensitivity,WritePolicy} from "./types";
 const item=z.object({statement:z.string().min(3).max(240),evidenceIds:z.array(z.string()).max(60),targetId:z.string().optional()});
-export const reflectionSchema=z.object({merges:z.array(item).max(30),observations:z.array(item).max(5),strategies:z.array(item.extend({trigger:z.string().min(2).max(80)})).max(3)});
+export const reflectionSchema=z.object({profile:z.object({text:z.string().max(1200),evidenceIds:z.array(z.string()).max(60)}).optional(),merges:z.array(item).max(30),observations:z.array(item).max(5),strategies:z.array(item.extend({trigger:z.string().min(2).max(80)})).max(3)});
 type Output=z.infer<typeof reflectionSchema>;
 type Plan={unit:MemoryUnit;parents:MemoryUnit[];evidence:MemoryUnit[];kind:keyof ReflectionRun["outputs"]};
 const explicit=(m:MemoryUnit)=>(m.source.kind==="manual"||m.source.kind==="tool")&&m.source.actor.kind==="user";
@@ -92,7 +93,8 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
   const recent=await c.memories.find({...scope,...(space?.lastReflectionAt?{updatedAt:{$gt:space.lastReflectionAt}}:{})}).sort({updatedAt:-1}).limit(60).toArray();
   const feedback=await c.memories.find({...scope,type:{$in:["feedback","outcome"]},createdAt:{$gte:new Date(+now-30*86400000)}}).sort({createdAt:-1}).limit(60).toArray();
   const strategies=await c.memories.find({...scope,type:"strategy"}).sort({importance:-1}).limit(30).toArray();
-  const units=[...new Map([...recent,...feedback,...strategies].filter(m=>m.ownerId===input.ownerId&&[input.spaceKey,"global"].includes(m.spaceKey)&&alive(m,now)).map(m=>[m._id.toHexString(),m])).values()];
+  const stable=await c.memories.find({...scope,spaceKey:"global",type:{$in:["profile","fact","preference"]},sensitivity:"none"}).sort({importance:-1}).limit(60).toArray();
+  const units=[...new Map([...recent,...feedback,...strategies,...stable.filter(m=>profileEligible(m,input.ownerId,now))].filter(m=>m.ownerId===input.ownerId&&[input.spaceKey,"global"].includes(m.spaceKey)&&alive(m,now)).map(m=>[m._id.toHexString(),m])).values()];
   await step("gather","done",units.length);await step("cluster","running");
   const clusters=clusterMemories(units);await step("cluster","done",clusters.length);await step("consolidate","running");
   const output=units.length?reflectionSchema.parse((await generateStructured("reflect",{schema:reflectionSchema,prompt:reflectionPrompt(units,clusters)})).object):{merges:[],observations:[],strategies:[]};
@@ -109,6 +111,7 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
     const applied:ReflectionRun["outputs"]={merged:[],observations:[],strategies:[]};
     for(const plan of plans){const {unit,parents}=plan;
      if(unit.status==="active"&&unit.slotKey){const conflict=await c.memories.findOne({ownerId:input.ownerId,spaceKey:unit.spaceKey,status:"active",slotKey:unit.slotKey},opts);if(conflict&&!parents.some(p=>p._id.equals(conflict._id)))throw new Error("Reflection slot changed");}
+     await invalidateProfile(input.ownerId,session,parents.map(m=>m._id),false);
      for(const parent of parents){const changed=await c.memories.updateOne({ownerId:input.ownerId,_id:parent._id,status:"active"},{$set:{status:"superseded",validTo:now,supersededBy:unit._id,supersedeReason:unit.supersedeReason,updatedAt:now}},opts);if(!changed.matchedCount)throw new Error("Reflection target changed");await c.events.insertOne({_id:new ObjectId(),ownerId:input.ownerId,spaceKey:parent.spaceKey,memoryId:parent._id,type:parent.type,kind:"superseded",actor:{kind:"reflection",name:"reflection"},summary:"Memory superseded by reflection",at:now},opts);}
      if(unit.pinned&&unit.status==="active"){
       const pins=await c.memories.find({ownerId:input.ownerId,status:"active",pinned:true,$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]},opts).toArray();
@@ -117,6 +120,7 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
      const stored=Object.fromEntries(Object.entries(unit).filter(([,v])=>v!==undefined)) as unknown as MemoryUnit;
      await c.memories.insertOne(stored,opts);await c.events.insertOne({_id:new ObjectId(),ownerId:input.ownerId,spaceKey:unit.spaceKey,memoryId:unit._id,type:unit.type,kind:"reflected",actor:{kind:"reflection",name:"reflection"},summary:`Reflection ${unit.status==="active"?"applied":"pending"}`,at:now},opts);applied[plan.kind].push(unit._id.toHexString());
     }
+    await writeProfile(input.ownerId,output.profile,units,session,new Date());
     if(ObjectId.isValid(input.spaceKey)){
      const currentSpace=await c.spaces.findOne({ownerId:input.ownerId,_id:new ObjectId(input.spaceKey)},opts);
      // Preserve increments from writes completed while the model was consolidating.

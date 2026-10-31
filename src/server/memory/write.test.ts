@@ -1,0 +1,16 @@
+import {beforeEach,expect,it,vi} from "vitest";
+import {ObjectId} from "mongodb";
+import type {MemoryUnit,CandidateMemory} from "./types";
+vi.mock("server-only",()=>({}));
+const c=vi.hoisted(()=>({memories:{findOne:vi.fn(),find:vi.fn(),aggregate:vi.fn(),updateOne:vi.fn(),insertOne:vi.fn()},events:{findOne:vi.fn(),insertOne:vi.fn()},settings:{updateOne:vi.fn()},profiles:{updateOne:vi.fn(),deleteOne:vi.fn()}}));
+const session=vi.hoisted(()=>({withTransaction:vi.fn(async fn=>fn()),endSession:vi.fn()}));
+vi.mock("@/server/db/collections",()=>({collections:()=>c}));
+vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>session})}));
+vi.mock("@/server/llm/registry",()=>({embed:async()=>[Array(768).fill(.1)]}));
+import {writeCandidates} from "./write";
+const now=new Date(),old={_id:new ObjectId(),ownerId:"alice",spaceKey:"global",status:"active",type:"profile",subject:"alice",attribute:"course",slotKey:"alice.course",value:"math",statement:"Alice studies math.",validFrom:new Date(+now-1000),createdAt:now,stats:{confirmCount:0},pinned:false} as MemoryUnit;
+const candidate={statement:"Alice studies programming.",type:"profile",subject:"alice",attribute:"course",value:"cs",entities:[],importance:8,confidence:.9,sensitivity:"none",scope:"global",explicit:true,hint:"new"} as CandidateMemory;
+const ctx={ownerId:"alice",spaceKey:"global",now,policy:"auto" as const,source:{kind:"manual" as const,actor:{kind:"user" as const,name:"you"}},recalled:[]};
+beforeEach(()=>{vi.clearAllMocks();c.memories.findOne.mockImplementation(async f=>f.slotKey||f._id?old:null);c.events.findOne.mockResolvedValue(null);c.memories.updateOne.mockResolvedValue({matchedCount:1});c.memories.aggregate.mockReturnValue({toArray:async()=>[]});});
+it("marks only the superseded target's current or previous profile in the source transaction",async()=>{expect((await writeCandidates([candidate],ctx)).superseded).toBe(1);expect(c.profiles.updateOne).toHaveBeenCalledWith({_id:"alice",ownerId:"alice",$or:[{evidenceIds:{$in:[old._id]}},{"previous.evidenceIds":{$in:[old._id]}}]},{$set:{invalidatedAt:expect.any(Date)}},{session});expect(c.profiles.deleteOne).not.toHaveBeenCalled();});
+it("preserves profile cache on stats-only confirmations and unrelated additions",async()=>{await writeCandidates([{...candidate,value:"math"}],ctx);expect(c.profiles.updateOne).not.toHaveBeenCalled();c.memories.findOne.mockResolvedValue(null);await writeCandidates([candidate],ctx);expect(c.profiles.updateOne).not.toHaveBeenCalled();expect(c.profiles.deleteOne).not.toHaveBeenCalled();});

@@ -6,6 +6,7 @@ import { collections } from "@/server/db/collections";
 import { embed } from "@/server/llm/registry";
 import { cosine, score, select, type Ranked, type Hits } from "./score";
 import {parseAsOf,historicalFilter,isHistoricalMemory,historicalMetadata} from "./historical";
+import {readProfile} from "./profile";
 import { memoryDTO } from "./serialize";
 import type { MemoryUnit, RecallInput, RecallResult, RecallIntent, RecallChannel, RecallNotice, ReasonCode, RecallLatency } from "./types";
 export function detectIntent(query: string): RecallIntent {
@@ -116,6 +117,7 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
   const strategies=coreRows.filter(live).map(m=>at?historicalMetadata(m,at):m).filter(m=>m.type==="strategy").map(m=>({unit:m,relevance:queryVector?cosine(queryVector,m.embedding):0})).filter(x=>x.unit.pinned || x.relevance>=0.6 || (intent==="plan" && /plan|schedule|time.?box/i.test(x.unit.statement))).sort((a,b)=>Number(b.unit.pinned)-Number(a.unit.pinned) || (intent==="plan" ? Number(/plan|schedule|time.?box/i.test(b.unit.statement))-Number(/plan|schedule|time.?box/i.test(a.unit.statement)) : 0) || b.relevance-a.relevance || b.unit.importance-a.unit.importance).slice(0,3).map(x=>memoryDTO(x.unit));
   const picks=picked.map((row,i)=>{const codes=reasons(row,intent,planningFallback);return {ref:`m${i+1}`,memoryId:row.unit._id.toHexString(),type:row.unit.type,statement:row.unit.statement,final:row.scores.final,scores:row.scores,reasons:codes,why:codes.map(code=>REASONS[code]).join(" · "),status:row.unit.status,ageDays:Math.max(0,(+now-+row.unit.updatedAt)/86400000),confirmCount:row.unit.stats.confirmCount};});
   const candidates=ranked.map(row=>({memoryId:row.unit._id.toHexString(),statement:row.unit.statement,type:row.unit.type,scores:row.scores,selected:row.selected,reasons:reasons(row,intent,planningFallback),droppedBy:row.droppedBy}));
+  const profile=at?undefined:await readProfile(input.ownerId,wallNow);
   latency.total=performance.now()-started;
   let recallId="";
   if(input.persistTrace!==false) {
@@ -124,6 +126,6 @@ export async function recall(input: RecallInput): Promise<RecallResult> {
     recallId=_id.toHexString(); } catch { /* Trace storage is best effort during a DB interruption. */ }
     if(ids.length && !at) void c.memories.bulkWrite(ids.map(_id=>({updateOne:{filter:{ownerId:input.ownerId,_id,status:"active"},update:{$inc:{"stats.recallCount":1},$set:{"stats.lastRecalledAt":now}}}}))).catch(()=>{});
   }
-  return {recallId,...snapshot,intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
+  return {recallId,...snapshot,...(profile?{profile}:{}),intent,channelsRan:channels,picks,candidates,core,strategies,notices,latencyMs:latency};
 }
 export async function getRecallTrace(ownerId:string,messageId:string) {return collections().recalls.findOne({ownerId,messageId});}

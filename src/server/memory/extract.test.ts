@@ -1,8 +1,8 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({mem:{findOne:vi.fn(),aggregate:vi.fn(),insertOne:vi.fn(),updateOne:vi.fn(),find:vi.fn()},events:{findOne:vi.fn(),insertOne:vi.fn()},spaces:{updateOne:vi.fn()},generateStructured:vi.fn(),embed:vi.fn(),transaction:vi.fn(),end:vi.fn()}));
-vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock.mem,events:mock.events,spaces:mock.spaces,settings:{updateOne:mock.spaces.updateOne}})}));
+const mock=vi.hoisted(()=>({profiles:{updateOne:vi.fn(),deleteOne:vi.fn()},mem:{findOne:vi.fn(),aggregate:vi.fn(),insertOne:vi.fn(),updateOne:vi.fn(),find:vi.fn()},events:{findOne:vi.fn(),insertOne:vi.fn()},spaces:{updateOne:vi.fn()},generateStructured:vi.fn(),embed:vi.fn(),transaction:vi.fn(),end:vi.fn()}));
+vi.mock("@/server/db/collections",()=>({collections:()=>({profiles:mock.profiles,memories:mock.mem,events:mock.events,spaces:mock.spaces,settings:{updateOne:mock.spaces.updateOne}})}));
 vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>({withTransaction:mock.transaction,endSession:mock.end})})}));
 vi.mock("@/server/llm/registry",()=>({generateStructured:mock.generateStructured,embed:mock.embed}));
 const {extractAndWrite,rememberExplicit}=await import("./extract");

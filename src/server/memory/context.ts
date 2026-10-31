@@ -59,8 +59,10 @@ export function buildSystemPrompt(input: BuildContextInput): BuiltContext {
     );
   }
 
+  const profile=!recall.asOf?recall.profile:undefined;
+  if(profile)sections.push(`## About ${userName}\n${profile}`);
   if (recall.core.length) {
-    sections.push(`## About ${userName} (core)\n${recall.core.map((m) => `- ${m.statement}`).join("\n")}`);
+    sections.push(`## ${profile?"Pinned core memories":`About ${userName} (core)`}\n${recall.core.map((m) => `- ${m.statement}`).join("\n")}`);
   }
 
   if (recall.picks.length) {

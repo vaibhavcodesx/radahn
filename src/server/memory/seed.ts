@@ -1,6 +1,7 @@
 /** Demo seed: memory-engine.md §2–§3 and TRD §15. Runtime uses precomputed synthetic vectors only. */
 import { ObjectId } from "mongodb";
 import { mongo } from "@/server/db/client";
+import {invalidateProfile} from "./profile";
 import { lockOwner } from "./mutation";
 import { collections } from "@/server/db/collections";
 import { DEMO_MEMORIES } from "./fixtures/demo";
@@ -32,6 +33,7 @@ export async function seedDemo({ownerId,spaceIds,conversations}:SeedDemoInput):P
  const session=mongo().startSession();
  try{await session.withTransaction(async()=>{
  await lockOwner(ownerId,session);
+ await invalidateProfile(ownerId,session);
  const existing=await c.memories.find({ownerId,demo:{$ne:true},status:"active",slotKey:{$exists:true}},{session}).toArray();
  const occupied=new Set(existing.map(m=>`${m.spaceKey}:${m.slotKey}`));
  // User truth wins: retain colliding synthetic facts for review instead of replacing it.
@@ -47,6 +49,7 @@ export async function removeDemo(ownerId:string):Promise<void>{
  const session=mongo().startSession();
  try{await session.withTransaction(async()=>{
   await lockOwner(ownerId,session);
+ await invalidateProfile(ownerId,session);
   await collections().memories.deleteMany({ownerId,demo:true},{session});
  });}finally{await session.endSession();}
 }
@@ -54,6 +57,7 @@ export async function deleteAll(ownerId:string):Promise<void>{
  const c=collections(),session=mongo().startSession();
  try{await session.withTransaction(async()=>{
   await lockOwner(ownerId,session);
+ await invalidateProfile(ownerId,session);
   // MongoDB transactions require sequential operations on their shared session.
   for(const collection of [c.memories,c.events,c.recalls,c.reflections])await collection.deleteMany({ownerId},{session});
  });}finally{await session.endSession();}

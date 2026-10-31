@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vitest";
+vi.mock("server-only",()=>({}));
 import type { MemoryUnit } from "./types";
-const c=vi.hoisted(()=>({memories:{find:vi.fn(()=>({toArray:async()=>[]})),deleteMany:vi.fn(),insertMany:vi.fn()},events:{insertOne:vi.fn(),deleteMany:vi.fn()},recalls:{deleteMany:vi.fn()},reflections:{deleteMany:vi.fn()}}));
+const c=vi.hoisted(()=>({profiles:{deleteOne:vi.fn()},memories:{find:vi.fn(()=>({toArray:async()=>[]})),deleteMany:vi.fn(),insertMany:vi.fn()},events:{insertOne:vi.fn(),deleteMany:vi.fn()},recalls:{deleteMany:vi.fn()},reflections:{deleteMany:vi.fn()}}));
 vi.mock("@/server/db/collections",()=>({collections:()=>c}));
 import { seedDemo, removeDemo, deleteAll } from "./seed";
 import { DEMO_MEMORIES } from "./fixtures/demo";
@@ -57,3 +58,6 @@ test("deleteAll awaits each deletion sequentially within its transaction",async(
  await deleteAll("owner");expect(peak).toBe(1);
 });
 
+
+test.each([removeDemo,deleteAll])("cleanup erases current and previous profile cache in the owner transaction",async cleanup=>{await cleanup("owner");expect(c.profiles.deleteOne).toHaveBeenCalledWith({_id:"owner",ownerId:"owner"},{session});});
+test("seed replacement also invalidates the entire derived profile cache",async()=>{await seedDemo(input);expect(c.profiles.deleteOne).toHaveBeenCalledWith({_id:"owner",ownerId:"owner"},{session});});

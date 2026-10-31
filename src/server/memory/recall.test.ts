@@ -1,9 +1,10 @@
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),embed:vi.fn()}));
+const mock=vi.hoisted(()=>({aggregate:vi.fn(),find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),bulkWrite:vi.fn(),embed:vi.fn(),profile:vi.fn()}));
 vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock,events:mock,recalls:mock,settings:{findOne:async()=>({timeZone:"Asia/Kolkata"})}})}));
 vi.mock("@/server/llm/registry",()=>({embed:mock.embed}));
+vi.mock("./profile",()=>({readProfile:mock.profile}));
 const {recall,temporalWindow}=await import("./recall");
 import type {MemoryUnit} from "./types";
 const now=new Date("2026-10-31T00:00:00Z");
@@ -111,3 +112,7 @@ it("returns historical core and strategies while keeping every temporal predicat
  expect(pipelines.find(p=>p[0].$vectorSearch)[0].$vectorSearch.filter).not.toHaveProperty("validFrom");
  expect(pipelines.find(p=>p[0].$vectorSearch)[1].$match.validFrom).toEqual({$lte:new Date(asOf)});
 });
+
+it("includes a validated profile only for current recall and never reads it for asOf",async()=>{mock.profile.mockResolvedValue("Alice studies computer science.");expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false})).profile).toBe("Alice studies computer science.");mock.profile.mockClear();expect((await recall({ownerId:"alice",spaceKey:"s",query:"hello",asOf:now.toISOString(),persistTrace:false})).profile).toBeUndefined();expect(mock.profile).not.toHaveBeenCalled();});
+
+it("includes validated profile loading in reported recall latency",async()=>{mock.profile.mockImplementation(async()=>{await new Promise(resolve=>setTimeout(resolve,25));return "Alice likes programming.";});const result=await recall({ownerId:"alice",spaceKey:"s",query:"hello",persistTrace:false});expect(result.latencyMs.total).toBeGreaterThanOrEqual(20);});

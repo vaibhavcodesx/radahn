@@ -9,3 +9,10 @@ it("labels a historical validity snapshot without claiming complete transaction-
  expect(result.system).toContain("valid as of");
  expect(result.system).toContain("do not present them as current facts");
 });
+
+it("uses profile About text while retaining pinned constraints, and defensively excludes profile for asOf",()=>{
+ const recall={recallId:"",profile:"Alice studies computer science.",intent:"general",channelsRan:[],picks:[],candidates:[],core:[{statement:"Deadline is 9 PM.",type:"constraint"}],strategies:[],notices:[],latencyMs:{}} as unknown as RecallResult;
+ const input={recall,userName:"Alice",timeZone:"Asia/Kolkata",now:new Date(),spaceName:"demo"};
+ const current=buildSystemPrompt(input).system;expect(current).toContain("## About Alice\nAlice studies computer science.");expect(current).toContain("Deadline is 9 PM.");expect(current).not.toContain("About Alice (core)");
+ recall.asOf="2026-10-31T01:00:00Z";const past=buildSystemPrompt(input).system;expect(past).not.toContain(recall.profile);expect(past).toContain("About Alice (core)");
+});

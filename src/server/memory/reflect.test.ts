@@ -2,8 +2,8 @@ import {beforeEach,describe,expect,it,vi} from "vitest";
 import {ObjectId} from "mongodb";
 import type {MemoryUnit} from "./types";
 vi.mock("server-only",()=>({}));
-const mock=vi.hoisted(()=>({mem:{find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),updateOne:vi.fn()},runs:{insertOne:vi.fn(),updateOne:vi.fn(),find:vi.fn()},spaces:{findOne:vi.fn(),updateOne:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},events:{insertOne:vi.fn()},generate:vi.fn(),embed:vi.fn(),transaction:vi.fn(),end:vi.fn()}));
-vi.mock("@/server/db/collections",()=>({collections:()=>({memories:mock.mem,reflections:mock.runs,spaces:mock.spaces,settings:mock.settings,events:mock.events})}));
+const mock=vi.hoisted(()=>({mem:{find:vi.fn(),findOne:vi.fn(),insertOne:vi.fn(),updateOne:vi.fn()},runs:{insertOne:vi.fn(),updateOne:vi.fn(),find:vi.fn()},spaces:{findOne:vi.fn(),updateOne:vi.fn()},profiles:{findOne:vi.fn(),replaceOne:vi.fn(),updateOne:vi.fn(),deleteOne:vi.fn()},settings:{findOne:vi.fn(),updateOne:vi.fn()},events:{insertOne:vi.fn()},generate:vi.fn(),embed:vi.fn(),transaction:vi.fn(),end:vi.fn()}));
+vi.mock("@/server/db/collections",()=>({collections:()=>({profiles:mock.profiles,memories:mock.mem,reflections:mock.runs,spaces:mock.spaces,settings:mock.settings,events:mock.events})}));
 vi.mock("@/server/db/client",()=>({mongo:()=>({startSession:()=>({withTransaction:mock.transaction,endSession:mock.end})})}));
 vi.mock("@/server/llm/registry",()=>({generateStructured:mock.generate,embed:mock.embed}));
 const {runReflection,listReflections,clusterMemories}=await import("./reflect");
@@ -41,4 +41,9 @@ describe("reflection parent audit events",()=>{
 describe("reflection demo cleanup lineage",()=>{
  it.each([true,false])("marks only entirely demo-derived output as demo (all demo: %s)",async allDemo=>{rows=[unit({demo:true}),unit({demo:allDemo})];mock.generate.mockResolvedValue({object:output({observations:[{statement:"Aarav prefers concise answers.",evidenceIds:rows.map(m=>m._id.toHexString())}]})});await runReflection({ownerId,spaceKey,trigger:"manual"});const saved=mock.mem.insertOne.mock.calls[0][0];if(allDemo)expect(saved.demo).toBe(true);else expect(saved.demo).not.toBe(true);});
  it("keeps a refined real strategy non-demo when its fresh evidence is entirely demo",async()=>{const prior=unit({type:"strategy",statement:"When Aarav asks for a plan, give concise bullets."});rows=[unit({demo:true}),unit({demo:true}),prior];mock.generate.mockResolvedValue({object:output({strategies:[{statement:"When planning, use at most 5 concise bullets.",trigger:"planning",evidenceIds:rows.slice(0,2).map(m=>m._id.toHexString()),targetId:prior._id.toHexString()}]})});await runReflection({ownerId,spaceKey,trigger:"manual"});expect(mock.mem.insertOne.mock.calls[0][0].demo).not.toBe(true);});
+});
+
+it("gathers stable global facts after last reflection and writes a profile from the existing single call",async()=>{
+ rows=[unit({spaceKey:"global",type:"profile",statement:"Alice studies computer science.",updatedAt:new Date(0)})];mock.spaces.findOne.mockResolvedValue({lastReflectionAt:new Date(),unitsSinceReflection:1});mock.generate.mockResolvedValue({object:output({profile:{text:"Alice studies computer science.",evidenceIds:[rows[0]._id.toHexString()]}})});
+ const result=await runReflection({ownerId,spaceKey,trigger:"manual"});expect(result.status).toBe("done");expect(mock.generate).toHaveBeenCalledTimes(1);expect(mock.profiles.replaceOne).toHaveBeenCalled();expect(mock.mem.find.mock.calls.some(([f])=>f.spaceKey==="global"&&f.type?.$in?.includes("profile")&&!f.updatedAt)).toBe(true);
 });
