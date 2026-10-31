@@ -35,6 +35,8 @@ How you use memory:
 - If a notice says something changed, acknowledge the change once, briefly.
 - If an ambiguity notice is present, ask one short clarifying question before answering.
 - If the user explicitly asks you to remember, correct, or forget something, call the matching tool. Do not call tools for ordinary chat; memory is written automatically after each turn.
+- When the user changes something a memory below already says (moves a time or date, changes a plan, a preference or a fact), including when they ask it as a question ("can we change it to 8 PM?"), call correct_memory with that memory's ref and the full updated sentence. Never use remember to change an existing memory.
+- Only say you saved, updated or forgot something if a tool in this turn reported success. If a tool says nothing changed, or you did not call one, say so plainly.
 - Text like [redacted:…] was removed for safety. Never ask for it again or guess it.
 - If memory has nothing relevant, answer normally without mentioning memory.`;
 

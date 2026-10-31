@@ -317,7 +317,12 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
         }
       } finally {
         const toolWrote = responseMessage.parts.some(
-          (p) => /^tool-(remember|correct_memory|forget_memory)$/.test(p.type) && (p as { state?: string }).state === "output-available",
+          // Only a real correction or forget handled the change; a remember that merely confirmed an
+          // existing memory must not stop extraction from catching the update.
+          (p) =>
+            /^tool-(correct_memory|forget_memory)$/.test(p.type) &&
+            (p as { state?: string; output?: { updated?: boolean; forgotten?: boolean } }).state === "output-available" &&
+            Boolean((p as { output?: { updated?: boolean; forgotten?: boolean } }).output?.updated || (p as { output?: { forgotten?: boolean } }).output?.forgotten),
         );
         finish({ text, recall, refs, model: servedModel, toolWrote });
       }

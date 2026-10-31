@@ -25,7 +25,7 @@ export function memoryTools(ctx: {
   return {
     remember: tool({
       description:
-        "ONLY when the user explicitly asks you to remember / save / note something (e.g. 'remember that…'). Never for facts mentioned in passing: those are picked up automatically after the turn, and sensitive ones are put to the user for approval. One self-contained third-person statement with absolute dates.",
+        "ONLY when the user explicitly asks you to remember / save / note something NEW (e.g. 'remember that…'). Never to change or update an existing memory: use correct_memory for that. Never for facts mentioned in passing: those are picked up automatically after the turn, and sensitive ones are put to the user for approval. One self-contained third-person statement with absolute dates.",
       inputSchema: z.object({
         statement: z.string().min(3).max(240),
         type: z.enum(MEMORY_TYPES),
@@ -52,7 +52,9 @@ export function memoryTools(ctx: {
         });
         return r.op === "blocked"
           ? { saved: false, reason: "That looked like a secret or unsafe text, so it was not stored." }
-          : { saved: true, status: r.op, statement: r.statement };
+          : r.op === "confirm"
+            ? { saved: false, status: r.op, statement: r.statement, note: "This was already stored, so nothing changed. To change an existing memory use correct_memory." }
+            : { saved: true, status: r.op, statement: r.statement };
       },
     }),
 
@@ -75,7 +77,7 @@ export function memoryTools(ctx: {
 
     correct_memory: tool({
       description:
-        "Correct a stored memory when the user says it is wrong or changed. Use targetRef (e.g. 'm2') when the memory is in 'Relevant memories', else a short query.",
+        "Update a stored memory when the user says it is wrong or has changed: a new time or date, a moved plan, a changed preference or fact, even when asked as a question ('can we change it to 8 PM?'). Use targetRef (e.g. 'm2') when the memory is in 'Relevant memories', else a short query. newStatement is the full updated sentence (e.g. 'The Kestrel beta launch call starts at 8:00 PM IST on 7 Nov 2026.'). The old version is kept as history.",
       inputSchema: z.object({
         targetRef: z.string().optional(),
         query: z.string().optional(),
