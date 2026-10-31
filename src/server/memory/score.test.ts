@@ -43,7 +43,7 @@ describe("recall scoring",()=>{
  it("computes cosine safely",()=>{expect(cosine([1,0],[1,0])).toBe(1);expect(cosine([0,0],[1,0])).toBe(0);expect(cosine([1],[1,0])).toBe(0);});
  it("context citations map exactly to selected refs",()=>{
   const recall={picks:[{ref:"m1",memoryId:"id1",type:"fact",statement:"Aarav uses Atlas.",ageDays:0,confirmCount:0}],core:[],strategies:[],notices:[]} as unknown as RecallResult;
-  expect(buildSystemPrompt({userName:"Aarav",now,timeZone:"Asia/Kolkata",spaceName:"hackathon",recall}).refs).toEqual({m1:"id1"});
+  expect(buildSystemPrompt({userName:"Aarav",now,timeZone:"Asia/Kolkata",spaceName:"Kestrel",recall}).refs).toEqual({m1:"id1"});
  });
 });
 

@@ -585,7 +585,7 @@ export interface Insights {
 export interface SeedDemoInput {
   ownerId: string;
   /** Space _id hex for each demo space key (fixtures/demo.ts DEMO_SPACES). */
-  spaceIds: Record<'personal' | 'hackathon' | 'internships', string>;
+  spaceIds: Record<'personal' | 'project' | 'internships', string>;
   /** Demo conversations already inserted by the app, in DEMO_CONVERSATIONS order. */
   conversations: Array<{ conversationId: string; messageIds: string[] }>;
 }

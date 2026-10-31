@@ -14,6 +14,8 @@ export async function seedDemoWorld(ownerId: string): Promise<{ spaceId: string;
   await removeDemoWorld(ownerId, { keepSpaces: true });
 
   const now = Date.now();
+  // Drop demo spaces from an older demo world (renamed persona) so they don't linger empty.
+  await spaces.deleteMany({ ownerId, demo: true, name: { $nin: DEMO_SPACES.map((sp) => sp.name) } });
   const existing = await spaces.find({ ownerId, demo: true }).toArray();
   const spaceIds = {} as Record<(typeof DEMO_SPACES)[number]["key"], string>;
   for (const sp of DEMO_SPACES) {
@@ -65,8 +67,8 @@ export async function seedDemoWorld(ownerId: string): Promise<{ spaceId: string;
 
   const eng = await engine();
   const result = await eng.seedDemo({ ownerId, spaceIds, conversations: convs });
-  await updateSettings(ownerId, { demoLoadedAt: new Date(), currentSpaceId: spaceIds.hackathon, displayName: "Aarav" });
-  return { spaceId: spaceIds.hackathon, memories: result.memories };
+  await updateSettings(ownerId, { demoLoadedAt: new Date(), currentSpaceId: spaceIds.project, displayName: "Aarav" });
+  return { spaceId: spaceIds.project, memories: result.memories };
 }
 
 export async function removeDemoWorld(ownerId: string, opts: { keepSpaces?: boolean } = {}) {

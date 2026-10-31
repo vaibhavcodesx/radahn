@@ -59,7 +59,7 @@ export function EmptyState({
               <p className="text-[12.5px] font-medium text-ink-3">Demo</p>
               <p className="mt-1 text-[14px] text-ink">Load a demo memory world</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">
-                Aarav, a student at SVNIT racing the UNCHARTED deadline: 3 spaces, ~38 memories of every type, a corrected decision, one item waiting for review, one about to expire. Labelled DEMO.
+                Aarav, a student building Kestrel, a flight-log app for drone pilots: 3 spaces, ~40 memories of every type, a corrected decision, one item waiting for review, one about to expire. Labelled DEMO.
               </p>
             </div>
           </div>

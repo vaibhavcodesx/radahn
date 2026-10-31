@@ -6,7 +6,7 @@ vi.mock("@/server/db/collections",()=>({collections:()=>c}));
 import { seedDemo, removeDemo, deleteAll } from "./seed";
 import { DEMO_MEMORIES } from "./fixtures/demo";
 beforeEach(()=>vi.clearAllMocks());
-const input={ownerId:"owner",spaceIds:{personal:"personal",hackathon:"hack",internships:"intern"},conversations:[{conversationId:"conv",messageIds:["m0","m1","m2"]}]};
+const input={ownerId:"owner",spaceIds:{personal:"personal",project:"hack",internships:"intern"},conversations:[{conversationId:"conv",messageIds:["m0","m1","m2"]}]};
 test("seeds one owner-scoped batch with resolved links, real vectors and optional fields omitted",async()=>{
  const before=Date.now();expect(await seedDemo(input)).toEqual({memories:DEMO_MEMORIES.length});
  expect(c.memories.deleteMany).toHaveBeenCalledWith({ownerId:"owner",demo:true},{session});

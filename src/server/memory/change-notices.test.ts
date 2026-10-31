@@ -12,7 +12,7 @@ describe('changed notices',()=>{
  it('rejects recency-driven picks despite crossing the final threshold',()=>{expect(shouldAnnounceChange(old,row({final:.51,rrf:.15,vector:.3}))).toBe(false);});
  it('rejects weak final scores',()=>{expect(shouldAnnounceChange(old,row({final:.49}))).toBe(false);});
  it('does not repeat a change after the replacement has been recalled',()=>{expect(shouldAnnounceChange(old,{...row(),unit:{...current,stats:{...current.stats,lastRecalledAt:at}}})).toBe(false);});
- it('does not label a role refinement as a value change',()=>{expect(shouldAnnounceChange({...old,value:'student',statement:'The user is a student at SVNIT Surat.'},{...row(),unit:{...current,value:'student, B.Tech 2nd year',statement:'Aarav is a B.Tech 2nd year student at SVNIT Surat.'}})).toBe(false);});
+ it('does not label a role refinement as a value change',()=>{expect(shouldAnnounceChange({...old,value:'student',statement:'The user is a student at NIT Surat.'},{...row(),unit:{...current,value:'student, B.Tech 2nd year',statement:'Aarav is a B.Tech 2nd year student at NIT Surat.'}})).toBe(false);});
  it('requires an explicit shared slot and different values',()=>{expect(shouldAnnounceChange({...old,slotKey:undefined},row())).toBe(false);expect(shouldAnnounceChange({...old,value:'10 PM'},row())).toBe(false);});
 });
 

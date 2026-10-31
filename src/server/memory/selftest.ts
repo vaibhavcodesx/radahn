@@ -30,7 +30,7 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
     const data:Array<{type:MemoryType;statement:string;importance:number}>=[
       {type:"constraint",statement:"Aarav must submit Radahn by 9 PM today.",importance:10},
       {type:"preference",statement:"Aarav likes plans broken into time boxes of 30 to 60 minutes.",importance:8},
-      {type:"goal",statement:"Aarav wants a top-16 finish at UNCHARTED 2026.",importance:9},
+      {type:"goal",statement:"Aarav wants 500 active pilots on Kestrel by January 2027.",importance:9},
     ];
     const now=new Date();
     await check("embed-and-seed-isolated-owner",async()=>{
@@ -172,7 +172,7 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(result.added+result.confirmed+result.pending<1)throw new SelfTestAssertion("Extraction produced no useful memory");
     });
     await check("precomputed-demo-seed-and-removal",async()=>{
-      const input={ownerId,spaceIds:{hackathon:spaceKey,personal:new ObjectId().toHexString(),internships:new ObjectId().toHexString()},conversations:[]};
+      const input={ownerId,spaceIds:{project:spaceKey,personal:new ObjectId().toHexString(),internships:new ObjectId().toHexString()},conversations:[]};
       const before=await c.memories.countDocuments({ownerId,demo:{$ne:true}});
       const result=await seedDemo(input);
       if(result.memories!==DEMO_MEMORIES.length || await c.memories.countDocuments({ownerId,demo:true})!==DEMO_MEMORIES.length)throw new SelfTestAssertion("Demo seed count failed");

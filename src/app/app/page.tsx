@@ -5,7 +5,7 @@ import { DEMO_SUGGESTIONS } from "@/server/memory/fixtures/demo";
 
 export const metadata = { title: "New chat" };
 
-const FRESH_SUGGESTIONS = ["I'm building a hackathon project due tonight. Help me plan.", "I prefer short bullet answers.", "What do you remember about me?"];
+const FRESH_SUGGESTIONS = ["I'm launching a side project next week. Help me plan.", "I prefer short bullet answers.", "What do you remember about me?"];
 
 export default async function NewChatPage() {
   const user = await requirePageUser();
