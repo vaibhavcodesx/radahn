@@ -264,7 +264,9 @@ export async function runTurn(input: TurnInput): Promise<ReadableStream> {
           system: ctx.system,
           messages: modelMessages,
           tools,
-          stopWhen: isStepCount(3),
+          // Room for several memory tool calls and still a written answer (3 was used up by three
+          // remember calls, leaving the reply with chips and no text).
+          stopWhen: isStepCount(6),
           maxRetries: 0,
           providerOptions: thinkingOptions(c.modelId, "low"),
           abortSignal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
