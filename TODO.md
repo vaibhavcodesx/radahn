@@ -27,7 +27,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [ ] Bug bash ×3 fresh profiles · demo video · README · deck · final deploy 20:45 · tag v1.0.0 · freeze 21:00 · submit form by 22:00
 
 ## Done
-- [x] [claude] Merged Codex #7–#16, reflection/profile/citation/notice integration fixes, time travel UI, contradictions UI, migration hardening, maintenance cron, MCP endpoint + Connected agents, hosted eval route + results (09:30)
+- [x] [claude] Merged Codex #7–#16, reflection/profile/citation/notice integration fixes, time travel UI, contradictions UI, migration hardening, maintenance cron, MCP endpoint + Connected agents, hosted eval route + results (09:07)
 - [x] [human] Google OAuth origin + redirect added (08:30)
 - [x] [claude] Phase 0: repo, CI, Vercel prod (radahn-ai.vercel.app), Atlas setup (04:38)
 - [x] [codex/claude] C1 quota routing, C2 privacy gate merged (04:55)

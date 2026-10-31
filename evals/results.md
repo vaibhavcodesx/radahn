@@ -1,6 +1,6 @@
 # Memory evaluation
 
-Hosted run on production (Vercel bom1 + Atlas M0 + Gemini free tier), 31 Oct 2026 ~09:25 IST, via the operator route `POST /api/admin/eval`.
+Hosted run on production (Vercel bom1 + Atlas M0 + Gemini free tier), 31 Oct 2026 ~09:05 IST, via the operator route `POST /api/admin/eval`.
 
 Mode: hosted; budgetExceeded=false; Disposable eval owner cleaned in finally.
 
