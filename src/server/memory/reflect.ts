@@ -17,6 +17,15 @@ import type {CandidateMemory,MemoryUnit,ReflectInput,ReflectionRun,ReflectionSte
 const item=z.object({statement:z.string().min(3).max(240),evidenceIds:z.array(z.string()).max(60),targetId:z.string().optional()});
 export const reflectionSchema=z.object({profile:z.object({text:z.string().max(1200),evidenceIds:z.array(z.string()).max(60)}).optional(),merges:z.array(item).max(30),observations:z.array(item).max(5),strategies:z.array(item.extend({trigger:z.string().min(2).max(80)})).max(3)});
 type Output=z.infer<typeof reflectionSchema>;
+// Gemini answers "invalid argument" for nested maxItems in response schemas (probed 08:50 IST), so the
+// model gets an uncapped shape and the caps above are enforced by clamping before the strict parse.
+const llmItem=z.object({statement:z.string(),evidenceIds:z.array(z.string()),targetId:z.string().optional()});
+const llmSchema=z.object({profile:z.object({text:z.string(),evidenceIds:z.array(z.string())}).optional(),merges:z.array(llmItem),observations:z.array(llmItem),strategies:z.array(llmItem.extend({trigger:z.string()}))});
+export function clampReflection(raw:z.infer<typeof llmSchema>):Output {
+ const fit=<T extends z.infer<typeof llmItem>>(list:T[],max:number)=>list.filter(i=>i.statement.trim().length>=3&&i.statement.length<=240).slice(0,max).map(i=>({...i,evidenceIds:i.evidenceIds.slice(0,60)}));
+ const profile=raw.profile&&raw.profile.text.length<=1200?{text:raw.profile.text,evidenceIds:raw.profile.evidenceIds.slice(0,60)}:undefined;
+ return reflectionSchema.parse({...(profile?{profile}:{}),merges:fit(raw.merges,30),observations:fit(raw.observations,5),strategies:fit(raw.strategies.filter(s=>s.trigger.length>=2&&s.trigger.length<=80),3)});
+}
 type Plan={unit:MemoryUnit;parents:MemoryUnit[];evidence:MemoryUnit[];kind:keyof ReflectionRun["outputs"]};
 const explicit=(m:MemoryUnit)=>(m.source.kind==="manual"||m.source.kind==="tool")&&m.source.actor.kind==="user";
 const alive=(m:MemoryUnit,now:Date)=>m.status==="active"&&(!m.expiresAt||+m.expiresAt>+now);
@@ -99,7 +108,7 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
   const units=[...new Map([...recent,...feedback,...strategies,...stable.filter(m=>profileEligible(m,input.ownerId,now))].filter(m=>m.ownerId===input.ownerId&&[input.spaceKey,"global"].includes(m.spaceKey)&&alive(m,now)).map(m=>[m._id.toHexString(),m])).values()];
   await step("gather","done",units.length);await step("cluster","running");
   const clusters=clusterMemories(units);await step("cluster","done",clusters.length);await step("consolidate","running");
-  const output=units.length?reflectionSchema.parse((await generateStructured("reflect",{schema:reflectionSchema,prompt:reflectionPrompt(units,clusters)})).object):{merges:[],observations:[],strategies:[]};
+  const output=units.length?clampReflection((await generateStructured("reflect",{schema:llmSchema,prompt:reflectionPrompt(units,clusters)})).object):{merges:[],observations:[],strategies:[]};
   const plans=plansFor(output,units,clusters,input,settings?.writePolicy??"review_sensitive",now);
   if(plans.length){const vectors=await embed(plans.map(p=>({text:p.unit.statement,title:p.unit.type})),"document");if(vectors.length!==plans.length||vectors.some(v=>v.length!==768||v.some(n=>!Number.isFinite(n))))throw new Error("Embedding unavailable");plans.forEach((p,i)=>{p.unit.embedding=vectors[i];});}
   await step("consolidate","done",plans.length);await step("write","running");

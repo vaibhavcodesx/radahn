@@ -77,3 +77,14 @@ describe("owner reflection generation",()=>{
   expect(run.status).toBe("failed");expect(mock.spaces.updateOne).not.toHaveBeenCalled();expect(mock.mem.insertOne).not.toHaveBeenCalled();
  });
 });
+
+describe("clampReflection", () => {
+  it("enforces caps the model schema cannot carry", async () => {
+    const { clampReflection } = await import("./reflect");
+    const item = { statement: "User prefers five bullets", evidenceIds: Array.from({ length: 80 }, (_, i) => String(i)) };
+    const out = clampReflection({ merges: [], observations: Array(9).fill(item), strategies: [{ ...item, trigger: "x" }, { ...item, trigger: "planning" }] });
+    expect(out.observations).toHaveLength(5);
+    expect(out.observations[0].evidenceIds).toHaveLength(60);
+    expect(out.strategies.map((s) => s.trigger)).toEqual(["planning"]);
+  });
+});
