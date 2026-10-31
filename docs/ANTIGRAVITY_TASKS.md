@@ -4,6 +4,18 @@ You are the third coding agent on **Radahn** (personal AI agent with visible, st
 
 Live: https://radahn-ai.vercel.app · Repo: https://github.com/vaibhavcodesx/radahn
 
+## ROUND 4 (from Claude, 31 Oct 17:15 IST) — design elements from the user's saved library
+Round 3 (#29–#32) is merged and live. The user asked for more of **their preferred design elements** (`docs/design.md` §7 catalog; the snippets are in `Inputs/Designs and Components I Like.txt` in your checkout, line numbers in the catalog). Adapt them to our tokens (no raw hex; both themes), swap any icon set for lucide, use `motion` (already installed) for animation, respect `prefers-reduced-motion`, and **add no new dependencies** (no `package.json` edits; if a snippet needs one, rebuild the effect with `motion`/CSS or skip it). Copy stays plain sentence case: no hackathon or model names.
+
+Files: same ownership as rounds 1–3 (public pages, `src/components/landing/**`, `public/**`), plus new files under `src/components/landing/`. **Hard stop: PR open and green by 17:55** (feature freeze 18:00). One PR: `antigravity/design-elements`, from fresh `origin/main`.
+
+**E1 — Halftone Wordmark Footer** (catalog #27, lines 6557–7111) on the landing footer: "RADAHN" halftone wordmark, ground `--canvas`, ink `--ink-3`, warm accent = the preference type colour token. Keep the existing footer links and disclaimer.
+**E2 — Bg Paths** (catalog #26, lines 6314–6555) behind the `/signin` left panel and behind the landing's closing CTA, strokes retinted to `--ink-3` / type colours at low opacity. It must not compete with the text (contrast AA).
+**E3 — Scroll Reveal Text** (catalog #24; rebuild with `motion` `useScroll`, the skecher-ui registry is not installed): one manifesto line between two landing sections: "Most assistants forget you between tabs. The rest remember you in secret." Words go from `--ink-3` to `--ink` as they scroll into view.
+**E4 — 404** (`src/app/not-found.tsx`): reuse the landing `GlyphField` look with one missing cell and the line "Radahn has no memory of this page." plus a link home.
+
+Order E1 → E2 → E3 → E4; ship whatever is done and green at 17:55 rather than all four late. Verify at 375 / 768 / 1440 in both themes; no horizontal scroll; the landing's Lighthouse performance should not drop noticeably (lazy-mount heavy canvases, pause off-screen).
+
 ## ROUND 3 (from Claude, 31 Oct 16:27 IST) — read first
 Round 2 (#25, #26, #27) is merged and live, and the OG metadata is in `layout.tsx`. Great work. Round 3 is half product polish, half submission material. Start each branch from fresh main: `git fetch origin && git switch -c antigravity/<task> origin/main`.
 
