@@ -20,8 +20,8 @@ type Output=z.infer<typeof reflectionSchema>;
 // Gemini answers "invalid argument" for nested maxItems in response schemas (probed 08:50 IST), so the
 // model gets an uncapped shape and the caps above are enforced by clamping before the strict parse.
 const llmItem=z.object({statement:z.string(),evidenceIds:z.array(z.string()),targetId:z.string().optional()});
-const llmSchema=z.object({profile:z.object({text:z.string(),evidenceIds:z.array(z.string())}).optional(),merges:z.array(llmItem),observations:z.array(llmItem),strategies:z.array(llmItem.extend({trigger:z.string()}))});
-export function clampReflection(raw:z.infer<typeof llmSchema>):Output {
+export const reflectionLlmSchema=z.object({profile:z.object({text:z.string(),evidenceIds:z.array(z.string())}).optional(),merges:z.array(llmItem),observations:z.array(llmItem),strategies:z.array(llmItem.extend({trigger:z.string()}))});
+export function clampReflection(raw:z.infer<typeof reflectionLlmSchema>):Output {
  const fit=<T extends z.infer<typeof llmItem>>(list:T[],max:number)=>list.filter(i=>i.statement.trim().length>=3&&i.statement.length<=240).slice(0,max).map(i=>({...i,evidenceIds:i.evidenceIds.slice(0,60)}));
  const profile=raw.profile&&raw.profile.text.length<=1200?{text:raw.profile.text,evidenceIds:raw.profile.evidenceIds.slice(0,60)}:undefined;
  return reflectionSchema.parse({...(profile?{profile}:{}),merges:fit(raw.merges,30),observations:fit(raw.observations,5),strategies:fit(raw.strategies.filter(s=>s.trigger.length>=2&&s.trigger.length<=80),3)});
@@ -55,7 +55,8 @@ function sameTrigger(old:MemoryUnit,trigger:string):boolean {
    const group=clusters.find(g=>g.length===evidence.length&&g.every(m=>evidence.some(e=>e._id.equals(m._id))));
    if(!group||raw.targetId)continue;parents=group;type=group[0].type;
   }else if(kind==="strategies") {
-   if(evidence.filter(m=>m.type==="feedback"||m.type==="outcome").length<2&&!evidence.some(explicit))continue;
+   // K7: one complete behavioral source supports a rule; ordinary facts and unknown ids do not.
+   if(evidence.filter(m=>m.type==="feedback"||m.type==="outcome").length<1&&!evidence.some(explicit))continue;
    const strategies=units.filter(m=>m.type==="strategy"&&sameTrigger(m,trigger!));
    const target=raw.targetId?byId.get(raw.targetId):strategies[0];
    if(target&&(target.type!=="strategy"||!sameTrigger(target,trigger!)))continue;
@@ -93,7 +94,7 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
  const run:ReflectionRun={_id:new ObjectId(),...input,status:"running",steps:(["gather","cluster","consolidate","write"] as const).map(name=>({name,status:"pending"})),outputs:{merged:[],observations:[],strategies:[]},startedAt:now};
  await c.reflections.insertOne(run);
  let current:ReflectionStep["name"]="gather";
- const step=async(name:ReflectionStep["name"],status:ReflectionStep["status"],count?:number)=>{current=name;run.steps=run.steps.map(s=>s.name===name?{name,status,at:new Date(),...(count===undefined?{}:{detail:`count: ${count}`})}:s);await c.reflections.updateOne({_id:run._id,ownerId:input.ownerId},{$set:{steps:run.steps}});};
+ const step=async(name:ReflectionStep["name"],status:ReflectionStep["status"],count?:number,modelId?:string)=>{current=name;run.steps=run.steps.map(s=>s.name===name?{name,status,at:new Date(),...(count===undefined?{}:{detail:`count: ${count}${modelId?`; model: ${modelId}`:""}`})}:s);await c.reflections.updateOne({_id:run._id,ownerId:input.ownerId},{$set:{steps:run.steps}});};
  try {
   await step("gather","running");
   const scope={ownerId:input.ownerId,spaceKey:{$in:[...new Set([input.spaceKey,"global"])]},status:"active" as const,$or:[{expiresAt:{$exists:false}},{expiresAt:{$gt:now}}]};
@@ -108,10 +109,11 @@ export async function runReflection(input:ReflectInput):Promise<ReflectionRun> {
   const units=[...new Map([...recent,...feedback,...strategies,...stable.filter(m=>profileEligible(m,input.ownerId,now))].filter(m=>m.ownerId===input.ownerId&&[input.spaceKey,"global"].includes(m.spaceKey)&&alive(m,now)).map(m=>[m._id.toHexString(),m])).values()];
   await step("gather","done",units.length);await step("cluster","running");
   const clusters=clusterMemories(units);await step("cluster","done",clusters.length);await step("consolidate","running");
-  const output=units.length?clampReflection((await generateStructured("reflect",{schema:llmSchema,prompt:reflectionPrompt(units,clusters)})).object):{merges:[],observations:[],strategies:[]};
+  const generated=units.length?await generateStructured("reflect",{schema:reflectionLlmSchema,prompt:reflectionPrompt(units,clusters)}):undefined;
+  const output=generated?clampReflection(generated.object):{merges:[],observations:[],strategies:[]};
   const plans=plansFor(output,units,clusters,input,settings?.writePolicy??"review_sensitive",now);
   if(plans.length){const vectors=await embed(plans.map(p=>({text:p.unit.statement,title:p.unit.type})),"document");if(vectors.length!==plans.length||vectors.some(v=>v.length!==768||v.some(n=>!Number.isFinite(n))))throw new Error("Embedding unavailable");plans.forEach((p,i)=>{p.unit.embedding=vectors[i];});}
-  await step("consolidate","done",plans.length);await step("write","running");
+  await step("consolidate","done",plans.length,generated?.servedBy?.modelId);await step("write","running");
   const session=mongo().startSession();
   try {
    const outputs=await session.withTransaction(async()=>{

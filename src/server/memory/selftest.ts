@@ -20,12 +20,12 @@ import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
 class SelfTestAssertion extends Error {}
-export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string }
+export interface SelfTestCheck { name:string;ok:boolean;ms:number;detail?:string;model?:string }
 export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}> {
   const ownerId=`eval:selftest:${Date.now()}:${randomUUID()}`;
   const isolatedOwners=[ownerId,`${ownerId}:conflicts`,`${ownerId}:history`];
   const spaceKey=new ObjectId().toHexString(), c=collections(), checks:SelfTestCheck[]=[];
-  const check=async(name:string,fn:()=>Promise<void>)=>{const t=performance.now();try{await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t)});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
+  const check=async(name:string,fn:()=>Promise<void|{model?:string}>)=>{const t=performance.now();try{const metadata=await fn();checks.push({name,ok:true,ms:Math.round(performance.now()-t),...(metadata?.model?{model:metadata.model}:{})});}catch(error){checks.push({name,ok:false,ms:Math.round(performance.now()-t),detail:error instanceof SelfTestAssertion?error.message:"Check failed; provider and content details suppressed."});}};
   try {
     const data:Array<{type:MemoryType;statement:string;importance:number}>=[
       {type:"constraint",statement:"Aarav must submit Radahn by 9 PM today.",importance:10},
@@ -189,14 +189,17 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
     await check("feedback-reflection-and-strategy-history",async()=>{
       const now=new Date();
       await c.spaces.insertOne({_id:new ObjectId(spaceKey),ownerId,name:"Synthetic reflection",color:"--t-feedback",isDefault:false,unitsSinceReflection:8,createdAt:now});
+      // Seed includes the desired rule already: remove only this disposable demo rule to test actual learning.
+      await c.memories.deleteMany({ownerId,demo:true,type:"strategy"});
       const run=await runReflection({ownerId,spaceKey,trigger:"manual"});
       if(run.status!=="done" || run.steps.some(step=>step.status!=="done"))throw new SelfTestAssertion("Reflection did not complete all steps");
       const generated=await c.memories.find({ownerId,_id:{$in:run.outputs.strategies.map(id=>new ObjectId(id))},type:"strategy",status:"active"}).toArray();
-      if(!generated.some(m=>/bullet/i.test(m.statement)&&/(?:5|five|short|concise)/i.test(m.statement)&&m.evidenceIds.length>=2))throw new SelfTestAssertion("Reflection did not produce an evidence-backed bullet strategy");
+      if(!generated.some(m=>/bullet/i.test(m.statement)&&/(?:5|five|short|concise)/i.test(m.statement)&&m.evidenceIds.length>=1))throw new SelfTestAssertion("Reflection did not produce an evidence-backed bullet strategy");
       const space=await c.spaces.findOne({ownerId,_id:new ObjectId(spaceKey)});
       if(space?.unitsSinceReflection!==0 || !space.lastReflectionAt)throw new SelfTestAssertion("Reflection counter reset failed");
       if(((await c.settings.findOne({_id:ownerId}))?.reflectionRevision??0)<1)throw new SelfTestAssertion("Reflection generation was not committed");
       if(!(await listReflections(ownerId)).some(r=>r._id.equals(run._id)))throw new SelfTestAssertion("Reflection history missing");
+      return {model:run.steps.find(step=>step.name==="consolidate")?.detail?.match(/model: ([a-zA-Z0-9./_-]+)/)?.[1]};
     });
     await check("profile-summary-context-and-erasure",async()=>{
       const profile=await c.profiles.findOne({_id:ownerId,ownerId});

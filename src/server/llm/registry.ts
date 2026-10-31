@@ -2,7 +2,7 @@ import "server-only";
 import { fingerprint, refreshUsage, live, record } from "./quota";
 import { createGoogleGenerativeAI, type GoogleLanguageModelOptions } from "@ai-sdk/google";
 import { createGroq, type GroqLanguageModelChatOptions } from "@ai-sdk/groq";
-import { embedMany, generateText, Output, type LanguageModel } from "ai";
+import { embedMany, generateText, Output, NoObjectGeneratedError, NoOutputGeneratedError, type LanguageModel } from "ai";
 import type { z } from "zod";
 import { env } from "@/server/env";
 
@@ -195,6 +195,10 @@ async function runFallback<T>(
         const kind = classifyError(err);
         await report(c, kind);
         if (kind !== "error") break;
+        // Invalid structured content is model-specific; try another model without exposing its text.
+        if (NoObjectGeneratedError.isInstance(err) || NoOutputGeneratedError.isInstance(err)) {
+          hung.add(c.modelId);break;
+        }
         // A hung model: don't retry it on this or any other key — move to the next model.
         if (isTimeout(err)) {
           markSlow(c.modelId);

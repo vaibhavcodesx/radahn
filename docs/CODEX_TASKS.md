@@ -177,3 +177,5 @@ K5 follow-up [status: implemented 14:53 IST, codex/k5-profile-demo; source-groun
 K6 follow-up [status: implemented, codex/k6-model-options; typed catalog/stub and explicit preference behavior reviewed; lead model-picker integration remains app-owned].
 
 K3 food/cold-recall follow-up [status: implemented15:04 IST, codex/k3-food-relevance; final review has no remaining Important/Critical findings; new hosted food cases and K1 extraction metrics await deploy].
+
+K7 follow-up [status: engine implemented16:04IST, codex/k7-reflection; reviewed one-source validation; Groq20B excluded after wrapper400s; three consecutive deployed self-tests remain required before K8].
