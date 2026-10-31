@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BackgroundPaths } from "@/components/landing/BackgroundPaths";
 import { getUser } from "@/server/auth/session";
 import { SignInActions } from "./SignInActions";
 
@@ -16,12 +17,13 @@ export default async function SignInPage({ searchParams }: PageProps<"/signin">)
   return (
     <main className="grid min-h-dvh md:grid-cols-2">
       <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line p-10 md:flex">
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link href="/" className="relative z-10 flex items-center gap-2.5">
           <Image src="/brand/radahn-mark.png" alt="" width={28} height={28} className="rounded-[4px]" />
           <span className="font-sans text-[17px] font-semibold tracking-[-0.01em] text-ink">Radahn</span>
         </Link>
+        <BackgroundPaths />
         <GlyphBackdrop />
-        <p className="relative font-serif text-[44px] leading-[1.05] tracking-[-0.02em]">
+        <p className="relative z-10 font-serif text-[44px] leading-[1.05] tracking-[-0.02em]">
           Pick up where
           <br />
           <span className="text-ink-2">you left off.</span>
