@@ -14,6 +14,7 @@ import { seedDemo, removeDemo } from "./seed";
 import { flipExpired, runMaintenance } from "./lifecycle";
 import { createAgentKey, verifyAgentKey, listAgentKeys, revokeAgentKey } from "./agentKeys";
 import { listConflicts, resolveConflict } from "./conflicts";
+import { buildSystemPrompt } from "./context";
 import { mongo } from "@/server/db/client";
 import type { CandidateMemory } from "./types";
 import type { MemoryUnit, MemoryType } from "./types";
@@ -190,9 +191,22 @@ export async function runSelfTest():Promise<{ok:boolean;checks:SelfTestCheck[]}>
       if(space?.unitsSinceReflection!==0 || !space.lastReflectionAt)throw new SelfTestAssertion("Reflection counter reset failed");
       if(!(await listReflections(ownerId)).some(r=>r._id.equals(run._id)))throw new SelfTestAssertion("Reflection history missing");
     });
+    await check("profile-summary-context-and-erasure",async()=>{
+      const profile=await c.profiles.findOne({_id:ownerId,ownerId});
+      if(!profile || !profile.text || profile.text.length>1200 || profile.version<1 || !profile.evidenceIds.length)throw new SelfTestAssertion("Reflection profile missing or invalid");
+      const evidence=await c.memories.find({ownerId,_id:{$in:profile.evidenceIds}}).toArray();
+      if(evidence.length!==profile.evidenceIds.length || evidence.some(unit=>unit.spaceKey!=="global"||unit.sensitivity!=="none"||unit.status!=="active"))throw new SelfTestAssertion("Profile evidence scope failed");
+      const input={ownerId,spaceKey,query:"Plan my next 4 hours.",persistTrace:false};
+      const current=await recall(input);
+      if(current.profile!==profile.text || !buildSystemPrompt({recall:current,userName:"Aarav",timeZone:"Asia/Kolkata",spaceName:"selftest",now:new Date()}).system.includes(profile.text))throw new SelfTestAssertion("Profile context missing");
+      const historical=await recall({...input,asOf:new Date().toISOString()});
+      if(historical.profile)throw new SelfTestAssertion("Historical recall included current profile");
+      const result=await forgetMemory({ownerId,memoryId:profile.evidenceIds[0].toHexString(),actor:{kind:"system",name:"selftest"}});
+      if(result.status!=="forgotten" || await c.profiles.findOne({_id:ownerId,ownerId}))throw new SelfTestAssertion("Forgotten profile evidence retained derived text");
+    });
   } finally {
     await check("cleanup-isolated-owner",async()=>{
-      const cleanup=await Promise.allSettled(isolatedOwners.flatMap(ownerId=>[c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId})]));
+      const cleanup=await Promise.allSettled(isolatedOwners.flatMap(ownerId=>[c.memories.deleteMany({ownerId}),c.events.deleteMany({ownerId}),c.recalls.deleteMany({ownerId}),c.reflections.deleteMany({ownerId}),c.settings.deleteOne({_id:ownerId}),c.spaces.deleteMany({ownerId}),c.agentKeys.deleteMany({ownerId}),c.profiles.deleteOne({_id:ownerId,ownerId})]));
       if(cleanup.some(result=>result.status==="rejected"))throw new SelfTestAssertion("Isolated owner cleanup incomplete");
     });
   }

@@ -71,3 +71,7 @@ Update when a task starts or finishes. Owners: `[claude]` `[codex]` `[human]`. F
 - [x] [codex] C12 engine implemented 06:43: historical asOf list/recall filters, validity boundaries, historical prompt labeling and mock parity. TTL-deleted/forgotten history remains unavailable.
 
 - [ ] [codex] C12 lead handoff: pass optional validated absolute ISO asOf from GET /api/memories into listMemories; add asOf to src/server/chat/tools.ts recall_memory schema/execution and include snapshot time in historical tool results. Natural-language past-state questions need that explicit tool argument. Historical content follows validFrom/validTo, not a full transaction-time metadata audit.
+
+- [x] [codex] C13 engine implemented 06:54: reflection profile summary, bounded previous version, validated global evidence, profile TTL/erasure and historical exclusion; profiles key by owner _id and require a separate migration invalidation helper in lead auth.
+
+- [ ] [codex] C13 lead integration: call migrateProfile(fromOwnerId,toOwnerId,session) inside the account migration transaction under both owner locks; it invalidates both owner-keyed summaries. Do not add profiles to generic ownerId-only migration because _id also keys the owner. Run authenticated /api/admin/db-setup after deploying C13 for ttl_profile_purge.
